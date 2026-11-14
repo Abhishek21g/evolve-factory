@@ -6,6 +6,8 @@
   Fault-injection runner     world-model adversarial scenarios generated from the certified limits (vane splits around
                              the disagree threshold, failed vanes, gusts, dose typos, skipped meals), flown on main;
                              every failure is diagnosed by factory/worldmodel.py
+  Supplier compliance monitor supplier certificates, missing deliverables and customs holds (factory/supply.py), each
+                             with the requirements and hazards it affects
 
 No LLM: every monitor is deterministic (simulation, requirement tests, git, safety.json); the processes it starts get
 no model keys or agent commands (record.offline_env), so a scheduled run can never spend on an LLM.
@@ -26,6 +28,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "factory"))
 import record  # noqa: E402
 import store  # noqa: E402
+import supply  # noqa: E402
 import worldmodel  # noqa: E402
 
 RUNS = os.path.join(ROOT, ".runs")
@@ -39,6 +42,8 @@ MONITORS = [
      "what": "Resyncs the source of record: each requirement has a passing test, code that carries the stated value, trace links and fresh simulation evidence."},
     {"id": "fault-injection", "name": "Fault-injection runner", "every": 24 * 3600, "schedule": "nightly",
      "what": "World-model adversarial scenarios generated from the certified limits, flown on main; every failure is diagnosed."},
+    {"id": "supplier", "name": "Supplier compliance monitor", "every": 60 * 60, "schedule": "hourly",
+     "what": "Checks every supplier's certificates and required deliverables, and the parts held at customs, against the requirements and hazards they support (sample supplier data)."},
 ]
 lock = threading.Lock()      # history file
 worker = threading.Lock()    # one monitor run at a time
@@ -202,7 +207,24 @@ def fault_injection(pid, dev):
     return status, summary, findings, {"world": world, "diagnoses": diags, "cached": cached, "md": "\n".join(md)}
 
 
-RUN = {"reliability": reliability, "drift": drift, "fault-injection": fault_injection}
+def supplier_compliance(pid, dev):
+    v = supply.view(pid)
+    if not v or not v["available"]:
+        return "pass", "no suppliers recorded for this project", [], {"md": "# Supplier compliance monitor: PASS\n\nNo suppliers recorded."}
+    sev = {"expired_cert": "bad", "missing_deliverable": "bad", "import_delay": "bad", "expiring_cert": "warn"}
+    findings = [{"severity": sev.get(r["kind"], "info"), "text": f"{r['text']} · affects {', '.join(r['affects']) or 'no requirement'}",
+                 "req": next((a for a in r["affects"] if a.startswith("SR-")), None), "link": "suppliers"}
+                for r in sorted(v["risks"], key=lambda r: list(sev).index(r["kind"]) if r["kind"] in sev else 9)]
+    n = lambda s: sum(f["severity"] == s for f in findings)  # noqa: E731
+    status = "fail" if n("bad") else "warn" if n("warn") else "pass"
+    summary = (f"{len(v['suppliers'])} suppliers, {len(v['parts'])} parts (sample data): {n('bad')} blocking finding(s), "
+               f"{n('warn')} certificate(s) expiring within {supply.EXPIRING_DAYS} days, {n('info')} structural risk(s)")
+    md = [f"# Supplier compliance monitor: {status.upper()}", "", summary, "", v["sample"], "", "| Severity | Finding |", "|---|---|"]
+    md += [f"| {f['severity']} | {f['text']} |" for f in findings]
+    return status, summary, findings, {"md": "\n".join(md)}
+
+
+RUN = {"reliability": reliability, "drift": drift, "fault-injection": fault_injection, "supplier": supplier_compliance}
 
 
 def execute(mid, pid, trigger, rid):

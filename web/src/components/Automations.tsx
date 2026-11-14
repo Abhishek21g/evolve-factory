@@ -22,7 +22,7 @@ type Record_ = {
   proposals: { kind: "hazard" | "requirement-gap"; source: string; text: string; hazards?: string[] }[]; history: Change[];
 };
 type RunStatus = "running" | "pass" | "warn" | "fail" | "error";
-type Finding = { severity: "bad" | "warn" | "info"; text: string; req?: string; link?: "record" | "faults" };
+type Finding = { severity: "bad" | "warn" | "info"; text: string; req?: string; link?: "record" | "faults" | "suppliers" };
 type Run = { id: string; monitor: string; project: string; trigger: string; started: number; status: RunStatus; summary: string; findings: Finding[]; duration?: number; cached?: boolean | null };
 type Monitor = { id: string; name: string; schedule: string; what: string; every: number; running: boolean; last: Run | null; next: number | null; runs: Run[] };
 type Monitors = { monitors: Monitor[]; scheduler: "on" | "off" };
@@ -233,7 +233,7 @@ export function Automations({ state, live, getJSON, post }: Props) {
         <span className="text-[12px] text-dim">scheduler {view.scheduler}</span>
       </PageHead>
       {err && <p className="mb-4 text-[12px] text-bad">{err}</p>}
-      <div className="mb-8 grid gap-3 lg:grid-cols-3">
+      <div className="mb-8 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {view.monitors.map(m => (
           <div key={m.id} className="flex flex-col rounded-lg border border-line bg-panel p-4">
             <div className="mb-1 flex items-center gap-2">
@@ -300,6 +300,7 @@ function RunRow({ r, name, pid, air, open, toggle, getJSON }: { r: Run; name: st
                     {r.findings.map((f, i) => (
                       <p key={i} className={`text-[12px] ${sevCls(f.severity)}`}>● {f.text}
                         {f.link === "record" && <a href={`#/p/${pid}/source-of-record`} className="ml-2 text-acc hover:underline">source of record</a>}
+                        {f.link === "suppliers" && <a href={`#/p/${pid}/suppliers`} className="ml-2 text-acc hover:underline">suppliers</a>}
                       </p>
                     ))}
                   </div>
