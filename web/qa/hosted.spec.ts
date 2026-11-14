@@ -52,6 +52,25 @@ test("hosted: typing the pump request plays the recorded run, BLOCKED then APPRO
   expect(problems).toEqual([]);
 });
 
+test("hosted: a pump what-if plays the recording closest in meaning, and says so when none matches", async ({ page }) => {
+  const recs = await recordings(page);
+  const pid = recs.find(r => r.kind === "build" && /single-bolus limit/.test(r.prompt))!.project;
+  const adult = recs.find(r => r.project === pid && r.kind === "whatif" && /adult eats 150 g/i.test(r.prompt));
+  const problems = watch(page);
+  await page.goto(`/?speed=8#/p/${pid}/world-model`);
+  const main = page.locator("main");
+  await page.locator("#composer").fill("What if an adult eats 150 g of carbs?");
+  await page.locator("#composer").press("Enter");
+  if (adult) await expect(main.getByText("What-if: “What if an adult eats 150 g of carbs?”")).toBeVisible({ timeout: 30_000 });
+  else await expect(main.getByText(/No recording of “What if an adult eats 150 g of carbs\?”/).first()).toBeVisible({ timeout: 30_000 });
+  await page.locator("#composer").fill("What if a teenager eats 100 g?");  // another cohort and amount than any recording
+  await expect(main.locator("form button[type=submit]")).toBeEnabled({ timeout: 30_000 });  // the first replay has finished
+  await page.locator("#composer").press("Enter");
+  await expect(main.getByText(/No recording of “What if a teenager eats 100 g\?”, so this plays the closest/).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator("#composer")).toBeEnabled({ timeout: 30_000 });
+  expect(problems).toEqual([]);
+});
+
 test("hosted: a Boeing what-if plays its recording, unmatched text says so, and no pump content reaches Boeing", async ({ page }) => {
   const recs = await recordings(page);
   const air = recs.find(r => r.kind === "whatif" && /AoA vane/.test(r.prompt)) || recs.find(r => r.kind === "whatif" && !PUMP_WORDS.test(r.prompt) && r.project.includes("boeing"));
@@ -67,7 +86,7 @@ test("hosted: a Boeing what-if plays its recording, unmatched text says so, and 
   await expect(page.locator("#composer")).toBeEnabled({ timeout: 30_000 });
   await page.locator("#composer").fill("what if the hydraulics freeze");  // matches no recording: the closest one plays
   await page.locator("#composer").press("Enter");
-  await expect(main.getByText("Hosted demo plays a recorded run").first()).toBeVisible({ timeout: 30_000 });
+  await expect(main.getByText(/No recording of “what if the hydraulics freeze”/).first()).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("#composer")).toBeEnabled({ timeout: 30_000 });
   await page.goto(`/#/p/${air!.project}/audit`);
   const audit = await main.innerText();

@@ -11,6 +11,8 @@ export type Incident = {
   id: string; ts: number; project: string; device: string; caller: string; what: string; when: string; severity: string; context: string;
   summary: string; hazard: { id: string; title: string; severity?: string; score: number; matched: string[] }; wo: string; link: string;
   conversation_id: string; source: "live" | "simulated" | "recorded"; transcript: Turn[]; memory: { id: string; backend: string; ms?: number; collection?: string };
+  /** The recorded sample call's incident (factory/incidents.py sample): its work order was filed where it was recorded. */
+  sample?: boolean;
 };
 type Sample = { conversation_id: string; agent_id: string; duration: number; audio: string; turns: Turn[]; incident: Incident };
 type Props = {
@@ -19,7 +21,7 @@ type Props = {
 };
 type CallStatus = "idle" | "connecting" | "connected" | "ended" | "error";
 
-/** Incidents from the factory server (or its snapshot), else the recorded sample call's incident. */
+/** Incidents from the factory server (or its snapshot), with the recorded sample call's incident on its project. */
 function useIncidents(getJSON: Props["getJSON"], live: boolean, project: string, tick: number) {
   const [list, setList] = useState<Incident[] | null>(null);
   const [sample, setSample] = useState<Sample | null>(null);
@@ -30,7 +32,8 @@ function useIncidents(getJSON: Props["getJSON"], live: boolean, project: string,
       const l = (await getJSON<{ incidents: Incident[] }>(`incidents?project=${encodeURIComponent(project)}`))?.incidents ?? null;
       if (stop) return;
       setSample(s);
-      setList(l ?? (s && s.incident.project === project ? [s.incident] : []));
+      const own = s && s.incident.project === project && !l?.some(x => x.conversation_id === s.incident.conversation_id);
+      setList([...(l ?? []), ...(own ? [{ ...s.incident, sample: true }] : [])]);
     })();
     return () => { stop = true; };
   }, [getJSON, live, project, tick]);
@@ -156,16 +159,19 @@ function RecordedCall({ sample }: { sample: Sample }) {
   );
 }
 
-function IncidentCard({ inc, pid }: { inc: Incident; pid: string }) {
+function IncidentCard({ inc, pid, open }: { inc: Incident; pid: string; open?: boolean }) {
   return (
     <div className="rounded-lg border border-line bg-panel p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <a href={`#/p/${pid}/incidents/${inc.id}`} className="font-mono text-sm font-semibold hover:underline">{inc.id}</a>
+        <a href={`#/p/${pid}/incidents/${inc.id}`} aria-current={open ? "page" : undefined} className="font-mono text-sm font-semibold hover:underline">{inc.id}</a>
         <span className="text-base text-ink">{inc.summary}</span>
+        {inc.sample && <span className="rounded border border-line px-1.5 py-px text-2xs text-dim">sample · recorded call</span>}
         <span className="ml-auto text-xs text-dim">{inc.source} · <Ago ts={inc.ts} /></span>
       </div>
       <div className="mt-2 flex flex-wrap gap-2 text-sm">
-        <a href={`#/p/${pid}/work-orders/${inc.wo}`} className="rounded border border-line px-2 py-0.5 hover:border-white/30">Work order <b className="font-mono">{inc.wo}</b> <Badge tone="Draft">draft</Badge></a>
+        {inc.sample
+          ? <span className="rounded border border-line px-2 py-0.5 text-mute">Filed as <b className="font-mono">{inc.wo}</b> where the call was recorded</span>
+          : <a href={`#/p/${pid}/work-orders/${inc.wo}`} className="rounded border border-line px-2 py-0.5 hover:border-white/30">Work order <b className="font-mono">{inc.wo}</b> <Badge tone="Draft">draft</Badge></a>}
         <a href={`#/p/${pid}/traceability/${inc.hazard.id}`} className="rounded border border-bad/30 px-2 py-0.5 text-bad hover:border-bad/60">Traced to {inc.hazard.id} {inc.hazard.title}</a>
         <span className="rounded border border-line px-2 py-0.5 text-mute">Memory: {inc.memory.backend}{inc.memory.collection ? ` · ${inc.memory.collection}` : ""}</span>
         <span className="rounded border border-line px-2 py-0.5 text-mute">Severity (caller): {inc.severity}</span>
@@ -181,7 +187,7 @@ function IncidentDetail({ inc, pid }: { inc: Incident; pid: string }) {
     ["Conversation", inc.conversation_id || "—"]];
   return (
     <>
-      <IncidentCard inc={inc} pid={pid} />
+      <IncidentCard inc={inc} pid={pid} open />
       <dl className="mt-4 grid gap-y-2 text-sm">
         {rows.map(([k, v]) => <div key={k} className="grid grid-cols-[10rem_1fr] gap-3 border-b border-line/60 pb-2"><dt className="text-dim">{k}</dt><dd className="text-ink">{v}</dd></div>)}
       </dl>

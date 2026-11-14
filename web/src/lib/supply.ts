@@ -50,7 +50,9 @@ export type Tower = {
   project: Project; requirements: number; hazards: number;
   software: { total: number; running: number; approved: number; blocked: number; draft: number; prs: string[];
     latest: { id: string; title: string; status: string; verdict: string | null }[] };
-  safety: { sim: { wo: string | null; question?: string; verdict: string; runs: number; new: number; kind: string } | null;
+  /** sim: the simulation Simulations leads with (latest what-if, else latest work order), its verdict by simVerdict's rule;
+   *  `harmed`: runs that count against it (any harm in a what-if, new harm in a work order). */
+  safety: { sim: { wo: string | null; question?: string; verdict: string; runs: number; new: number; harmed?: number; kind: string } | null;
     gaps: { id: string; gaps: string[] }[]; untraced: number };
   supply?: { suppliers: number; tiers: Record<string, number>; parts: number; counts: Record<RiskKind, number>; top: Risk[] };
   finance?: { factory_usd: number; budget_usd: number; suppliers_usd: number; suppliers_budget: number; cost_per_wo: number | null;

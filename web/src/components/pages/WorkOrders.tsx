@@ -137,7 +137,8 @@ const STEPS = (device: string) => [
 
 export function WorkOrderView({ state, events, post, text, getJSON, team, id, live }: Ctx & { id: string }) {
   const p = state.project!;
-  const w = state.work_orders?.find(x => x.id === id);
+  const old = state.archived_work_orders?.find(x => x.id === id);
+  const w = state.work_orders?.find(x => x.id === id) || old;
   const [doc, setDoc] = useState<{ title: string; body: string } | null>(null);
   const [err, setErr] = useState("");
   const gh = state.trace?.github;
@@ -173,6 +174,7 @@ export function WorkOrderView({ state, events, post, text, getJSON, team, id, li
       </PageHead>
       {why && live && <p className="-mt-5 mb-6 text-sm text-warn">{why}</p>}
       {err && <p role="alert" className="-mt-5 mb-6 text-sm text-bad">{err}</p>}
+      {old && <p className="-mt-3 mb-4 text-sm text-dim">An earlier copy of this request, not listed: <a href={`#/p/${p.id}/work-orders/${old.superseded_by}`} className="text-acc hover:underline">{old.superseded_by}</a> is the current one.</p>}
       {w.description && <p className="-mt-3 mb-6 max-w-3xl text-base text-mute">{w.description}</p>}
       {w.evidence && (
         <div className={cn("mb-8 flex items-start gap-3 rounded-xl border px-5 py-4", ok ? "border-ok/30 bg-ok/[.06]" : "border-bad/30 bg-bad/[.06]")}>
