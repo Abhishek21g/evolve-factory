@@ -19,4 +19,11 @@ pump_status request_bolus(pump_state *s, double units, int bg_mg_dl);
 pump_status check_occlusion(double line_pressure_kpa);
 pump_status check_watchdog(const pump_state *s, long now_ms);
 
+/* Optional extended bolus interface. Not implemented on main. A Work Order that adds extended delivery
+ * must implement exactly these signatures: the world model (sim/world.py) drives them once per minute
+ * and doses each simulated patient with whatever the code adds to delivered_today_u. */
+void pump_set_adult(pump_state *s, int adult);
+pump_status request_extended_bolus(pump_state *s, double units, int minutes, int bg_mg_dl);
+pump_status extended_bolus_tick(pump_state *s, int bg_mg_dl); /* once per minute; delivers and records */
+
 #endif
