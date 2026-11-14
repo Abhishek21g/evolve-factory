@@ -107,5 +107,5 @@ export function useFactoryState(projectId: string) {
     return r.ok ? r.json() : null;
   }, []);
 
-  return { state, events, live, post, text, getJSON };
+  return { state, events, live, post, text, getJSON, base: base.current };
 }

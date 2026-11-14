@@ -25,7 +25,7 @@ const go = (h: string) => { location.hash = h; };
 
 export default function App() {
   const route = useRoute();
-  const { state, events, live, post, text, getJSON } = useFactoryState(route.project);
+  const { state, events, live, post, text, getJSON, base } = useFactoryState(route.project);
   const [me, setMe] = useState("abhishek");
   useEffect(() => { try { setMe(localStorage.getItem("actor") || "abhishek"); } catch { /* private mode */ } }, []);
   const switchMe = (id: string) => { setMe(id); try { localStorage.setItem("actor", id); } catch { /* ignore */ } };
@@ -33,7 +33,7 @@ export default function App() {
   if (!state) return <div className="grid min-h-screen place-items-center text-[13px] text-dim">Connecting to the factory…</div>;
   const team = Object.fromEntries(state.team.map(m => [m.id, m])) as Record<string, Member>;
   const p = route.project ? state.project : null;
-  const ctx = { state, events, live: !!live, post: (path: string, body: object) => post(path, body, me), text, getJSON, team, me };
+  const ctx = { state, events, live: !!live, post: (path: string, body: object) => post(path, body, me), text, getJSON, team, me, base };
 
   return (
     <div className="flex min-h-screen">
@@ -60,7 +60,7 @@ export default function App() {
   );
 }
 
-type Ctx = { state: State; events: Ev[]; live: boolean; post: (p: string, b: object) => Promise<{ error?: string; id?: string; started?: string }>; text: (p: string) => Promise<string>; getJSON: <T>(p: string) => Promise<T | null>; team: Record<string, Member>; me: string };
+type Ctx = { state: State; events: Ev[]; live: boolean; post: (p: string, b: object) => Promise<{ error?: string; id?: string; started?: string }>; text: (p: string) => Promise<string>; getJSON: <T>(p: string) => Promise<T | null>; team: Record<string, Member>; me: string; base: string | null };
 
 /* ---------- sidebar ---------- */
 function Sidebar({ state, project, page, me, setMe, live }: { state: State; project?: string; page: string; me: string; setMe: (id: string) => void; live: boolean }) {
@@ -165,7 +165,7 @@ const SUGGEST = [
   ["simulate", "What if an adult eats 150 g of carbs?"],
 ] as const;
 
-function HomePage({ state, post, team, me, live }: Ctx) {
+function HomePage({ state, post, team, me, live, base }: Ctx) {
   const p = state.project!;
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"build" | "simulate">("build");
@@ -193,7 +193,8 @@ function HomePage({ state, post, team, me, live }: Ctx) {
     ["HydraDB", hydra === "connected" ? "ok" : hydra === "missing key" ? "off" : "warn",
       { connected: "shared memory, live recall", connecting: "connecting…", "falling back": "unreachable: using local memory", "missing key": "add key to connect" }[hydra]],
     ["Composio", comp === "connected" ? "ok" : comp === "missing key" ? "off" : "warn",
-      comp === "not connected" ? <a href="/api/connect/composio" target="_blank" rel="noopener" className="text-acc hover:underline">Connect GitHub</a>
+      base === null ? "Connect on the live server"
+        : comp === "not connected" ? <a href={`${base}/api/connect/composio`} target="_blank" rel="noopener" className="text-acc hover:underline">Connect GitHub</a>
         : { connected: "files evidence on GitHub", checking: "checking…", error: "unreachable: runs continue", "missing key": "add key to connect" }[comp]],
     ["Vercel", "ok", "hosting"],
   ];
