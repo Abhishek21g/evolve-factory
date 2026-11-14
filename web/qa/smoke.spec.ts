@@ -101,9 +101,9 @@ test.describe("every page, both projects", () => {
       await expect(page).toHaveURL(new RegExp(`#/p/${p.id}/work-orders$`));
       await expect(page.getByRole("button", { name: "Project" })).toContainText(p.name);
     }
-    await page.getByRole("button", { name: "Acting as" }).click();
-    await page.getByRole("menuitem").last().click();
-    await expect(page.getByRole("button", { name: "Acting as" })).toBeVisible();
+    await page.getByTestId("user-menu").click();
+    await page.getByRole("menuitem", { name: "Muralikrishna Inti" }).click();
+    await expect(page.getByTestId("user-menu")).toBeVisible();
     expect(problems).toEqual([]);
   });
 

@@ -32,6 +32,7 @@ POST /api/record/resync {project}                   resync the source of record 
 POST /api/monitors/run {id, project}                run a monitor now (in the background)
 POST /api/supply/suppliers {project, name, tier, parent, kind, supplies, contact, email, affects}   connect a supplier team
 POST /api/supply/deliverables {project, supplier, deliverable, title, kind, url, item, expires}  a supplier submits a deliverable
+/api/auth/*  sign-in, session, sign-out (factory/auth.py)
 POST actions carry the acting person in the X-Actor header (recorded in the audit trail).
 Everything else is served from web/out. Keys are read from .env and never sent to the browser.
 """
@@ -47,6 +48,7 @@ from urllib.parse import parse_qs, urlparse
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "factory"))
+import auth  # noqa: E402
 import callouts  # noqa: E402
 import elevenlabs  # noqa: E402
 import hotline  # noqa: E402
@@ -133,10 +135,12 @@ class H(SimpleHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
-    def send(self, code, obj, ctype="application/json"):
+    def send(self, code, obj, ctype="application/json", headers=None):
         body = obj.encode() if isinstance(obj, str) else json.dumps(obj).encode()
         self.send_response(code)
         self.send_header("Content-Type", ctype)
+        for k, v in (headers or {}).items():
+            self.send_header(k, v)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
@@ -145,7 +149,7 @@ class H(SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Actor")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Actor, Authorization")
         self.send_header("Access-Control-Allow-Methods", "GET, POST")
         self.send_header("Access-Control-Allow-Private-Network", "true")
         self.end_headers()
@@ -170,6 +174,9 @@ class H(SimpleHTTPRequestHandler):
             self.send_header("Location", link)
             self.end_headers()
             return
+        if u.path.startswith("/api/auth/"):
+            code, obj, h = auth.handle(u.path, {}, self.headers)
+            return self.send(code, obj, headers=h)
         if u.path == "/api/events":
             since = int(q.get("since", "0"))
             evs = store.events()  # every event stamped with its project; the UI shows the selected project's
@@ -241,6 +248,9 @@ class H(SimpleHTTPRequestHandler):
         try:
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
             clip = lambda k, n=300: str(body.get(k, "")).strip()[:n]  # noqa: E731
+            if u.path.startswith("/api/auth/"):
+                code, obj, h = auth.handle(u.path, body, self.headers)
+                return self.send(code, obj, headers=h)
             if u.path == "/api/projects":
                 if not clip("name", 80):
                     return self.send(400, {"error": "name required"})
