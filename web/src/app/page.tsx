@@ -59,12 +59,6 @@ export default function App() {
       <Sidebar state={state} project={unknown ? undefined : route.project || undefined} page={route.page} me={me} setMe={switchMe} live={!!live} />
       <main className="min-w-0 flex-1 px-6 pb-24 pt-8 md:px-10">
         <div key={route.project} className="mx-auto max-w-[1360px]">
-        {live === false && (
-          <div className="mb-6 flex items-center gap-2 rounded-lg border border-line bg-panel px-4 py-2.5 text-sm text-mute">
-            <Info size={15} className="shrink-0 text-acc" />
-            Hosted demo: requests and what-ifs play recorded real runs in your browser. Clone the repo and run <code className="font-mono text-ink">demo/go.sh</code> for live agents.
-          </div>
-        )}
         {route.project && !p && !unknown ? null :
           route.page === "integrations" ? <Integrations {...ctx} /> :
           !p ? (route.page === "control-tower" ? <AllTowers {...ctx} /> : <Projects {...ctx} />) :
@@ -130,9 +124,9 @@ function Sidebar({ state, project, page, me, setMe, live }: { state: State; proj
       <div className="space-y-2 border-t border-line p-3">
         <div className="flex items-center gap-2 px-1 text-xs text-mute">
           <span className={`size-2 rounded-full ${live ? "bg-ok shadow-[0_0_8px] shadow-ok/60" : "bg-dim"}`} />
-          {live ? "Factory online" : "Hosted demo"} <span className="text-dim">· memory {state.status?.memory || "local"}</span>
+          {live ? "Factory online" : "Demo workspace"} <span className="text-dim">· memory {state.status?.memory || "local"}</span>
         </div>
-        <UserMenu humans={humans} me={me} setMe={setMe} active={page === "integrations"}
+        <UserMenu humans={humans} me={me} setMe={setMe} team={state.team} active={page === "integrations"}
           integrations={project ? `#/p/${project}/integrations` : "#/settings/integrations"} />
       </div>
     </aside>
@@ -145,7 +139,7 @@ function Projects({ state, post, team, live }: Ctx) {
   return (
     <>
       <PageHead title="Projects" sub="Each project is a physical-AI product: its code, its hazard log, and a world model to test changes against.">
-        <Button primary onClick={() => setOpen(true)} disabled={!live}><Plus size={14} /> New project</Button>
+        <Button primary onClick={() => setOpen(true)} disabled={!live && !state.status?.hosted}><Plus size={14} /> New project</Button>
       </PageHead>
       <Table head={["Project", "Device", "Standard", "World model", "Owner", "Created"]}
         empty="No projects yet. Create one to import its hazard log and start work orders."
@@ -300,7 +294,8 @@ function AddMemory({ post, project, onClose }: { post: Ctx["post"]; project: str
 }
 
 /* ---------- requirements ---------- */
-function Requirements({ state }: Ctx) {
+function Requirements({ state, post, live }: Ctx) {
+  const [adding, setAdding] = useState(false);
   const open = (id: string) => <a href={`#/p/${state.project!.id}/traceability/${id}`} className="whitespace-nowrap font-mono text-sm font-semibold hover:underline">{id}</a>;
   const reqs = state.requirements || [];
   const fixes = Object.fromEntries((state.trace?.hazards || []).map(h => [h.id, h.fixes || []]));
@@ -317,8 +312,10 @@ function Requirements({ state }: Ctx) {
     ? <a key={anchor} href={`${gh.repo}/blob/${gh.sha}/docs/TRACEABILITY.md#${anchor}`} target="_blank" rel="noopener" className="text-acc hover:underline">{label}</a> : label;
   return (
     <>
-      <PageHead title="Requirements" sub={<>Hazard log and the safety requirements that mitigate each hazard ({state.project?.standard || "ISO 14971"}). Imported from the repository; agents cannot edit them.
-        {dal && <> How each level and objective maps to trace evidence: {doc("development-assurance-levels", "assurance levels")}, {doc("arp4754a-development-assurance-level-assignment", "ARP4754A")}, {doc("do-178c-annex-a-objectives", "DO-178C objectives")}, {doc("faa-stages-of-involvement-soi-1-4", "SOI 1-4")}, {doc("do-254-airborne-electronic-hardware", "DO-254")}.</>}</>} />
+      <PageHead title="Requirements" sub={<>Hazard log and the safety requirements that mitigate each hazard ({state.project?.standard || "ISO 14971"}). Imported from the repository; agents cannot edit them. People can propose new ones.
+        {dal && <> How each level and objective maps to trace evidence: {doc("development-assurance-levels", "assurance levels")}, {doc("arp4754a-development-assurance-level-assignment", "ARP4754A")}, {doc("do-178c-annex-a-objectives", "DO-178C objectives")}, {doc("faa-stages-of-involvement-soi-1-4", "SOI 1-4")}, {doc("do-254-airborne-electronic-hardware", "DO-254")}.</>}</>}>
+        <Button primary onClick={() => setAdding(true)} disabled={!live && !state.status?.hosted}><Plus size={14} /> New requirement</Button>
+      </PageHead>
       <Section title="Hazards">
         <Table head={["ID", "Hazard", "Severity", "Mitigated by"]} rows={(state.hazards || []).map(h => [
           <span key="i">{open(h.id)}</span>, h.title, <Badge key="s" tone={["S3", "Catastrophic", "Hazardous"].includes(h.severity || "") ? "FAIL" : "Stopped"}>{h.dal ? `${h.severity} · DAL ${h.dal}` : h.severity}</Badge>,
@@ -330,9 +327,47 @@ function Requirements({ state }: Ctx) {
           ...(dal ? [<span key="d" className="whitespace-nowrap text-sm">{r.dal ? `DAL ${r.dal}` : ""}</span>,
             <span key="o" className="text-sm text-mute">{(r.objectives || []).join(" · ")}</span>] : []),
           <span key="c" className="font-mono text-xs text-mute">{(r.symbols || []).slice(0, 2).join(", ")}</span>,
-          <span key="t" className="text-mute">unit test {r.id} · world model</span>])} />
+          <span key="t" className="text-mute">{(r as { proposed?: boolean }).proposed || !r.symbols ? <Badge tone="Stopped">proposed</Badge> : `unit test ${r.id} · world model`}</span>])} />
       </Section>
+      {adding && <NewRequirement state={state} post={post} onClose={() => setAdding(false)} />}
     </>
+  );
+}
+
+function NewRequirement({ state, post, onClose }: { state: State; post: Ctx["post"]; onClose: () => void }) {
+  const p = state.project!;
+  const [text, setText] = useState("");
+  const [hz, setHz] = useState<string[]>([]);
+  const [err, setErr] = useState("");
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const r = await post("requirements", { project: p.id, text, hazards: hz.join(",") });
+    if (r.error) return setErr(r.error);
+    onClose();
+  };
+  return (
+    <Modal title={`New requirement · ${p.name}`} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-4">
+        <Field label="Requirement"><textarea rows={3} className={inputCls} value={text} onChange={e => setText(e.target.value)} autoFocus
+          placeholder="e.g. An extended bolus never delivers more than 10 U in any 60 minutes" /></Field>
+        <Field label="Mitigates hazards">
+          <div className="flex flex-wrap gap-1.5">
+            {(state.hazards || []).map(h => {
+              const on = hz.includes(h.id);
+              return (
+                <button type="button" key={h.id} onClick={() => setHz(on ? hz.filter(x => x !== h.id) : [...hz, h.id])} aria-pressed={on}
+                  className={`rounded-md border px-2 py-1 text-sm ${on ? "border-acc/50 bg-acc/10 text-ink" : "border-line text-mute hover:text-ink"}`}>
+                  <span className="font-mono">{h.id}</span> {h.title}
+                </button>
+              );
+            })}
+          </div>
+        </Field>
+        <p className="text-sm text-dim">Proposed requirements are traced and recorded in the audit trail. A person merges them into the source of record.</p>
+        {err && <p role="alert" className="text-sm text-bad">{err}</p>}
+        <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button primary type="submit" disabled={!text.trim()}>Add requirement</Button></div>
+      </form>
+    </Modal>
   );
 }
 

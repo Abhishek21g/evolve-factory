@@ -334,15 +334,37 @@ export function WorldLoopPage({ state, events, live, checking, getJSON, id }: Pr
           </select>
         )}
       </PageHead>
-      <SimVsWorld air={air} />
       {loop ? (
         <>
+          <LoopHero loop={loop} />
           <p className="mb-3 text-base"><a href={`#/p/${p.id}/work-orders/${loop.wo}`} className="font-mono text-mute hover:underline">{loop.wo}</a> <span className="text-ink">{loop.title}</span></p>
-          <CockpitCallouts getJSON={getJSON} device={p.device} wkey={loop.wo} tick={`${events.length}-${live}`} />
           <LoopView loop={loop} />
+          <CockpitCallouts getJSON={getJSON} device={p.device} wkey={loop.wo} tick={`${events.length}-${live}`} />
         </>
       ) : loop === undefined ? null : <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-base text-dim">{wo ? "No simulation for this work order yet. Run it: the world model flies every attempt." : "Run a work order: every attempt is flown in the world model and diagnosed here."}</p>}
+      <div className="mt-10"><h2 className="mb-3 text-md font-semibold">How it works</h2><SimVsWorld air={air} /></div>
     </>
+  );
+}
+
+/** Top of the World Model page: the outcome first. Each attempt's verdict, how many simulated runs failed, and what fixed it. */
+function LoopHero({ loop }: { loop: NonNullable<ReturnType<typeof useLoop>> }) {
+  const a = loop.attempts;
+  if (!a.length) return null;
+  const last = a[a.length - 1];
+  const passed = last.world_verdict === "PASS";
+  const d = a.find(x => x.diagnosis)?.diagnosis;
+  return (
+    <div className={`mb-8 rounded-xl border p-5 ${passed ? "border-ok/30 bg-ok/[.04]" : "border-bad/30 bg-bad/[.04]"}`}>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className={`text-2xl font-semibold tracking-tight ${passed ? "text-ok" : "text-bad"}`}>{passed ? "Safe to merge" : "Blocked"}</span>
+        <span className="text-mute">after {a.length} attempt{a.length > 1 ? "s" : ""} in the world model</span>
+        <span className="ml-auto inline-flex items-center gap-2">
+          {a.map((x, i) => <span key={x.n} className="inline-flex items-center gap-2">{i > 0 && <span className="text-dim">→</span>}<Badge tone={x.world_verdict === "PASS" ? "PASS" : "BLOCKED"}>{`#${x.n} ${x.world_verdict}`}</Badge></span>)}
+        </span>
+      </div>
+      {d && <p className="mt-2 text-base text-mute">Caught: <span className="text-ink">{d.headline}</span>{d.requirements.length ? <> · violates {d.requirements.map(r => r.id).join(", ")}</> : null}. The diagnosis went back to Claude Code{passed ? ", which fixed it; the re-simulation passed." : "."}</p>}
+    </div>
   );
 }
 

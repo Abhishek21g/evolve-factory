@@ -28,7 +28,7 @@ export function WorkOrders({ state, post, team, live }: Ctx) {
   return (
     <>
       <PageHead title="Work Orders" sub={`Each work order is built by the agent team for ${p.name} and must pass the deterministic gate and the world model before it can merge.`}>
-        <Button primary onClick={() => setOpen(true)} disabled={!live} title={live ? undefined : "Read-only snapshot"}><Plus size={14} /> New work order</Button>
+        <Button primary onClick={() => setOpen(true)} disabled={!live && !state.status?.hosted}><Plus size={14} /> New work order</Button>
       </PageHead>
       {st?.busy && st.running && st.project === p.id && (
         <a href={`#/p/${p.id}/work-orders/${st.running}`} className="mb-4 flex items-center gap-2 rounded-lg border border-run/30 bg-run/5 px-4 py-2.5 text-sm text-run hover:bg-run/10">
@@ -58,7 +58,7 @@ export function WorkOrders({ state, post, team, live }: Ctx) {
           <ListChecks size={28} className="mb-3 text-dim" />
           <p className="text-md font-medium">No work orders for {p.name} yet</p>
           <p className="mt-1 max-w-md text-sm text-mute">Describe a change. The agent team analyses hazards, writes the code, runs every requirement test and the world model, then files the evidence.</p>
-          <div className="mt-5"><Button primary onClick={() => setOpen(true)} disabled={!live}><Plus size={14} /> New work order</Button></div>
+          <div className="mt-5"><Button primary onClick={() => setOpen(true)} disabled={!live && !state.status?.hosted}><Plus size={14} /> New work order</Button></div>
         </div>
       )}
       {open && <NewWO ctx={{ state, post, live }} onClose={() => setOpen(false)} />}

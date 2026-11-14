@@ -18,7 +18,7 @@ export type Played = {
   note: string | null;
 };
 
-export const HOSTED_NOTE = "Hosted demo plays a recorded run";
+export const HOSTED_NOTE = "Plays the closest recorded real run";
 
 const STOP = new Set(["the", "and", "for", "with", "what", "when", "than", "that", "this", "from", "into", "more", "does", "happens",
   "should", "would", "could", "can", "are", "was", "our", "its", "two"]);

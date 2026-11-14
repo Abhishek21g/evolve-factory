@@ -78,7 +78,7 @@ export function SignIn({ onSignedIn }: { onSignedIn: (s: Session) => void }) {
             <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-acc text-bg"><Sparkles size={17} /></span>
             <span className="min-w-0 flex-1">
               <span className="block text-base font-semibold text-ink">{busy === "demo" ? "Opening the workspace…" : "Enter demo workspace"}</span>
-              <span className="block text-sm text-mute">No account needed · both projects, {cfg?.live === false ? "read-only snapshot" : "live factory"}</span>
+              <span className="block text-sm text-mute">No account needed · both projects, {cfg?.live === false ? "runs replay real recorded runs" : "live factory"}</span>
             </span>
             <ArrowRight size={17} className="text-acc transition-transform group-hover:translate-x-0.5" />
           </button>
