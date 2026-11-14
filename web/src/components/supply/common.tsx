@@ -47,33 +47,29 @@ export const Stat = ({ label, value, sub, href, tone }: { label: string; value: 
     : <div className="min-w-[88px]">{body}</div>;
 };
 
-/** A titled list separated by hairlines; the structure comes from type and dividers, not cards. */
-export const List = ({ title, count, aside, children }: { title: string; count?: number; aside?: ReactNode; children: ReactNode }) => (
-  <section className="mb-10">
-    <div className="mb-1.5 flex items-baseline justify-between gap-3">
-      <h2 className="text-sm font-medium text-ink">{title}{count !== undefined && <span className="ml-1.5 font-normal tabular-nums text-dim">{count}</span>}</h2>
-      {aside && <div className="text-sm text-dim">{aside}</div>}
-    </div>
-    <div className="divide-y divide-line border-t border-line">{children}</div>
-  </section>
+/** Boxed variants used by the Control Tower, Supply Chain and Finance pages. */
+export const SampleBox = ({ children }: { children: ReactNode }) => (
+  <div className="mb-6 flex items-start gap-2 rounded-md border border-warn/25 bg-warn/5 px-3 py-2 text-xs text-mute">
+    <Info size={14} className="mt-px shrink-0 text-warn" /><div>{children}</div>
+  </div>
 );
 
-/** One line: status dot, short title, muted metadata on the right; the whole row opens the page behind it. */
-export const Row = ({ tone, href, meta, children }: { tone?: Tone; href?: string; meta?: ReactNode; children: ReactNode }) => {
+export const StatCard = ({ label, value, sub, href, tone }: { label: string; value: ReactNode; sub?: ReactNode; href?: string; tone?: Tone }) => {
   const body = (
     <>
-      <Dot tone={tone} />
-      <span className="min-w-0 flex-1 truncate">{children}</span>
-      {meta && <span className="shrink-0 text-sm text-dim">{meta}</span>}
+      <div className="text-xs text-dim">{label}</div>
+      <div className={`mt-0.5 text-xl font-semibold tabular-nums ${toneText(tone === "run" ? undefined : tone)}`}>{value}</div>
+      {sub && <div className="mt-0.5 text-xs text-mute">{sub}</div>}
     </>
   );
-  const cls = "flex items-center gap-3 py-2.5 text-base";
-  return href ? <a href={href} className={`${cls} -mx-2 rounded-sm px-2 transition-colors hover:bg-white/[.03]`}>{body}</a> : <div className={cls}>{body}</div>;
+  return href
+    ? <a href={href} className="block rounded-lg border border-line bg-panel p-3 hover:border-line-strong">{body}</a>
+    : <div className="rounded-lg border border-line bg-panel p-3">{body}</div>;
 };
 
 export const Bar = ({ value, max, tone = "run" }: { value: number; max: number; tone?: Tone }) => (
-  <div className="h-1 w-full overflow-hidden rounded-full bg-white/[.06]">
-    <div className={`h-full rounded-full ${tone === "bad" ? "bg-bad" : tone === "warn" ? "bg-warn" : tone === "ok" ? "bg-ok" : "bg-mute"}`}
+  <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[.06]">
+    <div className={`h-full rounded-full ${tone === "bad" ? "bg-bad" : tone === "warn" ? "bg-warn" : tone === "ok" ? "bg-ok" : "bg-run"}`}
       style={{ width: `${Math.min(100, max ? (value / max) * 100 : 0)}%` }} />
   </div>
 );
