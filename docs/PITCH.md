@@ -161,8 +161,6 @@ Rule: one voice at a time. The person not speaking looks at the screen, not the 
 
 15. **Business: what's this to 8090?** (A) 8090 traces software intent. My company CertusAI traces safety evidence: living hazard analysis for IEC 62304 and ISO 26262, replacing DOORS and Jama. This is the bridge: Software Factory for the regulated half of your customer list.
 
-Bonus if asked "what did you build tonight vs before": everything in the repo was written during EVOLVE (see README "Built before the event"). No CertusAI code is used.
-
 ---
 
 ## 6. Rehearsal drill

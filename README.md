@@ -174,11 +174,6 @@ make -s -C demo/aircraft test                                 # aircraft require
 | GitHub CLI (`gh`) | opening PRs | MIT, tool only |
 | Cursor, Codex CLI | IDE and coding agents used while building | proprietary / Apache-2.0 |
 
-## Built before the event
-
-Nothing. All code and commits in this repo were made during EVOLVE (hacking started Fri Nov 13, 7:10 PM PT). Ideas
-were planned beforehand, which the rules allow. No code from CertusAI (our separate startup) is used.
-
 Team: Abhishek Enaguthi ([@Abhishek21g](https://github.com/Abhishek21g)), Muralikrishna Inti ([@Muralikinti](https://github.com/Muralikinti)).
 
 ## License
