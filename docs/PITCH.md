@@ -35,6 +35,9 @@ Only say what is in the "Built" column. Items marked *(if built by freeze)* get 
 | ISO 26262 | **Not in code** (IEC 62304 / ISO 14971 only) | CertusAI / roadmap only. |
 | Hosted backup site | **Public** at https://certus-factory.vercel.app: read-only snapshot of the 25 U run (WO-345, end state, older UI until `demo/deploy.sh` is re-run), Run disabled, first paint ~0.3 s | Backup only. Demo from `localhost:8787` (`demo/go.sh replay`). |
 | Tree-sitter call graph | **Not built** | Q&A: "next step." |
+| Supply pages (Control Tower, Suppliers, Supply Chain, Finance) | **Built** on **sample data** (fictional suppliers, prices, budget; the UI says so). Supplier deliverables become real trace links | "Sample suppliers." Never name them as partners. |
+| Safety hotline (Incidents), "Hear the pump" callouts | **Built**; alarms are derived from the simulation trace by code. Voice needs ElevenLabs: hotline not configured and callout clips not synthesized on the stage laptop as of Nov 14 05:45 | Don't click Play or the hotline on stage unless both were set up and tested. |
+| Connected card "8090 Software Factory · work orders via MCP" | UI label; the factory talks to SF over its REST API (row above) | Don't read the label aloud. |
 
 ---
 
