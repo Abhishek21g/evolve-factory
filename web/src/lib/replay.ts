@@ -18,8 +18,10 @@ export type Played = {
   note: string | null;
 };
 
+/** A request quoted in a sentence: up to 80 characters, cut at a word. */
+export const quote = (s: string) => s.length <= 80 ? s : `${s.slice(0, 79).replace(/\s+\S*$/, "")}…`;
 /** Said before the closest recording plays when nothing recorded matches the request. */
-export const noMatch = (asked: string, prompt: string) => `No recording of “${asked.slice(0, 80)}”, so this plays the closest recorded run: “${prompt}”`;
+export const noMatch = (asked: string, prompt: string) => `No recording of “${quote(asked)}”, so this plays the closest recorded run: “${prompt}”`;
 
 const STOP = new Set(["the", "and", "for", "with", "what", "when", "than", "that", "this", "from", "into", "more", "does", "happens",
   "should", "would", "could", "can", "are", "was", "our", "its", "two", "has", "have", "they", "their", "there"]);

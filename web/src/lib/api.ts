@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Ev, Gate, World } from "./feed";
 import type { Trace } from "./trace";
-import { chips, closest, finished, noMatch, playedAudit, playedWo, reached, replayed, rewrite, roster, verdicts, type Played, type Recording } from "./replay";
+import { chips, closest, finished, noMatch, quote, playedAudit, playedWo, reached, replayed, rewrite, roster, verdicts, type Played, type Recording } from "./replay";
 import snapshot from "../../public/snapshot.json";
 
 export type Member = { id: string; name: string; role: string; kind: "human" | "agent" };
@@ -218,7 +218,7 @@ export function useFactoryState(projectId: string) {
     const m = closest(recordings(recProject(l, project)).filter(r => r.kind === kind), again?.title || text);
     if (!m) return { error: `No recorded ${kind === "build" ? "work order run" : "what-if"} for this project in the hosted demo.` };
     // A recorded work order only replays its own request: another recording would show under its title.
-    if (again && !m.matched && recorded.includes(again as WorkOrder)) return { error: `The hosted demo plays recorded runs only, and none is recorded for “${again.title.slice(0, 80)}”. Run the factory locally (demo/go.sh) to build it.` };
+    if (again && !m.matched && recorded.includes(again as WorkOrder)) return { error: `The hosted demo plays recorded runs only, and none is recorded for “${quote(again.title)}”. Run the factory locally (demo/go.sh) to build it.` };
     const data = await fetch(snapFile(`replay?id=${m.rec.id}`, "json")).then(r => (r.ok ? r.json() as Promise<{ events: Ev[] }> : null)).catch(() => null);
     if (!data?.events.length) return { error: "This recorded run is missing from the hosted snapshot." };
     const next = `WO-${Math.max(100, ...known.map(w => Number(w.id.slice(3)) || 0)) + 1}`;
