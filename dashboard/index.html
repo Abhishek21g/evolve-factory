@@ -58,6 +58,21 @@ td.r.FAIL { color: var(--red); }
 .log .blocked { color: var(--red); }
 .log .pass { color: var(--green); }
 .empty { color: var(--mute); font-size: 13px; }
+.panels { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 560px) { .panels { grid-template-columns: 1fr; } }
+figure { margin: 0; }
+figcaption { font-size: 12px; margin-bottom: 4px; }
+figcaption .bad { color: var(--red); }
+svg { width: 100%; height: auto; display: block; }
+svg polyline { fill: none; stroke-width: 1.4; }
+svg .base { stroke: #3a3a3a; stroke-width: 1; }
+svg .ok { stroke: var(--green); opacity: .8; }
+svg .old { stroke: var(--amber); }
+svg .new { stroke: var(--red); stroke-width: 2.2; }
+svg .band { fill: #3ecf8e14; }
+svg .thr { stroke: var(--red); stroke-dasharray: 3 3; opacity: .7; }
+svg .tl { fill: var(--red); font-size: 9px; }
+svg .ax { fill: var(--mute); font-size: 9px; }
 </style>
 </head>
 <body>
@@ -73,6 +88,10 @@ td.r.FAIL { color: var(--red); }
     <div class="lanes" id="lanes"></div>
   </div>
   <div>
+    <section class="card">
+      <h2>World model <span class="sub" id="wsub"></span></h2>
+      <div id="world"><p class="empty">No simulation yet.</p></div>
+    </section>
     <section class="card">
       <h2>Traceability matrix <span class="sub" id="cand"></span></h2>
       <div id="matrix"><p class="empty">No gate run yet.</p></div>
@@ -90,11 +109,18 @@ const AGENTS = [
   ["coder-claude", "Coder · Claude Code", "Implements in its own worktree"],
   ["coder-codex", "Coder · Codex", "Implements in parallel worktree"],
   ["gate", "Safety Gate", "Runs the tests behind each affected requirement"],
+  ["world", "World Model", "Runs the real pump code in 10 simulated patients"],
   ["reviewer", "Reviewer", "Opens the PR with evidence"],
 ];
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-let run = null, seen = 0;
+let run = null, seen = 0, verdicts = {};
+// One badge for the latest candidate: BLOCKED if any check blocked it.
+function badge() {
+  const bad = Object.keys(verdicts).filter(k => verdicts[k] === "BLOCKED");
+  $("verdict").className = "verdict " + (bad.length ? "blocked" : "pass");
+  $("verdict").textContent = bad.length ? bad.join(" + ") + ": BLOCKED" : "ALL CHECKS: PASS";
+}
 
 function reset() {
   $("lanes").innerHTML = AGENTS.map(([id, name, role]) => `
@@ -104,12 +130,14 @@ function reset() {
       <div class="msg"></div><ol></ol>
     </div>`).join("");
   $("log").innerHTML = ""; $("matrix").innerHTML = '<p class="empty">No gate run yet.</p>';
-  $("verdict").className = "verdict"; $("verdict").textContent = "IDLE"; $("cand").textContent = "";
+  $("world").innerHTML = '<p class="empty">No simulation yet.</p>'; $("wsub").textContent = "";
+  $("verdict").className = "verdict"; $("verdict").textContent = "IDLE"; verdicts = {}; $("cand").textContent = "";
   $("wo").textContent = "Waiting for a Work Order…"; seen = 0;
 }
 
 function apply(e) {
   if (e.run !== run) { run = e.run; reset(); }
+  if (e.agent.startsWith("coder") && e.state === "done") verdicts = {};  // new candidate submitted
   if (e.title) $("wo").innerHTML = `<b>${esc(e.wo)}</b> ${esc(e.title)}`;
   const lane = $("lane-" + e.agent);
   if (lane) {
@@ -120,8 +148,8 @@ function apply(e) {
     lane.querySelector(".msg").textContent = e.msg;
   }
   if (e.gate) {
-    $("verdict").className = "verdict " + e.gate.verdict.toLowerCase();
-    $("verdict").textContent = "SAFETY GATE: " + e.gate.verdict;
+    verdicts["SAFETY GATE"] = e.gate.verdict;
+    badge();
     $("cand").textContent = e.candidate ? "· " + e.candidate : "";
     $("matrix").innerHTML = e.gate.rows.length ? `<table>
       <tr><th>Requirement</th><th>Hazard</th><th>Triggered by</th><th>Result</th></tr>
@@ -130,9 +158,38 @@ function apply(e) {
         <td class="sub">${esc(r.why.join(", "))}</td><td class="r ${esc(r.result)}">${esc(r.result)}</td></tr>`).join("")}
     </table>` : '<p class="empty">No safety requirements affected.</p>';
   }
+  if (e.world) {
+    verdicts["WORLD MODEL"] = e.world.verdict;
+    badge();
+    drawWorld(e.world);
+  }
   const t = Number(e.t).toFixed(1).padStart(5, " ");
   $("log").insertAdjacentHTML("afterbegin",
     `<div><span class="t">${t}s</span><span class="a">${esc(e.agent)}</span><span class="${esc(e.state)}">${esc(e.msg)}</span></div>`);
+}
+
+// Blood-sugar traces, one panel per scenario. Grey = same patient on the base branch.
+function drawWorld(w) {
+  const W = 300, H = 170, P = 26, maxBG = 450, mins = w.results[0].trace.length * w.step_min;
+  const x = m => P + (m / mins) * (W - P - 6), y = g => 6 + (1 - Math.min(g, maxBG) / maxBG) * (H - P);
+  const line = (tr, cls) => `<polyline class="${cls}" points="${tr.map((g, i) => x(i * w.step_min).toFixed(1) + "," + y(g).toFixed(1)).join(" ")}"/>`;
+  const panel = sc => {
+    const rs = w.results.filter(r => r.scenario === sc);
+    const bad = rs.filter(r => r.new_hypo).length, old = rs.filter(r => r.preexisting).length;
+    return `<figure><figcaption>${esc(sc)} <span class="sub">${bad ? `<b class="bad">${bad} new severe hypo</b>` : "no new harm"}${old ? ` · ${old} pre-existing` : ""}</span></figcaption>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Blood glucose traces for ${esc(sc)}">
+      <rect class="band" x="${P}" y="${y(180)}" width="${W - P - 6}" height="${y(70) - y(180)}"/>
+      <line class="thr" x1="${P}" x2="${W - 6}" y1="${y(w.threshold)}" y2="${y(w.threshold)}"/>
+      <text x="${W - 8}" y="${y(w.threshold) - 3}" text-anchor="end" class="tl">${w.threshold} mg/dL</text>
+      ${[0, 100, 200, 300, 400].map(g => `<text x="${P - 4}" y="${y(g) + 3}" text-anchor="end" class="ax">${g}</text>`).join("")}
+      <text x="${x(w.meal_at)}" y="${H - 8}" text-anchor="middle" class="ax">meal</text>
+      <text x="${W - 6}" y="${H - 8}" text-anchor="end" class="ax">${mins / 60} h</text>
+      ${rs.map(r => line(r.base_trace, "base")).join("")}
+      ${rs.map(r => line(r.trace, r.new_hypo ? "new" : r.preexisting ? "old" : "ok")).join("")}
+    </svg></figure>`;
+  };
+  $("wsub").textContent = `· ${w.results.length / 2} simulated adults · grey = ${w.base}`;
+  $("world").innerHTML = `<div class="panels">${[...new Set(w.results.map(r => r.scenario))].map(panel).join("")}</div>`;
 }
 
 const parse = txt => txt.split("\n").filter(Boolean).map(l => JSON.parse(l));
