@@ -50,6 +50,7 @@ from urllib.parse import parse_qs, urlparse
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "factory"))
+sys.path.insert(0, os.path.join(ROOT, "gate"))
 import auth  # noqa: E402
 import callouts  # noqa: E402
 import elevenlabs  # noqa: E402
@@ -64,6 +65,7 @@ import store  # noqa: E402
 import supply  # noqa: E402
 import worldmodel  # noqa: E402
 import tracelinks  # noqa: E402
+import verdict  # noqa: E402
 
 STATIC = os.path.join(ROOT, "web", "out")
 PY = os.path.join(ROOT, ".venv/bin/python")
@@ -95,6 +97,7 @@ def composio_status():
 def warm():
     """Background, so the server answers at once: copy local memory into HydraDB and open the connection with a
     first recall; keep the Composio connection status fresh (it flips to connected soon after GitHub is authorized)."""
+    verdict.status()  # starts the Rust/Python parity check over the recorded verdicts
     memory.recall("bolus limit")  # first: an outage is detected within 2 s and every run after that skips HydraDB
     try:
         memory.seed()
@@ -169,6 +172,7 @@ class H(SimpleHTTPRequestHandler):
                            "composio": bool(os.environ.get("COMPOSIO_API_KEY")), "composio_status": composio_status(),
                            "software_factory": bool(os.environ.get("SF_API_KEY")), "replay": os.environ.get("FACTORY_REPLAY") == "1"}
             s["status"]["elevenlabs"] = hotline.status()
+            s["status"]["gate"] = verdict.status()
             return self.send(200, s)
         if u.path == "/api/connect/composio":  # one-time: authorize GitHub for the factory's Composio user
             link = subprocess.run([PY, os.path.join(ROOT, "factory/actions.py"), "connect"], capture_output=True, text=True,
@@ -201,8 +205,16 @@ class H(SimpleHTTPRequestHandler):
             w = next((w for w in store._load()["work_orders"] if w["id"] == wo), None)
             dev = store.device(w["project"] if w else "")
             gate = os.path.join(ROOT, ".runs", f"{wo}.gate.json")
-            reqs = {r["id"] for r in json.load(open(gate))["rows"]} if os.path.exists(gate) else set()
-            return self.send(200, open(p).read() + tracelinks.evidence_section(dev["id"], store.safety_spec(dev), reqs), "text/markdown")
+            g = json.load(open(gate)) if os.path.exists(gate) else {"rows": []}
+            reqs = {r["id"] for r in g["rows"]}
+            md = open(p).read()
+            world = os.path.join(ROOT, ".runs", f"{wo}.world.json")
+            chk = (store.with_checker(wo, g, json.load(open(world)) if os.path.exists(world) else None, store.safety_spec(dev)) or {}).get("checker")
+            if chk:  # older packs have a short "Deterministic gate:" line or none: say who decided, with parity and digest
+                line = verdict.sentence(chk, verdict.status())
+                md = re.sub(r"^Deterministic gate:.*$", lambda _: line, md, count=1, flags=re.M) if "Deterministic gate:" in md \
+                    else re.sub(r"^(\*\*Decision:\*\*.*)$", lambda m: m.group(1) + "\n" + line, md, count=1, flags=re.M)
+            return self.send(200, md + tracelinks.evidence_section(dev["id"], store.safety_spec(dev), reqs), "text/markdown")
         if u.path == "/api/trace/file":
             f = tracelinks.read_file(q.get("path", ""))
             return self.send(200, f) if f else self.send(404, {"error": "not a file in the repository"})

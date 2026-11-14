@@ -39,6 +39,8 @@ export type State = {
     hydradb?: "connected" | "connecting" | "falling back" | "missing key";
     composio_status?: "connected" | "not connected" | "checking" | "error" | "missing key";
     elevenlabs?: "connected" | "no agent" | "missing key";
+    /** gate/verdict.py status(): which engine decides verdicts and its parity with the Python reference on recorded runs. */
+    gate?: { engine: "rust" | "python"; cases: number; same: number; source: string };
   };
 };
 

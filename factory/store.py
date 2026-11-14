@@ -7,11 +7,15 @@ import json
 import os
 import re
 import subprocess
+import sys
 import threading
 import time
 
 import tracelinks
 import whatif_title
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "gate"))
+import verdict  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PATH = os.path.join(ROOT, ".runs", "factory.json")
@@ -247,6 +251,20 @@ def attribute_audit():
         return n
 
 
+_checked = {}
+
+
+def with_checker(wo_id, gate, world, spec):
+    """A gate result recorded before the verdict layer existed has no checker: re-check its recorded evidence with
+    the verdict layer (Rust when built), once per gate file. The recorded verdict stays the verdict."""
+    if not gate or gate.get("checker"):
+        return gate
+    k = (wo_id, os.path.getmtime(os.path.join(ROOT, ".runs", f"{wo_id}.gate.json")))
+    if k not in _checked:
+        _checked[k] = {**verdict.checker(verdict.decide(verdict.evidence(spec, [], gate["rows"], world))), "rechecked": True}
+    return {**gate, "checker": _checked[k]}
+
+
 def state(project_id, running):
     d = _load()
     proj = next((p for p in d["projects"] if p["id"] == project_id), d["projects"][0] if d["projects"] else None)
@@ -262,7 +280,8 @@ def state(project_id, running):
     wos = []
     for w in (w for w in d["work_orders"] if w["project"] == proj["id"]):
         st, _ = wo_status(w["id"], evs, running)
-        gate, world, ev = _load_run(f"{w['id']}.gate.json"), _load_run(f"{w['id']}.world.json"), None
+        world, ev = _load_run(f"{w['id']}.world.json"), None
+        gate = with_checker(w["id"], _load_run(f"{w['id']}.gate.json"), world, spec)
         evd = [e for e in evs if e.get("wo") == w["id"] and e.get("evidence")]
         if evd:
             ev = evd[-1]["evidence"]

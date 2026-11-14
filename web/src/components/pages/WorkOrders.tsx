@@ -7,6 +7,8 @@ import { blocked, go, type Ctx } from "@/lib/ctx";
 import { deviceCopy } from "@/lib/device";
 import { buttonVariants } from "@/components/kit/button";
 import { WorldChart } from "@/components/WorldChart";
+import { GateNote } from "@/components/GateNote";
+import type { Api } from "@/components/trace/Viewer";
 import { AuditTable, Diff, Empty, Markdown } from "@/components/common";
 import { Ago, Badge, Button, Field, Modal, PageHead, Replayed, Section, Table, Who, ago, inputCls } from "@/components/ui";
 
@@ -133,11 +135,13 @@ const STEPS = (device: string) => [
   ["reviewer", "Decision", "Merge decision from checks, never from an LLM"],
 ] as const;
 
-export function WorkOrderView({ state, events, post, text, team, id, live }: Ctx & { id: string }) {
+export function WorkOrderView({ state, events, post, text, getJSON, team, id, live }: Ctx & { id: string }) {
   const p = state.project!;
   const w = state.work_orders?.find(x => x.id === id);
   const [doc, setDoc] = useState<{ title: string; body: string } | null>(null);
   const [err, setErr] = useState("");
+  const gh = state.trace?.github;
+  const api: Api = useMemo(() => ({ getJSON, text, post, live, pid: p.id, gh }), [getJSON, text, post, live, p.id, gh]);
   const mine = useMemo(() => events.filter(e => e.wo === id), [events, id]);
   if (!w) return (
     <div className="grid place-items-center rounded-xl border border-dashed border-line px-6 py-16 text-center">
@@ -176,6 +180,7 @@ export function WorkOrderView({ state, events, post, text, team, id, live }: Ctx
           <div className="min-w-0">
             <p className={cn("text-md font-semibold", ok ? "text-ok" : "text-bad")}>{ok ? "Approved to merge" : "Blocked"}{w.evidence.decision && w.evidence.decision.toUpperCase() !== w.status.toUpperCase() ? ` · ${w.evidence.decision}` : ""}</p>
             <p className="mt-0.5 text-base text-ink/90">{w.evidence.headline}</p>
+            {w.gate?.checker && <div className="mt-1.5"><GateNote checker={w.gate.checker} state={state} api={api} /></div>}
           </div>
         </div>
       )}

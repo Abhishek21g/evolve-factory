@@ -15,6 +15,8 @@ export type Github = { repo: string; sha: string };
 export type Trace = {
   device?: string; github?: Github; tests?: { ts: number; results: Record<string, string>; running?: boolean };
   requirements?: TraceRow[]; hazards?: HazardRow[]; untraced?: Target[];
+  /** The Rust function that decides every verdict (gate-rs/src/lib.rs). */
+  gate?: Target | null;
   nodes: TraceNode[]; edges: { source: string; target: string }[];
 };
 export type RepoFile = { path: string; text: string; lines: number; repo: string; sha: string };
