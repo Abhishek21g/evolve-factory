@@ -2,7 +2,7 @@
 #ifndef PUMP_H
 #define PUMP_H
 
-#define MAX_BOLUS_U       10.0  /* SR-1 mitigates H-1 overdose */
+#define MAX_BOLUS_U       25.0  /* SR-1 mitigates H-1 overdose */
 #define MAX_DAILY_U       60.0  /* SR-2 mitigates H-2 cumulative overdose */
 #define MIN_BG_FOR_BOLUS  70    /* SR-3 mitigates H-3 hypoglycemia (mg/dL) */
 #define OCCLUSION_KPA     80.0  /* SR-4 mitigates H-4 missed delivery from blocked line */
