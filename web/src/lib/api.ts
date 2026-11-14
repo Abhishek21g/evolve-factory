@@ -59,6 +59,28 @@ export const recordedChips = (pid: string) => chips(recordings(pid));
 const WHAT_IF = /^\s*what (if|happens)\b/i;
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 const snapWo = (pid: string, id: string | null) => SNAP.states?.[pid]?.work_orders?.find(w => w.id === id);
+
+/* ---------- hosted site: an in-browser factory (projects, requirements, work orders you create are kept in this browser) ---------- */
+type LocalAudit = Audit & { project: string };
+export type Local = { projects: Project[]; base: Record<string, string>; wos: WorkOrder[]; reqs: Record<string, Requirement[]>; audit: LocalAudit[]; synced: Record<string, { at: number; by: string }> };
+const LOCAL = "certus-local";
+const EMPTY: Local = { projects: [], base: {}, wos: [], reqs: {}, audit: [], synced: {} };
+const loadLocal = (): Local => { try { return { ...EMPTY, ...JSON.parse(localStorage.getItem(LOCAL) || "{}") }; } catch { return EMPTY; } };
+const saveLocal = (l: Local) => { try { localStorage.setItem(LOCAL, JSON.stringify(l)); } catch { /* private mode: lasts this page */ } };
+/** The recorded project a browser-made project borrows its hazard log, world model and recorded runs from. */
+const recProject = (l: Local, pid: string) => l.base[pid] || pid;
+/** Snapshot state for a project with this browser's additions layered on top. */
+function stateFor(pid: string, l: Local): State | null {
+  const s0 = snapState(recProject(l, pid));
+  if (!s0) return null;
+  const mine = l.projects.find(p => p.id === pid);
+  const projects = [...s0.projects.filter(p => !l.projects.some(x => x.id === p.id)), ...l.projects];
+  if (!pid) return { ...s0, projects };
+  const s: State = mine ? { ...s0, project: mine, work_orders: [], audit: [], agents: {} } : s0;
+  const audit = [...l.audit.filter(a => a.project === pid), ...s.audit].sort((a, b) => b.ts - a.ts);
+  return { ...s, projects, audit, requirements: [...(s.requirements || []), ...(l.reqs[pid] || [])],
+    work_orders: [...(s.work_orders || []), ...l.wos.filter(w => w.project === pid)] };
+}
 /** Replays survive a reload of the tab (sessionStorage), shown finished. */
 const KEPT = "certus-replays";
 const keep = (ps: Played[]) => { try { sessionStorage.setItem(KEPT, JSON.stringify(ps)); } catch { /* full or private mode */ } };
@@ -77,6 +99,11 @@ export function useFactoryState(projectId: string) {
   const pid = useRef(projectId);
   pid.current = projectId;
   const [played, setPlayed] = useState<Played[]>([]);
+  const [local, setLocalState] = useState<Local>(EMPTY);
+  useEffect(() => { setLocalState(loadLocal()); }, []);
+  const localRef = useRef(local);
+  localRef.current = local;
+  const setLocal = useCallback((f: (l: Local) => Local) => { const n = f(localRef.current); localRef.current = n; saveLocal(n); setLocalState(n); }, []);
   const [playing, setPlaying] = useState<Played | null>(null);
   const now = useRef({ played, playing, events: allEvents });
   now.current = { played, playing, events: allEvents };
@@ -133,16 +160,59 @@ export function useFactoryState(projectId: string) {
 
   /** Hosted site: play the recorded run closest to the request, with its recorded timing (?speed=N plays it faster). */
   const replay = useCallback(async (path: string, body: Record<string, string>, actor: string) => {
+    const l = localRef.current;
+    const ts = Date.now() / 1000;
+    const log = (project: string, action: string, object: string, detail = "") => ({ ts, actor, action, object, detail, project });
+    if (path === "projects") {
+      const name = String(body.name || "").trim();
+      if (!name) return { error: "Give the project a name." };
+      const base = Object.values(SNAP.states || {}).find(s => s.project?.device === body.device)?.project || SNAP.state.project;
+      if (!base) return { error: "No world model for this device yet." };
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "project";
+      const taken = new Set([...SNAP.state.projects, ...l.projects].map(p => p.id));
+      let id = slug; for (let i = 2; taken.has(id); i++) id = `${slug}-${i}`;
+      const proj: Project = { ...base, id, name, created: ts, owner: actor };
+      const hz = snapState(base.id);
+      setLocal(x => ({ ...x, projects: [...x.projects, proj], base: { ...x.base, [id]: base.id },
+        audit: [...x.audit, log(id, "created project", name, proj.standard),
+          { ...log(id, "imported hazard log", name, `${hz?.hazards?.length || 0} hazards and ${hz?.requirements?.length || 0} safety requirements`), actor: "planner" }] }));
+      return { id };
+    }
+    if (path === "workorders") {
+      const title = String(body.title || "").trim();
+      if (!title) return { error: "Give the work order a title." };
+      const all = [...Object.values(SNAP.states || {}).flatMap(s => s.work_orders || []), ...l.wos, ...now.current.played.flatMap(p => p.wo ? [{ id: p.wo }] : [])];
+      const id = `WO-${Math.max(100, ...all.map(w => Number(w.id.slice(3)) || 0)) + 1}`;
+      const wo: WorkOrder = { id, project: body.project, title: title.slice(0, 120), description: String(body.description || ""), created: ts, requested_by: actor, status: "Draft", commits: [] };
+      setLocal(x => ({ ...x, wos: [...x.wos, wo], audit: [...x.audit, log(body.project, "created work order", id, wo.title)] }));
+      return { id };
+    }
+    if (path === "requirements") {
+      const text = String(body.text || "").trim();
+      if (!text) return { error: "Write the requirement." };
+      const have = stateFor(body.project, l)?.requirements || [];
+      const id = `SR-${Math.max(0, ...have.map(r => Number(r.id.replace(/\D/g, "")) || 0)) + 1}`;
+      const hazards = String(body.hazards || "").split(/[,\s]+/).filter(Boolean);
+      setLocal(x => ({ ...x, reqs: { ...x.reqs, [body.project]: [...(x.reqs[body.project] || []), { id, text, hazards }] },
+        audit: [...x.audit, log(body.project, "added requirement", id, text)] }));
+      return { id };
+    }
+    if (path === "record/resync") {
+      await sleep(1200);  // the deterministic re-derivation, as the server would run it
+      setLocal(x => ({ ...x, synced: { ...x.synced, [body.project]: { at: Date.now() / 1000, by: actor } },
+        audit: [...x.audit, log(body.project, "resynced source of record", "requirements", "re-derived against code, tests and simulation evidence")] }));
+      return {};
+    }
     if (now.current.playing) return { error: "factory busy" };
     const text = String(body.text || "").trim();
-    const known = [...Object.values(SNAP.states || {}).flatMap(s => s.work_orders || []),
+    const known = [...Object.values(SNAP.states || {}).flatMap(s => s.work_orders || []), ...l.wos,
       ...now.current.played.flatMap(p => (p.wo ? [{ id: p.wo, project: p.project, title: p.title }] : []))];
     const again = path === "run" ? known.find(w => w.id === body.wo) : undefined;
     if (path === "run" && !again) return { error: "unknown work order" };
     const project = again?.project || body.project || "";
     const kind = path === "whatif" || (path === "ask" && (body.skill === "simulate" || WHAT_IF.test(text))) ? "whatif" : "build";
     if (!["ask", "whatif", "run"].includes(path)) return { error: "Read-only snapshot. Run the factory locally to make changes." };
-    const m = closest(recordings(project).filter(r => r.kind === kind), again?.title || text);
+    const m = closest(recordings(recProject(l, project)).filter(r => r.kind === kind), again?.title || text);
     if (!m) return { error: `No recorded ${kind === "build" ? "work order run" : "what-if"} for this project in the hosted demo.` };
     const data = await fetch(snapFile(`replay?id=${m.rec.id}`, "json")).then(r => (r.ok ? r.json() as Promise<{ events: Ev[] }> : null)).catch(() => null);
     if (!data?.events.length) return { error: "This recorded run is missing from the hosted snapshot." };
@@ -167,7 +237,7 @@ export function useFactoryState(projectId: string) {
       setPlaying(null);
     })();
     return p.wo ? { started: p.wo, id: p.wo } : { started: "whatif" };
-  }, []);
+  }, [setLocal]);
 
   const post = useCallback(async (path: string, body: object, actor: string) => {
     await probe.done;
@@ -204,7 +274,17 @@ export function useFactoryState(projectId: string) {
    *  never answered from the snapshot. */
   const fetchApi = useCallback(async (path: string, ext: "json" | "txt") => {
     await probe.done;
-    if (base.current === null) return (await replayFile(path, ext)) ?? fetch(snapFile(path, ext), { cache: "no-store" }).catch(() => null);
+    if (base.current === null) {
+      const l = localRef.current;
+      const [kind, query = ""] = path.split("?");
+      const pid = new URLSearchParams(query).get("project") || "";
+      const own = recProject(l, pid);
+      const r = (await replayFile(path, ext)) ?? await fetch(snapFile(own !== pid ? path.replace(`project=${pid}`, `project=${own}`) : path, ext), { cache: "no-store" }).catch(() => null);
+      const sync = l.synced[pid];
+      if (kind !== "record" || !sync || !r?.ok) return r;
+      const rec = await r.json();
+      return new Response(JSON.stringify({ ...rec, synced_at: sync.at, synced_by: sync.by, resyncing: false }));
+    }
     return fetch(`${base.current}/api/${path}`, { cache: "no-store" }).catch(() => null);
   }, [probe, replayFile]);
 
@@ -222,7 +302,7 @@ export function useFactoryState(projectId: string) {
   // Never another project's state: a page must not render one project's data under another's name.
   const events = useMemo(() => projectId ? allEvents.filter(e => e.project === projectId) : allEvents, [allEvents, projectId]);
   const hosted = useMemo(() => {
-    const s = live ? null : snapState(projectId);
+    const s = live ? null : stateFor(projectId, local);
     if (!s) return null;
     const status = { ...s.status!, hosted: true, ...(playing ? { busy: true, job: playing.wo ? "build" : "whatif", running: playing.wo, project: playing.project } : {}) };
     const mine = played.filter(p => p.project === s.project?.id);
@@ -232,7 +312,7 @@ export function useFactoryState(projectId: string) {
     for (const p of mine) if (p.wo) wos.set(p.wo, playedWo(p, pevs, snapWo(p.rec.project, p.rec.wo)));
     const audit = [...mine.flatMap(p => playedAudit(p, pevs, p.wo ? wos.get(p.wo) : undefined)), ...s.audit].sort((a, b) => b.ts - a.ts);
     return { ...s, status, work_orders: [...wos.values()], audit, agents: roster(pevs) };
-  }, [live, projectId, played, playing, allEvents]);
-  const state = (live ? states[projectId] : null) ?? hosted ?? snapState(projectId);
+  }, [live, projectId, played, playing, allEvents, local]);
+  const state = (live ? states[projectId] : null) ?? hosted ?? stateFor(projectId, local);
   return { state, events, live, post, text, getJSON, base: base.current };
 }

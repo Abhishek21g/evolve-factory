@@ -285,6 +285,11 @@ class H(SimpleHTTPRequestHandler):
                 if not clip("name", 80):
                     return self.send(400, {"error": "name required"})
                 return self.send(201, store.create_project(actor, clip("name", 80), clip("device", 40)))
+            if u.path == "/api/requirements":
+                if not clip("text", 300):
+                    return self.send(400, {"error": "requirement text required"})
+                hz = [h for h in re.split(r"[,\s]+", clip("hazards", 200)) if h]
+                return self.send(201, store.create_requirement(actor, clip("project", 60), clip("text", 300), hz))
             if u.path == "/api/workorders":
                 if not clip("title", 120):
                     return self.send(400, {"error": "title required"})

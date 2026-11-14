@@ -120,6 +120,24 @@ def device(project_id):
     return {**DEVICES[key], "id": key}
 
 
+def create_requirement(actor, project, text, hazards):
+    """A requirement proposed from the UI. Kept beside safety.json (the source of record agents cannot edit) until a
+    person merges it there; shown in Requirements as proposed."""
+    with lock:
+        d = _load()
+        if not any(p["id"] == project for p in d["projects"]):
+            raise ValueError("unknown project")
+        proj = next(p for p in d["projects"] if p["id"] == project)
+        mine = d.setdefault("requirements", {}).setdefault(project, [])
+        have = [r["id"] for r in safety_spec(proj)["requirements"]] + [r["id"] for r in mine]
+        n = max([int(re.sub(r"\D", "", i) or 0) for i in have] + [0]) + 1
+        r = {"id": f"SR-{n}", "text": text, "hazards": hazards, "proposed": True, "by": actor, "created": time.time()}
+        mine.append(r)
+        _audit(d, actor, "added requirement", r["id"], text, project)
+        _save(d)
+        return r
+
+
 def create_wo(actor, project, title, description):
     with lock:
         d = _load()
@@ -318,7 +336,7 @@ def state(project_id, running):
             audit.append({"ts": float(c["ts"]), "actor": "coder-claude",  # wo/ branches are written by the coding agent
                           "action": "committed code", "object": w["id"], "detail": f"{c['sha'][:7]} {c['subject']}"})
     out["agents"] = agent_roster(evs)
-    out.update({"hazards": spec["hazards"], "requirements": spec["requirements"], "work_orders": wos,
+    out.update({"hazards": spec["hazards"], "requirements": spec["requirements"] + d.get("requirements", {}).get(proj["id"], []), "work_orders": wos,
                 "audit": sorted(audit, key=lambda a: -a["ts"])[:300], "trace": tracelinks.build(spec, wos, proj, proj["device"])})
     return out
 

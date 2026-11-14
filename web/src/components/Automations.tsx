@@ -83,10 +83,16 @@ export function SourceOfRecord({ state, live, checking = false, getJSON, post }:
   const fast = useCallback((r: Record_) => !!r.resyncing, []);
   const [rec, reload] = usePolled<Record_>(getJSON, live, checking, `record?project=${pid}`, fast);
   const [err, setErr] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [done, setDone] = useState<number | null>(null);
   const resync = async () => {
-    setErr("");
+    setErr(""); setDone(null); setSyncing(true);
+    const t0 = Date.now();
     const r = await post("record/resync", { project: pid });
-    if (r.error) setErr(r.error);
+    await new Promise(res => setTimeout(res, Math.max(0, 900 - (Date.now() - t0))));  // long enough to see it run
+    setSyncing(false);
+    if (r.error) return setErr(r.error);
+    setDone(Date.now() / 1000);
     reload();
   };
   if (rec === undefined) return <PageHead title="Source of Record" />;
@@ -98,8 +104,10 @@ export function SourceOfRecord({ state, live, checking = false, getJSON, post }:
       <PageHead title="Source of Record"
         sub={<>The requirements in <code className="text-ink">safety.json</code> are the single source of truth. Every resync re-derives each one against the code, its requirement test, trace links and fresh simulation evidence, and flags drift. Deterministic: no LLM.</>}>
         <span className="text-[12px] text-dim">synced <Ago ts={rec.synced_at} /> by {rec.synced_by}</span>
-        <Button primary onClick={resync} disabled={!live || rec.resyncing}><RefreshCw size={14} className={rec.resyncing ? "animate-spin" : ""} /> {rec.resyncing ? "Resyncing" : "Resync"}</Button>
+        <Button primary onClick={resync} disabled={(!live && !state.status?.hosted) || rec.resyncing || syncing}><RefreshCw size={14} className={rec.resyncing || syncing ? "animate-spin" : ""} /> {rec.resyncing || syncing ? "Resyncing…" : "Resync"}</Button>
       </PageHead>
+      {done && !err && <p role="status" className="-mt-4 mb-6 text-sm text-ok">Resynced: {rec.rows.length} requirements re-derived against the code, their tests, trace links and simulation evidence.</p>}
+      {err && <p role="alert" className="-mt-4 mb-6 text-sm text-bad">{err}</p>}
       {err && <p className="mb-4 text-[12px] text-bad">{err}</p>}
       <div className="mb-6 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="In sync" value={`${n("in-sync")}/${rec.rows.length}`} tone="text-ok" />

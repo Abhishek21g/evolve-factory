@@ -57,7 +57,7 @@ export async function signIn(creds: { email: string; password: string } | { demo
     if (!email.includes("@")) return { error: "Enter your work email." };
     const known = email.startsWith("murali") ? { name: "Muralikrishna Inti", role: "Firmware engineer", actor: "murali" }
       : "demo" in creds || email.startsWith("abhishek") ? {} : { name: nameFrom(email), role: "Reviewer" };
-    const user = { ...DEMO_USER, ...known, email, method: "demo workspace (read-only snapshot)", exp: Math.floor(Date.now() / 1000) + 7 * 86400 };
+    const user = { ...DEMO_USER, ...known, email, method: "demo workspace", exp: Math.floor(Date.now() / 1000) + 7 * 86400 };
     const s: Session = { user, token: null, mode: "local" };
     save(s);
     return s;

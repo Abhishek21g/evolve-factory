@@ -6,11 +6,13 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useAuth } from "./AuthGate";
 
 /** Sidebar footer: Settings link and the signed-in person (name, org, role), who they act as, and sign out. */
-export function UserMenu({ humans, me, setMe, integrations, active }:
-  { humans: Member[]; me: string; setMe: (id: string) => void; integrations: string; active: boolean }) {
+export function UserMenu({ humans, me, setMe, integrations, active, team }:
+  { humans: Member[]; me: string; setMe: (id: string) => void; integrations: string; active: boolean; team?: Member[] }) {
   const auth = useAuth();
   const user = auth?.user;
-  const self: Member = { id: user?.actor || me, name: user?.name || "", role: user?.role || "", kind: "human" };
+  // The footer shows who you are acting as: switching person changes the name, avatar and every action's author.
+  const acting = humans.find(h => h.id === me) || team?.find(h => h.id === me);
+  const self: Member = acting || { id: user?.actor || me, name: user?.name || "", role: user?.role || "", kind: "human" };
   return (
     <>
       <a href={integrations} aria-current={active ? "page" : undefined}
@@ -21,8 +23,8 @@ export function UserMenu({ humans, me, setMe, integrations, active }:
         <DropdownMenuTrigger aria-label="Account" data-testid="user-menu" className="flex w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left hover:bg-white/[.04]">
           <Avatar m={self} size={28} />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium">{user?.name}</span>
-            <span className="block truncate text-xs text-dim">{user?.org} · {user?.role}</span>
+            <span className="block truncate text-sm font-medium">{self.name}</span>
+            <span className="block truncate text-xs text-dim">{user?.org || "CertusAI"} · {self.role}</span>
           </span>
           <ChevronsUpDown size={14} className="text-dim" />
         </DropdownMenuTrigger>
@@ -30,7 +32,7 @@ export function UserMenu({ humans, me, setMe, integrations, active }:
           <DropdownMenuLabel className="font-normal">
             <span className="block truncate text-sm font-medium text-ink">{user?.name}</span>
             <span className="block truncate text-xs text-dim">{user?.email}</span>
-            <span className="block truncate text-xs text-dim">{user?.org} · {user?.role}{auth?.mode === "local" ? " · snapshot session" : ""}</span>
+            <span className="block truncate text-xs text-dim">{user?.org} · {user?.role}{auth?.mode === "local" ? " · demo workspace" : ""}</span>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuLabel className="text-xs text-dim">Acting as</DropdownMenuLabel>
