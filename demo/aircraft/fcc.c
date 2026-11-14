@@ -29,3 +29,6 @@ double fcc_step(fcc_state *s, double aoa_l_deg, double aoa_r_deg, double dt_s) {
         s->trim_deg = 0.0;
     return s->trim_deg;
 }
+
+/* AOA DISAGREE crew alert: shown whenever the AoA monitor rejects the sources. */
+int fcc_aoa_disagree(const fcc_state *s) { return !s->aoa_valid; }
