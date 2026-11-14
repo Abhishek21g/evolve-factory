@@ -68,9 +68,10 @@ Organization memory that may matter:
 {mem}
 
 Return ONLY a JSON object:
-{{"requirements": ["SR-.."], "hazards": ["H-.."], "risk": "one sentence on how this change could hurt a patient",
-  "guidance": "one sentence telling the coding agent how to implement it safely",
-  "new_hazard": "a hazard not yet in the log that this change raises, or empty string"}}"""
+{{"requirements": ["SR-.."], "hazards": ["H-.."], "risk": "how this change could hurt a patient, at most 20 words",
+  "guidance": "how the coding agent should implement it safely, at most 25 words",
+  "new_hazard": "a hazard not yet in the log that this change raises (at most 15 words), or empty string"}}
+Plain words, no preamble, no lists inside strings."""
 
 
 def safety_analysis(intent, spec, hits):
@@ -209,8 +210,10 @@ intended dose or picks "extended" mode; `cohort` is adult, adolescent or child (
 Question: {q}
 
 Return ONLY JSON: {{"scenarios": [{{"id": "short-kebab-id", "label": "short description", "carbs": 0-200,
-"typo": 1-20, "fallback": "reenter" or "extended", "cohort": "adult"|"adolescent"|"child"}}], "explain": "one sentence"}}
-Use 1 to 3 scenarios."""
+"typo": 1-20, "fallback": "reenter" or "extended", "cohort": "adult"|"adolescent"|"child"}}],
+"explain": "what the scenarios compare, at most 15 words"}}
+Use 1 to 3 scenarios: the one asked about, plus a correctly dosed control when it helps attribute the effect.
+Labels under 8 words. Do not predict results: the simulation answers."""
 
 
 def whatif(question):
