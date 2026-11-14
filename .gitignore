@@ -17,3 +17,4 @@ dashboard/events.jsonl
 web/node_modules/
 web/.next/
 web/out/
+gate-rs/target/

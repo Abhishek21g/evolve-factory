@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Ev, GateRow, World } from "./feed";
+import type { Ev, Gate, World } from "./feed";
 import snapshot from "../../public/snapshot.json";
 
 export type Member = { id: string; name: string; role: string; kind: "human" | "agent" };
@@ -10,7 +10,7 @@ export type Requirement = { id: string; text: string; hazards: string[]; symbols
 export type WorkOrder = {
   id: string; project: string; title: string; description: string; created: number; requested_by: string;
   status: "Draft" | "Running" | "Approved" | "Blocked" | "Stopped" | "Not run";
-  gate?: { verdict: string; rows: GateRow[] } | null; world?: World | null;
+  gate?: Gate | null; world?: World | null;
   evidence?: { decision: string; headline: string } | null;
   commits: { sha: string; author: string; ts: string; subject: string }[];
 };
