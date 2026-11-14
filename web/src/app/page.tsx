@@ -119,9 +119,9 @@ function Projects({ state, post, team, live }: Ctx) {
       <Table head={["Project", "Device", "Standard", "World model", "Owner", "Created"]}
         empty="No projects yet. Create one to import its hazard log and start work orders."
         rows={state.projects.map(p => [
-          <a key="n" href={`#/p/${p.id}/overview`} className="font-medium hover:underline">{p.name}</a>,
-          state.devices[p.device] || p.device, <span key="s" className="text-mute">{p.standard}</span>,
-          <span key="w" className="text-mute">{p.world_model}</span>, <Who key="o" m={team[p.owner]} />, <span key="c" className="text-mute">{ago(p.created)}</span>,
+          <a key="n" href={`#/p/${p.id}/overview`} className="whitespace-nowrap font-medium hover:underline">{p.name}</a>,
+          <span key="d" className="whitespace-nowrap">{state.devices[p.device] || p.device}</span>, <span key="s" className="text-mute">{p.standard}</span>,
+          <span key="w" className="text-mute">{p.world_model}</span>, <Who key="o" m={team[p.owner]} />, <span key="c" className="whitespace-nowrap text-mute">{ago(p.created)}</span>,
         ])} />
       {open && <NewProject state={state} post={post} onClose={() => setOpen(false)} />}
     </>
@@ -324,7 +324,13 @@ function AddMemory({ post, onClose }: { post: Ctx["post"]; onClose: () => void }
   const [kind, setKind] = useState("meeting");
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
-  const submit = async (e: React.FormEvent) => { e.preventDefault(); await post("memory", { kind, title, text }); onClose(); };
+  const [err, setErr] = useState("");
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const r = await post("memory", { kind, title, text });
+    if (r.error) return setErr(r.error);
+    onClose();
+  };
   return (
     <Modal title="Add to memory" onClose={onClose}>
       <form onSubmit={submit} className="space-y-4">
@@ -335,7 +341,8 @@ function AddMemory({ post, onClose }: { post: Ctx["post"]; onClose: () => void }
         </Field>
         <Field label="Title"><input className={inputCls} value={title} onChange={e => setTitle(e.target.value)} placeholder="Design review, Nov 14" /></Field>
         <Field label="Content"><textarea rows={5} className={inputCls} value={text} onChange={e => setText(e.target.value)} placeholder="Paste meeting notes, a Slack thread or an email." /></Field>
-        <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button primary type="submit">Save</Button></div>
+        {err && <p className="text-[12px] text-bad">{err}</p>}
+        <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button primary type="submit" disabled={!text.trim()}>Save</Button></div>
       </form>
     </Modal>
   );
@@ -458,7 +465,7 @@ function WorkOrderView({ state, events, post, text, team, id, live }: Ctx & { id
                 <li key={agent} className="relative pb-4">
                   <span className={`absolute -left-[25px] top-1 h-2.5 w-2.5 rounded-full border-2 border-bg ${t === "run" ? "pulse bg-run" : t === "bad" ? "bg-bad" : t === "ok" ? "bg-ok" : "bg-[#2a2f36]"}`} />
                   <div className="flex items-baseline justify-between gap-2">
-                    <span className={`text-[13px] font-medium ${t === "idle" ? "text-mute" : ""}`}>{label}</span>
+                    <a href={`#/p/${w.project}/agents/${agent}`} className={`text-[13px] font-medium hover:underline ${t === "idle" ? "text-mute" : ""}`}>{label}</a>
                     {e && <span className="font-mono text-[10px] text-dim">{e.t.toFixed(0)}s</span>}
                   </div>
                   <div className={`text-[12px] leading-snug ${t === "bad" ? "text-bad" : "text-dim"}`}>{e?.msg || desc}</div>
@@ -479,7 +486,7 @@ function WorkOrderView({ state, events, post, text, team, id, live }: Ctx & { id
             ) : <Empty>Every requirement the change touches is traced to an executed test.</Empty>}
           </Section>
           <Section title="Activity">
-            <AuditTable rows={state.audit.filter(a => a.object === id).slice(0, 12)} team={team} />
+            <AuditTable rows={state.audit.filter(a => a.object === id).slice(0, 12)} team={team} pid={w.project} />
           </Section>
         </div>
       </div>
@@ -534,12 +541,13 @@ function Traceability({ state }: Ctx) {
   );
 }
 
-function AuditTable({ rows, team }: { rows: State["audit"]; team: Record<string, Member> }) {
+function AuditTable({ rows, team, pid }: { rows: State["audit"]; team: Record<string, Member>; pid: string }) {
   return (
     <Table head={["When", "Who", "Action", "Object", "Detail"]} empty="No activity yet."
       rows={rows.map(a => [
         <span key="t" className="whitespace-nowrap text-mute" title={new Date(a.ts * 1000).toLocaleString()}>{ago(a.ts)}</span>,
-        <Who key="w" m={team[a.actor] || { id: a.actor, name: a.actor, role: "", kind: "human" }} />,
+        team[a.actor]?.kind === "agent" ? <a key="w" href={`#/p/${pid}/agents/${a.actor}`} className="hover:underline"><Who m={team[a.actor]} /></a>
+          : <Who key="w" m={team[a.actor] || { id: a.actor, name: a.actor, role: "", kind: "human" }} />,
         <span key="a" className="whitespace-nowrap">{a.action === "done" || a.action === "pass" ? "completed" : a.action}</span>,
         <span key="o" className="whitespace-nowrap font-mono text-[12px]">{a.object}</span>,
         <span key="d" className="line-clamp-2 text-[12px] text-mute">{a.detail}</span>])} />
@@ -558,7 +566,7 @@ function AuditTrail({ state, team }: Ctx) {
           ))}
         </div>
       </PageHead>
-      <AuditTable rows={rows} team={team} />
+      <AuditTable rows={rows} team={team} pid={state.project!.id} />
     </>
   );
 }
