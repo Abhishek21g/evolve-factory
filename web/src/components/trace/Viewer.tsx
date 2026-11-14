@@ -80,7 +80,7 @@ export function CodeLines({ file, start, end, only, context = 2 }: { file: RepoF
       </div>);
   });
   return (
-    <div ref={ref} className={`scroll-thin overflow-auto rounded-md border border-line bg-bg py-2 font-mono text-[11.5px] leading-[1.6] text-[#d1d5db] ${only ? "max-h-72" : ""}`}>
+    <div ref={ref} className={`scroll-thin overflow-auto rounded-md border border-line bg-bg py-2 font-mono text-xs leading-[1.6] text-[#d1d5db] ${only ? "max-h-72" : ""}`}>
       {rows}
     </div>
   );
@@ -90,7 +90,7 @@ export function CodeLines({ file, start, end, only, context = 2 }: { file: RepoF
 function inline(s: string): ReactNode[] {
   return s.split(/(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|_[^_]+_)/g).map((p, i) => {
     if (p.startsWith("**")) return <b key={i}>{p.slice(2, -2)}</b>;
-    if (p.startsWith("`")) return <code key={i} className="rounded bg-white/[.05] px-1 font-mono text-[11.5px] text-acc">{p.slice(1, -1)}</code>;
+    if (p.startsWith("`")) return <code key={i} className="rounded bg-white/[.05] px-1 font-mono text-xs text-acc">{p.slice(1, -1)}</code>;
     const link = p.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
     if (link) return /^https?:/.test(link[2]) ? <a key={i} href={link[2]} target="_blank" rel="noopener" className="text-acc hover:underline">{link[1]}</a> : <span key={i} className="text-acc">{link[1]}</span>;
     if (/^_[^_]+_$/.test(p)) return <i key={i}>{p.slice(1, -1)}</i>;
@@ -111,7 +111,7 @@ export function MarkdownDoc({ src, anchor }: { src: string; anchor?: string }) {
     if (l.startsWith("```")) {
       const body: string[] = [];
       for (i++; i < lines.length && !lines[i].startsWith("```"); i++) body.push(lines[i]);
-      out.push(<pre key={i} className="scroll-thin my-3 overflow-x-auto rounded-md bg-bg p-3 font-mono text-[11.5px] text-mute">{body.join("\n")}</pre>);
+      out.push(<pre key={i} className="scroll-thin my-3 overflow-x-auto rounded-md bg-bg p-3 font-mono text-xs text-mute">{body.join("\n")}</pre>);
       continue;
     }
     if (l.startsWith("|")) {
@@ -120,7 +120,7 @@ export function MarkdownDoc({ src, anchor }: { src: string; anchor?: string }) {
         if (!/^\|[-:|\s]+\|$/.test(lines[i])) rows.push(lines[i].replace(/^\||\|$/g, "").split("|").map(c => c.trim()));
       }
       i--;
-      out.push(<div key={i} className="my-3 overflow-x-auto"><table className="w-full text-[12.5px]"><tbody>
+      out.push(<div key={i} className="my-3 overflow-x-auto"><table className="w-full text-sm"><tbody>
         {rows.map((r, j) => <tr key={j} className={j ? "border-t border-line" : "text-dim"}>{r.map((c, k) => <td key={k} className="py-1.5 pr-3 align-top">{inline(c)}</td>)}</tr>)}
       </tbody></table></div>);
       continue;
@@ -129,11 +129,11 @@ export function MarkdownDoc({ src, anchor }: { src: string; anchor?: string }) {
     if (h) {
       const id = slug(h[2]);
       const hit = id === anchor;
-      const cls = h[1].length === 1 ? "mb-3 text-[18px]" : h[1].length === 2 ? "mb-2 mt-6 text-[15px]" : "mb-1.5 mt-5 text-[13.5px]";
+      const cls = h[1].length === 1 ? "mb-3 text-lg" : h[1].length === 2 ? "mb-2 mt-6 text-md" : "mb-1.5 mt-5 text-base";
       out.push(<div key={i} id={id} className={`scroll-mt-4 font-semibold ${cls} ${hit ? "-mx-2 rounded bg-acc/[.09] px-2 py-1 text-acc" : ""}`}>{h[2]}</div>);
-    } else if (/^\s*[-*] /.test(l)) out.push(<li key={i} className="ml-5 list-disc text-[13px] leading-relaxed">{inline(l.replace(/^\s*[-*] /, ""))}</li>);
-    else if (/^\d+\. /.test(l)) out.push(<li key={i} className="ml-5 list-decimal text-[13px] leading-relaxed">{inline(l.replace(/^\d+\. /, ""))}</li>);
-    else if (l.trim()) out.push(<p key={i} className="my-1.5 text-[13px] leading-relaxed text-[#cfd3d8]">{inline(l)}</p>);
+    } else if (/^\s*[-*] /.test(l)) out.push(<li key={i} className="ml-5 list-disc text-base leading-relaxed">{inline(l.replace(/^\s*[-*] /, ""))}</li>);
+    else if (/^\d+\. /.test(l)) out.push(<li key={i} className="ml-5 list-decimal text-base leading-relaxed">{inline(l.replace(/^\d+\. /, ""))}</li>);
+    else if (l.trim()) out.push(<p key={i} className="my-1.5 text-base leading-relaxed text-[#cfd3d8]">{inline(l)}</p>);
   }
   return <div ref={ref}>{out}</div>;
 }
@@ -151,12 +151,12 @@ export function useFile(api: Api, path?: string) {
 }
 
 export const GithubLink = ({ href }: { href: string }) => href ? (
-  <a href={href} target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 rounded-md border border-line bg-panel2 px-3 py-1.5 text-[13px] font-medium hover:border-white/20">
+  <a href={href} target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 rounded-md border border-line bg-panel2 px-3 py-1.5 text-base font-medium hover:border-white/20">
     <ExternalLink size={13} /> Open on GitHub
   </a>
 ) : null;
 
-const Notice = ({ children }: { children: ReactNode }) => <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-[13px] text-dim">{children}</p>;
+const Notice = ({ children }: { children: ReactNode }) => <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-base text-dim">{children}</p>;
 
 function FileBody({ api, t, file }: { api: Api; t: Target; file: RepoFile | null | undefined }) {
   if (file === undefined) return <Notice>Opening {t.path}…</Notice>;
@@ -176,10 +176,10 @@ export function TestResult({ api, t }: { api: Api; t: Target }) {
   };
   const result = run?.result || t.result;
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-2 text-[12px] text-mute">
+    <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-mute">
       Latest result {result ? <Badge>{result}</Badge> : <span className="text-dim">not run yet</span>}
       {run && <span className="text-dim">ran just now</span>}
-      {t.cmd && <code className="font-mono text-[11px] text-dim">{t.cmd}</code>}
+      {t.cmd && <code className="font-mono text-xs text-dim">{t.cmd}</code>}
       <span className="ml-auto"><Button onClick={again} disabled={!api.live || busy}><Play size={13} /> {busy ? "Running…" : "Run tests"}</Button></span>
     </div>
   );
@@ -201,16 +201,16 @@ export function Drawer({ api, t, onClose }: { api: Api; t: Target; onClose: () =
   switch (t.kind) {
     case "code":
     case "scenario":
-      title = <>{t.label} <span className="font-mono text-[12px] font-normal text-dim">{where(t)}</span></>;
+      title = <>{t.label} <span className="font-mono text-sm font-normal text-dim">{where(t)}</span></>;
       body = <FileBody api={api} t={t} file={file} />;
       break;
     case "test":
-      title = <>{t.label} <span className="font-mono text-[12px] font-normal text-dim">{where(t)}</span></>;
+      title = <>{t.label} <span className="font-mono text-sm font-normal text-dim">{where(t)}</span></>;
       body = <><TestResult api={api} t={t} /><FileBody api={api} t={t} file={file} /></>;
       break;
     case "doc":
     case "clause":
-      title = <>{t.label} <span className="font-mono text-[12px] font-normal text-dim">{where(t)}</span></>;
+      title = <>{t.label} <span className="font-mono text-sm font-normal text-dim">{where(t)}</span></>;
       body = <FileBody api={api} t={t} file={file} />;
       break;
     case "evidence":
@@ -236,11 +236,11 @@ export function Drawer({ api, t, onClose }: { api: Api; t: Target; onClose: () =
         className="flex h-full w-full max-w-[860px] flex-col border-l border-line bg-panel shadow-2xl">
         <div className="flex items-center gap-3 border-b border-line px-5 py-3">
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] uppercase tracking-[.12em] text-dim">{t.kind.replace("_", " ")}{t.link ? ` · added by ${t.by} (${t.link})` : t.auto ? " · from safety.json" : ""}</div>
-            <h2 className="truncate text-[15px] font-semibold">{title}</h2>
-            {t.note && <div className="truncate text-[12px] text-mute">{t.note}</div>}
+            <div className="text-2xs uppercase tracking-[.12em] text-dim">{t.kind.replace("_", " ")}{t.link ? ` · added by ${t.by} (${t.link})` : t.auto ? " · from safety.json" : ""}</div>
+            <h2 className="truncate text-md font-semibold">{title}</h2>
+            {t.note && <div className="truncate text-sm text-mute">{t.note}</div>}
           </div>
-          {t.wo && <a href={`#/p/${api.pid}/work-orders/${t.wo}`} onClick={onClose} className="text-[13px] text-acc hover:underline">Open {t.wo}</a>}
+          {t.wo && <a href={`#/p/${api.pid}/work-orders/${t.wo}`} onClick={onClose} className="text-base text-acc hover:underline">Open {t.wo}</a>}
           <GithubLink href={gh} />
           <button onClick={onClose} aria-label="Close" className="text-mute hover:text-ink"><X size={16} /></button>
         </div>

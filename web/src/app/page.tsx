@@ -1,14 +1,15 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity, ArrowUp, Bot, Orbit, Boxes, Brain, FileCheck2, FlaskConical, GitBranch, GitPullRequest, Home, ListChecks, Network, Plus, Play, Search, ShieldAlert, Users,
+  Activity, ArrowUp, Bot, Check, ChevronsUpDown, Info, Orbit, Boxes, Brain, ShieldCheck, FileCheck2, FlaskConical, GitBranch, GitPullRequest, Home, ListChecks, Network, Plus, Play, Search, ShieldAlert, Users,
 } from "lucide-react";
 import { useFactoryState, type MemoryView, type Member, type State, type WorkOrder } from "@/lib/api";
 import type { Ev } from "@/lib/feed";
 import { WorldChart } from "@/components/WorldChart";
 import { Traceability } from "@/components/trace/Traceability";
-import { AGENT_ICON, AgentPage, AgentTeam } from "@/components/Agents";
+import { AgentIcon, AgentPage, AgentTeam } from "@/components/Agents";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/kit/dropdown-menu";
 import { LoopSummary, SimVsWorld, WorldLoopPage } from "@/components/WorldLoop";
 import { Ago, Avatar, Badge, Button, Field, Modal, PageHead, Replayed, Section, Table, Who, ago, inputCls } from "@/components/ui";
 
@@ -41,10 +42,12 @@ export default function App() {
   return (
     <div className="flex min-h-screen">
       <Sidebar state={state} project={unknown ? undefined : route.project || undefined} page={route.page} me={me} setMe={switchMe} live={!!live} />
-      <main className="min-w-0 flex-1 px-5 pb-20 pt-6 md:px-10">
+      <main className="min-w-0 flex-1 px-6 pb-24 pt-8 md:px-10">
+        <div className="mx-auto max-w-[1360px]">
         {live === false && (
-          <div className="mb-5 rounded-md border border-line bg-panel2 px-3 py-2 text-[12px] text-mute">
-            Read-only snapshot of a real run. Clone the repo and run <code className="text-ink">factory/server.py</code> to create projects and run work orders.
+          <div className="mb-6 flex items-center gap-2 rounded-lg border border-line bg-panel px-4 py-2.5 text-sm text-mute">
+            <Info size={15} className="shrink-0 text-acc" />
+            Read-only snapshot of a real run. Clone the repo and run <code className="font-mono text-ink">demo/go.sh</code> to create projects and run work orders.
           </div>
         )}
         {route.project && !p && !unknown ? null :
@@ -60,6 +63,7 @@ export default function App() {
           route.page === "agents" && route.item ? <AgentPage {...ctx} id={route.item} /> :
           route.page === "agents" ? <AgentTeam {...ctx} /> :
           route.page === "memory" ? <Memory {...ctx} /> : <HomePage {...ctx} />}
+        </div>
       </main>
     </div>
   );
@@ -75,39 +79,51 @@ function Sidebar({ state, project, page, me, setMe, live }: { state: State; proj
     ["traceability", "Traceability", Network], null, ["audit", "Audit Trail", Activity], ["team", "Team", Users],
   ] as const;
   const humans = state.team.filter(m => m.kind === "human");
+  const item = (active: boolean) => `group flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm font-medium transition-colors ${active ? "bg-white/[.07] text-ink" : "text-mute hover:bg-white/[.04] hover:text-ink"}`;
   return (
-    <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-[#0c0d0f] lg:flex">
-      <a href="#/" className="flex items-center gap-2.5 border-b border-line px-4 py-3.5">
-        <div className="grid h-6 w-6 place-items-center rounded bg-ink font-mono text-[12px] font-bold text-bg">C</div>
-        <div className="min-w-0">
-          <div className="truncate text-[13px] font-semibold">{state.projects.find(x => x.id === project)?.name || "Certus Factory"}</div>
-          <div className="truncate text-[11px] text-dim">{project ? "Certus Factory" : "Software factory for physical AI"}</div>
-        </div>
+    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-sidebar md:flex">
+      <a href="#/" className="flex h-14 items-center gap-2.5 px-4">
+        <span className="grid size-7 place-items-center rounded-md bg-gradient-to-br from-acc to-violet-400 text-bg"><ShieldCheck size={16} strokeWidth={2.4} /></span>
+        <span className="min-w-0">
+          <span className="block truncate text-base font-semibold tracking-tight">Certus Factory</span>
+          <span className="block truncate text-xs text-dim">Software factory for physical AI</span>
+        </span>
       </a>
       {project && <ProjectSwitcher state={state} project={project} page={page} />}
-      <nav className="flex-1 space-y-0.5 p-2 text-[13px]">
-        <a href="#/" className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 ${!project ? "bg-white/[.06] text-ink" : "text-mute hover:bg-white/[.04] hover:text-ink"}`}>
-          <Boxes size={15} /> Projects
+      <nav aria-label="Main" className="scroll-thin flex-1 space-y-0.5 overflow-y-auto px-3 py-2">
+        <a href="#/" aria-current={!project ? "page" : undefined} className={item(!project)}>
+          <Boxes size={16} className="shrink-0" /> All projects
         </a>
-        {project && <div className="my-2 border-t border-line" />}
-        {project && nav.map((n, i) => !n ? <div key={i} className="my-2 border-t border-line" /> : (([k, l, Icon]) => (
-          <a key={k} href={`#/p/${project}/${k}`} className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 ${page === k ? "bg-white/[.06] text-ink" : "text-mute hover:bg-white/[.04] hover:text-ink"}`}>
-            <Icon size={15} /> {l}
+        {project && <div className="my-2 h-px bg-line" />}
+        {project && nav.map((n, i) => !n ? <div key={i} className="my-2 h-px bg-line" /> : (([k, l, Icon]) => (
+          <a key={k} href={`#/p/${project}/${k}`} aria-current={page === k ? "page" : undefined} className={item(page === k)}>
+            <Icon size={16} className={`shrink-0 ${page === k ? "text-acc" : ""}`} /> {l}
           </a>
         ))(n))}
       </nav>
-      <div className="space-y-3 border-t border-line p-3 text-[12px]">
-        <div className="flex items-center gap-2 text-dim">
-          <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-ok" : "bg-dim"}`} />
-          {live ? "Factory online" : "Snapshot"} · memory {state.status?.memory || "local"}
+      <div className="space-y-2 border-t border-line p-3">
+        <div className="flex items-center gap-2 px-1 text-xs text-mute">
+          <span className={`size-2 rounded-full ${live ? "bg-ok shadow-[0_0_8px] shadow-ok/60" : "bg-dim"}`} />
+          {live ? "Factory online" : "Read-only snapshot"} <span className="text-dim">· memory {state.status?.memory || "local"}</span>
         </div>
-        <label className="flex items-center gap-2">
-          <Avatar m={humans.find(h => h.id === me)} />
-          <select aria-label="Acting as" value={me} onChange={e => setMe(e.target.value)}
-            className="min-w-0 flex-1 cursor-pointer bg-transparent text-[13px] text-ink outline-none">
-            {humans.map(h => <option key={h.id} value={h.id} className="bg-panel">{h.name}</option>)}
-          </select>
-        </label>
+        <DropdownMenu>
+          <DropdownMenuTrigger aria-label="Acting as" className="flex w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left hover:bg-white/[.04]">
+            <Avatar m={humans.find(h => h.id === me)} size={26} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">{humans.find(h => h.id === me)?.name}</span>
+              <span className="block truncate text-xs text-dim">{humans.find(h => h.id === me)?.role}</span>
+            </span>
+            <ChevronsUpDown size={14} className="text-dim" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" className="w-56">
+            <DropdownMenuLabel className="text-xs text-dim">Acting as</DropdownMenuLabel>
+            {humans.map(h => (
+              <DropdownMenuItem key={h.id} onSelect={() => setMe(h.id)} className="gap-2.5">
+                <Avatar m={h} /> <span className="flex-1">{h.name}</span> {h.id === me && <Check size={14} />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </aside>
   );
@@ -154,8 +170,8 @@ function NewProject({ state, post, onClose }: { state: State; post: Ctx["post"];
             {soon.map(s => <option key={s} disabled>{s} · world model coming</option>)}
           </select>
         </Field>
-        <p className="text-[12px] text-dim">The factory imports the repository&apos;s hazard log and safety requirements and connects the world model.</p>
-        {err && <p className="text-[12px] text-bad">{err}</p>}
+        <p className="text-sm text-dim">The factory imports the repository&apos;s hazard log and safety requirements and connects the world model.</p>
+        {err && <p className="text-sm text-bad">{err}</p>}
         <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button primary type="submit">Create project</Button></div>
       </form>
     </Modal>
@@ -213,31 +229,31 @@ function HomePage({ state, post, team, me, live, base }: Ctx) {
   return (
     <>
       <div className="mx-auto mt-6 max-w-2xl md:mt-12">
-        <h1 className="mb-1 text-center text-[26px] font-semibold tracking-tight">{greet}, {team[me]?.name.split(" ")[0]}.</h1>
-        <p className="mb-6 text-center text-[13px] text-dim">{p.name} · your agent team is ready</p>
+        <h1 className="mb-1 text-center text-3xl font-semibold tracking-tight">{greet}, {team[me]?.name.split(" ")[0]}.</h1>
+        <p className="mb-6 text-center text-base text-dim">{p.name} · your agent team is ready</p>
         <form onSubmit={submit} className="rounded-xl border border-line bg-panel focus-within:border-white/20">
           <textarea value={text} onChange={e => setText(e.target.value)} rows={2} aria-label="What should the factory work on?"
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
             placeholder={mode === "build" ? "What should the factory build? Agents plan, code, test and simulate it." : "Ask the world model a what-if question."}
-            className="block w-full resize-none bg-transparent px-4 pt-3.5 text-[14px] outline-none placeholder:text-dim" />
+            className="block w-full resize-none bg-transparent px-4 pt-3.5 text-md outline-none placeholder:text-dim" />
           <div className="flex items-center gap-2 px-3 pb-3 pt-1">
-            <div className="flex overflow-hidden rounded-md border border-line text-[12px]">
+            <div className="flex overflow-hidden rounded-md border border-line text-sm">
               {(["build", "simulate"] as const).map(m => (
                 <button type="button" key={m} onClick={() => setMode(m)}
                   className={`px-2.5 py-1 ${mode === m ? "bg-white/[.08] text-ink" : "text-mute hover:text-ink"}`}>{m === "build" ? "Build" : "Simulate"}</button>
               ))}
             </div>
-            <span className="text-[11px] text-dim">{mode === "build" ? "creates a work order and runs the agent team" : "Simulation Agent + world model"}</span>
+            <span className="text-xs text-dim">{mode === "build" ? "creates a work order and runs the agent team" : "Simulation Agent + world model"}</span>
             <button type="submit" disabled={!live || busy || !text.trim()} aria-label="Send"
               className="ml-auto grid h-7 w-7 place-items-center rounded-full bg-ink text-bg disabled:opacity-30"><ArrowUp size={15} /></button>
           </div>
         </form>
-        {err && <p className="mt-2 text-[12px] text-bad">{err}</p>}
-        {busy && <p className="mt-2 text-[12px] text-run">Agents are working on <a href={`#/p/${st?.project || p.id}/${st?.running ? `work-orders/${st.running}` : "world-model"}`} className="underline">{st?.running || "a simulation"}</a>{st?.project && st.project !== p.id ? ` in ${state.projects.find(x => x.id === st.project)?.name || st.project}` : ""}. <a href={`#/p/${st?.project || p.id}/agents`} className="underline">Watch the team</a></p>}
+        {err && <p className="mt-2 text-sm text-bad">{err}</p>}
+        {busy && <p className="mt-2 text-sm text-run">Agents are working on <a href={`#/p/${st?.project || p.id}/${st?.running ? `work-orders/${st.running}` : "world-model"}`} className="underline">{st?.running || "a simulation"}</a>{st?.project && st.project !== p.id ? ` in ${state.projects.find(x => x.id === st.project)?.name || st.project}` : ""}. <a href={`#/p/${st?.project || p.id}/agents`} className="underline">Watch the team</a></p>}
         <div className="mt-3 flex flex-wrap justify-center gap-1.5">
           {(SUGGEST_BY_DEVICE[p.device] || SUGGEST).map(([m, t]) => (
             <button key={t} onClick={() => { setMode(m); setText(t); }}
-              className="rounded-full border border-line px-2.5 py-1 text-[12px] text-mute hover:border-white/20 hover:text-ink">{t}</button>
+              className="rounded-full border border-line px-2.5 py-1 text-sm text-mute hover:border-white/20 hover:text-ink">{t}</button>
           ))}
         </div>
       </div>
@@ -252,12 +268,12 @@ function HomePage({ state, post, team, me, live, base }: Ctx) {
               return (
                 <a key={a.id} href={`#/p/${p.id}/agents/${a.id}`} className={`block rounded-lg border bg-panel p-3 hover:border-white/20 ${t === "run" ? "border-run/40" : "border-line"}`}>
                   <div className="flex items-center gap-2">
-                    <span className="grid h-6 w-6 place-items-center rounded-md bg-white/[.05] font-mono text-[11px] text-acc">{AGENT_ICON[a.id] || "◇"}</span>
-                    <span className="truncate text-[13px] font-medium">{a.name}</span>
+                    <AgentIcon id={a.id} size={24} />
+                    <span className="truncate text-base font-medium">{a.name}</span>
                     <span className={`ml-auto h-1.5 w-1.5 shrink-0 rounded-full ${t === "run" ? "pulse bg-run" : t === "bad" ? "bg-bad" : t === "ok" ? "bg-ok" : "bg-[#2a2f36]"}`} />
                   </div>
-                  <p className="mt-2 line-clamp-2 min-h-[2.6em] text-[12px] leading-snug text-mute">{l?.msg || a.role}</p>
-                  <div className="mt-1.5 text-[11px] text-dim">{l ? `${st === "working" ? "working" : "idle"} · ${l.done} step${l.done === 1 ? "" : "s"} done${l.wo ? ` · ${l.wo}` : ""}` : "idle · not run yet"}</div>
+                  <p className="mt-2 line-clamp-2 min-h-[2.6em] text-sm leading-snug text-mute">{l?.msg || a.role}</p>
+                  <div className="mt-1.5 text-xs text-dim">{l ? `${st === "working" ? "working" : "idle"} · ${l.done} step${l.done === 1 ? "" : "s"} done${l.wo ? ` · ${l.wo}` : ""}` : "idle · not run yet"}</div>
                 </a>
               );
             })}
@@ -267,21 +283,21 @@ function HomePage({ state, post, team, me, live, base }: Ctx) {
           <Section title="Recent work orders" aside={<a href={`#/p/${p.id}/work-orders`} className="hover:text-ink">View all</a>}>
             <div className="divide-y divide-line rounded-lg border border-line">
               {wos.length ? wos.map(w => (
-                <a key={w.id} href={`#/p/${p.id}/work-orders/${w.id}`} className="flex items-center gap-3 px-3 py-2.5 text-[13px] hover:bg-white/[.02]">
-                  <span className="font-mono text-[12px] text-dim">{w.id}</span>
+                <a key={w.id} href={`#/p/${p.id}/work-orders/${w.id}`} className="flex items-center gap-3 px-3 py-2.5 text-base hover:bg-white/[.02]">
+                  <span className="font-mono text-sm text-dim">{w.id}</span>
                   <span className="min-w-0 flex-1 truncate">{w.title}</span>
                   <Badge>{w.status}</Badge>
                 </a>
-              )) : <p className="px-3 py-5 text-center text-[13px] text-dim">Ask the factory to build something above.</p>}
+              )) : <p className="px-3 py-5 text-center text-base text-dim">Ask the factory to build something above.</p>}
             </div>
           </Section>
           <Section title="Connected">
-            <ul className="space-y-2 text-[13px]">
+            <ul className="space-y-2 text-base">
               {connected.map(([n, tone, what]) => (
                 <li key={n} className="flex items-center gap-2.5">
                   <span className={`h-1.5 w-1.5 rounded-full ${tone === "ok" ? "bg-ok" : tone === "warn" ? "bg-run" : "bg-[#2a2f36]"}`} />
                   <span className={tone === "off" ? "text-mute" : ""}>{n}</span>
-                  <span className="ml-auto text-[12px] text-dim">{what}</span>
+                  <span className="ml-auto text-sm text-dim">{what}</span>
                 </li>
               ))}
             </ul>
@@ -315,7 +331,7 @@ function Memory({ state, post, getJSON, live }: Ctx) {
   const kinds = Object.entries(base.reduce<Record<string, number>>((m, it) => ({ ...m, [it.kind]: (m[it.kind] || 0) + 1 }), {})).sort((a, b) => b[1] - a[1]);
   const items = base.filter(m => !kind || m.kind === kind);
   const inv = data?.inventory;
-  const chip = (on: boolean) => `rounded-full border px-2.5 py-0.5 text-[12px] ${on ? "border-white/30 bg-white/[.08] text-ink" : "border-line text-mute hover:text-ink"}`;
+  const chip = (on: boolean) => `rounded-full border px-2.5 py-0.5 text-sm ${on ? "border-white/30 bg-white/[.08] text-ink" : "border-line text-mute hover:text-ink"}`;
   return (
     <>
       <PageHead title="Memory" sub={<>The factory&apos;s context layer in HydraDB: org memory, the regulatory knowledge base and lessons from every finished work order, scoped by project. Agents recall it before every change and write back after every verdict. Backend: <b className="text-ink">{data?.backend === "HydraDB" ? "HydraDB" : state.status?.hydradb === "falling back" ? "local (HydraDB unreachable, retrying)" : "local (add HYDRADB_API_KEY for HydraDB)"}</b></>}>
@@ -327,16 +343,16 @@ function Memory({ state, post, getJSON, live }: Ctx) {
           return (
             <div key={c} className="rounded-lg border border-line bg-panel p-3">
               <div className="flex items-baseline justify-between gap-2">
-                <span className="font-mono text-[12px] text-ink">{c}</span>
-                <span className="text-[18px] font-semibold tabular-nums">{n ? (all ? n.total : n.projects[p.device] || 0) : "—"}</span>
+                <span className="font-mono text-sm text-ink">{c}</span>
+                <span className="text-lg font-semibold tabular-nums">{n ? (all ? n.total : n.projects[p.device] || 0) : "—"}</span>
               </div>
-              <p className="mt-0.5 text-[11.5px] text-dim">{desc}</p>
-              {n && <p className="mt-1.5 line-clamp-1 text-[11px] text-mute">{Object.entries(n.kinds[all ? "" : p.device] || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${v} ${k.replace("_", " ")}`).join(" · ")}</p>}
+              <p className="mt-0.5 text-xs text-dim">{desc}</p>
+              {n && <p className="mt-1.5 line-clamp-1 text-xs text-mute">{Object.entries(n.kinds[all ? "" : p.device] || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${v} ${k.replace("_", " ")}`).join(" · ")}</p>}
             </div>
           );
         })}
       </div>
-      <p className="mb-6 text-[11.5px] text-dim">{inv ? <>Counts {all ? "across all projects" : `for ${p.name}`} served by <b className="text-mute">{served(inv)}</b> · database default-tenant · {inv.backend === "HydraDB" ? `read ${ago(inv.at)}` : "HydraDB counts appear once it answers"}</> : null}</p>
+      <p className="mb-6 text-xs text-dim">{inv ? <>Counts {all ? "across all projects" : `for ${p.name}`} served by <b className="text-mute">{served(inv)}</b> · database default-tenant · {inv.backend === "HydraDB" ? `read ${ago(inv.at)}` : "HydraDB counts appear once it answers"}</> : null}</p>
       <form onSubmit={e => { e.preventDefault(); load(q); }} className="mb-3 flex gap-2">
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-dim" />
@@ -353,22 +369,22 @@ function Memory({ state, post, getJSON, live }: Ctx) {
         <button className={chip(!kind)} onClick={() => setKind("")}>All types · {base.length}</button>
         {kinds.map(([k, n]) => <button key={k} className={chip(kind === k)} onClick={() => setKind(kind === k ? "" : k)}>{k.replace("_", " ")} · {n}</button>)}
       </div>
-      {data?.hits.length ? <p className="mb-3 text-[12px] text-dim">Top {data.hits.length} items the agents would read for this request · recalled by <b className="text-ink">{served(data.recall)}</b> from {data.recall?.collections?.join(", ")}</p> : null}
+      {data?.hits.length ? <p className="mb-3 text-sm text-dim">Top {data.hits.length} items the agents would read for this request · recalled by <b className="text-ink">{served(data.recall)}</b> from {data.recall?.collections?.join(", ")}</p> : null}
       <div className="divide-y divide-line rounded-lg border border-line">
         {items.map(m => (
           <div key={m.id} className="px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded bg-white/[.05] px-1.5 py-0.5 font-mono text-[10px] uppercase text-mute">{m.kind.replace("_", " ")}</span>
-              <span className="text-[13px] font-medium">{m.title}</span>
-              {m.synthetic && <span className="rounded border border-line px-1.5 py-px text-[10px] text-dim">synthetic</span>}
-              <span className="ml-auto flex items-center gap-2 font-mono text-[11px] text-dim">
+              <span className="rounded bg-white/[.05] px-1.5 py-0.5 font-mono text-2xs uppercase text-mute">{m.kind.replace("_", " ")}</span>
+              <span className="text-base font-medium">{m.title}</span>
+              {m.synthetic && <span className="rounded border border-line px-1.5 py-px text-2xs text-dim">synthetic</span>}
+              <span className="ml-auto flex items-center gap-2 font-mono text-xs text-dim">
                 {m.collection || "org_memory"}{m.score !== undefined && <> · relevance {m.score}</>}
               </span>
             </div>
-            <p className="mt-1 text-[12.5px] leading-relaxed text-mute">{m.text}</p>
+            <p className="mt-1 text-sm leading-relaxed text-mute">{m.text}</p>
           </div>
         ))}
-        {!items.length && <p className="px-4 py-6 text-center text-[13px] text-dim">Nothing remembered yet.</p>}
+        {!items.length && <p className="px-4 py-6 text-center text-base text-dim">Nothing remembered yet.</p>}
       </div>
       {adding && <AddMemory post={post} project={p.id} onClose={() => { setAdding(false); setTimeout(() => load(), 300); }} />}
     </>
@@ -396,7 +412,7 @@ function AddMemory({ post, project, onClose }: { post: Ctx["post"]; project: str
         </Field>
         <Field label="Title"><input className={inputCls} value={title} onChange={e => setTitle(e.target.value)} placeholder="Design review, Nov 14" /></Field>
         <Field label="Content"><textarea rows={5} className={inputCls} value={text} onChange={e => setText(e.target.value)} placeholder="Paste meeting notes, a Slack thread or an email." /></Field>
-        {err && <p className="text-[12px] text-bad">{err}</p>}
+        {err && <p className="text-sm text-bad">{err}</p>}
         <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button primary type="submit" disabled={!text.trim()}>Save</Button></div>
       </form>
     </Modal>
@@ -405,7 +421,7 @@ function AddMemory({ post, project, onClose }: { post: Ctx["post"]; project: str
 
 /* ---------- requirements ---------- */
 function Requirements({ state }: Ctx) {
-  const open = (id: string) => <a href={`#/p/${state.project!.id}/traceability/${id}`} className="font-mono text-[12px] font-semibold hover:underline">{id}</a>;
+  const open = (id: string) => <a href={`#/p/${state.project!.id}/traceability/${id}`} className="font-mono text-sm font-semibold hover:underline">{id}</a>;
   const reqsFor = (h: string) => (state.requirements || []).filter(r => r.hazards.includes(h)).map(r => r.id).join(", ");
   return (
     <>
@@ -413,12 +429,12 @@ function Requirements({ state }: Ctx) {
       <Section title="Hazards">
         <Table head={["ID", "Hazard", "Severity", "Mitigated by"]} rows={(state.hazards || []).map(h => [
           <span key="i">{open(h.id)}</span>, h.title, <Badge key="s" tone={["S3", "Catastrophic", "Hazardous"].includes(h.severity || "") ? "FAIL" : "Stopped"}>{h.dal ? `${h.severity} · DAL ${h.dal}` : h.severity}</Badge>,
-          <span key="m" className="font-mono text-[12px] text-mute">{reqsFor(h.id)}</span>])} />
+          <span key="m" className="font-mono text-sm text-mute">{reqsFor(h.id)}</span>])} />
       </Section>
       <Section title="Safety requirements">
         <Table head={["ID", "Requirement", "Hazards", "Code", "Verified by"]} rows={(state.requirements || []).map(r => [
-          <span key="i">{open(r.id)}</span>, r.text, <span key="h" className="font-mono text-[12px] text-mute">{r.hazards.join(", ")}</span>,
-          <span key="c" className="font-mono text-[11px] text-mute">{(r.symbols || []).slice(0, 2).join(", ")}</span>,
+          <span key="i">{open(r.id)}</span>, r.text, <span key="h" className="font-mono text-sm text-mute">{r.hazards.join(", ")}</span>,
+          <span key="c" className="font-mono text-xs text-mute">{(r.symbols || []).slice(0, 2).join(", ")}</span>,
           <span key="t" className="text-mute">unit test {r.id} · world model</span>])} />
       </Section>
     </>
@@ -430,10 +446,10 @@ function WOTable({ wos, team, pid }: { wos: WorkOrder[]; team: Record<string, Me
   return (
     <Table head={["ID", "Title", "Status", "Requested by", "Result", "Created"]} empty="No work orders yet."
       rows={wos.map(w => [
-        <a key="i" href={`#/p/${pid}/work-orders/${w.id}`} className="font-mono text-[12px] hover:underline">{w.id}</a>,
+        <a key="i" href={`#/p/${pid}/work-orders/${w.id}`} className="font-mono text-sm hover:underline">{w.id}</a>,
         <a key="t" href={`#/p/${pid}/work-orders/${w.id}`} className="hover:underline">{w.title}</a>,
         <Badge key="s">{w.status}</Badge>, <Who key="r" m={team[w.requested_by]} />,
-        <span key="x" className="text-[12px] text-mute">{w.evidence ? w.evidence.headline.split(";")[0] : "—"}</span>,
+        <span key="x" className="text-sm text-mute">{w.evidence ? w.evidence.headline.split(";")[0] : "—"}</span>,
         <span key="c" className="text-mute">{ago(w.created)}</span>])} />
   );
 }
@@ -467,7 +483,7 @@ function NewWO({ pid, post, onClose }: { pid: string; post: Ctx["post"]; onClose
       <form onSubmit={submit} className="space-y-4">
         <Field label="Title"><input className={inputCls} value={title} onChange={e => setTitle(e.target.value)} autoFocus /></Field>
         <Field label="Description"><textarea rows={4} className={inputCls} value={desc} onChange={e => setDesc(e.target.value)} /></Field>
-        {err && <p className="text-[12px] text-bad">{err}</p>}
+        {err && <p className="text-sm text-bad">{err}</p>}
         <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button primary type="submit">Create</Button></div>
       </form>
     </Modal>
@@ -502,7 +518,7 @@ function WorkOrderView({ state, events, post, text, team, id, live }: Ctx & { id
 
   return (
     <>
-      <div className="mb-1 text-[12px] text-dim"><a href={`#/p/${w.project}/work-orders`} className="hover:text-ink">Work Orders</a> / {w.id}</div>
+      <div className="mb-1 text-sm text-dim"><a href={`#/p/${w.project}/work-orders`} className="hover:text-ink">Work Orders</a> / {w.id}</div>
       <PageHead title={w.title} sub={<span className="inline-flex flex-wrap items-center gap-2"><Badge>{w.status}</Badge> requested by <Who m={team[w.requested_by]} /> · {ago(w.created)} <Replayed r={run.find(e => e.replay)?.replay} /></span>}>
         {w.evidence && <Button onClick={() => open("evidence", `Evidence pack · ${w.id}`)}><FileCheck2 size={14} /> Evidence</Button>}
         {w.commits.length > 0 && <Button onClick={() => open("diff", `Code change · ${w.id}`)}><GitBranch size={14} /> Code change</Button>}
@@ -510,8 +526,8 @@ function WorkOrderView({ state, events, post, text, team, id, live }: Ctx & { id
         {pr && <Button onClick={() => window.open(pr, "_blank", "noopener")}><GitPullRequest size={14} /> Pull request</Button>}
         <Button primary onClick={start} disabled={!live || busy || w.status === "Running"}><Play size={14} /> {w.status === "Draft" ? "Run" : "Run again"}</Button>
       </PageHead>
-      {err && <p className="-mt-3 mb-4 text-[12px] text-bad">{err}</p>}
-      {w.description && <p className="mb-6 max-w-3xl text-[13px] text-mute">{w.description}</p>}
+      {err && <p className="-mt-3 mb-4 text-sm text-bad">{err}</p>}
+      {w.description && <p className="mb-6 max-w-3xl text-base text-mute">{w.description}</p>}
 
       <div className="grid gap-8 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
         <Section title="Pipeline">
@@ -523,17 +539,17 @@ function WorkOrderView({ state, events, post, text, team, id, live }: Ctx & { id
                 <li key={agent} className="relative pb-4">
                   <span className={`absolute -left-[25px] top-1 h-2.5 w-2.5 rounded-full border-2 border-bg ${t === "run" ? "pulse bg-run" : t === "bad" ? "bg-bad" : t === "ok" ? "bg-ok" : "bg-[#2a2f36]"}`} />
                   <div className="flex items-baseline justify-between gap-2">
-                    <a href={`#/p/${w.project}/agents/${agent}`} className={`text-[13px] font-medium hover:underline ${t === "idle" ? "text-mute" : ""}`}>{label}</a>
-                    {e && <span className="font-mono text-[10px] text-dim">{e.t.toFixed(0)}s</span>}
+                    <a href={`#/p/${w.project}/agents/${agent}`} className={`text-base font-medium hover:underline ${t === "idle" ? "text-mute" : ""}`}>{label}</a>
+                    {e && <span className="font-mono text-2xs text-dim">{e.t.toFixed(0)}s</span>}
                   </div>
                   {agent === "safety" && e?.analysis ? (
-                    <div className="text-[12px] leading-snug text-dim">
-                      <div className="font-mono text-[11px] text-mute">{[...(e.analysis.hazards || []), ...(e.analysis.requirements || [])].join(" ")}</div>
+                    <div className="text-sm leading-snug text-dim">
+                      <div className="font-mono text-xs text-mute">{[...(e.analysis.hazards || []), ...(e.analysis.requirements || [])].join(" ")}</div>
                       <div className="line-clamp-2" title={e.analysis.risk}>Risk: {e.analysis.risk}</div>
                     </div>
-                  ) : <div className={`text-[12px] leading-snug ${t === "bad" ? "text-bad" : "text-dim"}`}>{e?.msg || desc}</div>}
-                  {agent === "gate" && e && w.gate?.checker && <div className="mt-0.5 font-mono text-[10px] text-mute">{w.gate.checker.label}</div>}
-                  {agent === "planner" && past && past !== e && <div className="mt-1 line-clamp-3 text-[11.5px] leading-snug text-mute" title={past.msg}>Memory: {past.msg}</div>}
+                  ) : <div className={`text-sm leading-snug ${t === "bad" ? "text-bad" : "text-dim"}`}>{e?.msg || desc}</div>}
+                  {agent === "gate" && e && w.gate?.checker && <div className="mt-0.5 font-mono text-2xs text-mute">{w.gate.checker.label}</div>}
+                  {agent === "planner" && past && past !== e && <div className="mt-1 line-clamp-3 text-xs leading-snug text-mute" title={past.msg}>Memory: {past.msg}</div>}
                 </li>
               );
             })}
@@ -548,7 +564,7 @@ function WorkOrderView({ state, events, post, text, team, id, live }: Ctx & { id
           <Section title="Requirement tests">
             {w.gate?.rows.length ? (
               <Table head={["Requirement", "Hazard", "Result"]} rows={w.gate.rows.map(r => [
-                <span key="r"><b className="font-mono text-[12px]">{r.id}</b> <span className="text-mute">{r.text}</span></span>,
+                <span key="r"><b className="font-mono text-sm">{r.id}</b> <span className="text-mute">{r.text}</span></span>,
                 <span key="h" className="text-mute">{r.hazards.map(h => `${h.id} ${h.title || ""}`).join("; ")}</span>, <Badge key="x">{r.result}</Badge>])} />
             ) : <Empty>Every requirement the change touches is traced to an executed test.</Empty>}
           </Section>
@@ -591,14 +607,14 @@ function WorldModel({ state, events, post, live, getJSON }: Ctx) {
           placeholder={air ? "Ask a what-if, e.g. What if the left AoA vane fails at 30 degrees?" : "Ask a what-if, e.g. What if a child eats 80 g and the parent types the dose 10x?"} />
         <Button primary type="submit" disabled={!live || state.status?.busy}><FlaskConical size={14} /> Simulate</Button>
       </form>
-      {err && <p className="-mt-6 mb-6 text-[12px] text-bad">{err}</p>}
+      {err && <p className="-mt-6 mb-6 text-sm text-bad">{err}</p>}
       {thinking && (
-        <p className="-mt-4 mb-6 flex items-center gap-2 rounded-md border border-run/30 bg-run/5 px-3 py-2 text-[12px] text-run">
+        <p className="-mt-4 mb-6 flex items-center gap-2 rounded-md border border-run/30 bg-run/5 px-3 py-2 text-sm text-run">
           <span className="pulse h-1.5 w-1.5 rounded-full bg-run" />{now?.msg || "Simulation Agent is planning scenarios"}
         </p>
       )}
       <Section title={latest?.question ? `What-if: “${latest.question}”` : "Latest what-if"} aside={latestEv?.replay ? <Replayed r={latestEv.replay} /> : latest ? "current firmware" : undefined}>
-        {plan && <p className="mb-3 line-clamp-1 text-[12px] text-mute" title={plan.msg}><span className="text-dim">Simulation Agent plan:</span> {plan.msg}</p>}
+        {plan && <p className="mb-3 line-clamp-1 text-sm text-mute" title={plan.msg}><span className="text-dim">Simulation Agent plan:</span> {plan.msg}</p>}
         {latest ? <WorldChart world={latest} /> : <Empty>Ask a question: the Simulation Agent turns it into scenarios and the world model answers.</Empty>}
       </Section>
       {woSim?.world && (
@@ -635,8 +651,8 @@ function AuditTable({ rows, team, pid }: { rows: State["audit"]; team: Record<st
         team[a.actor]?.kind === "agent" ? <a key="w" href={`#/p/${pid}/agents/${a.actor}`} className="hover:underline"><Who m={team[a.actor]} /></a>
           : <Who key="w" m={team[a.actor] || { id: a.actor, name: a.actor, role: "", kind: "human" }} />,
         <span key="a" className="whitespace-nowrap">{a.action === "done" || a.action === "pass" ? "completed" : a.action}</span>,
-        <span key="o" className="whitespace-nowrap font-mono text-[12px]">{a.object}</span>,
-        <span key="d" className="line-clamp-2 text-[12px] text-mute">{a.detail}</span>])} />
+        <span key="o" className="whitespace-nowrap font-mono text-sm">{a.object}</span>,
+        <span key="d" className="line-clamp-2 text-sm text-mute">{a.detail}</span>])} />
   );
 }
 
@@ -646,7 +662,7 @@ function AuditTrail({ state, team }: Ctx) {
   return (
     <>
       <PageHead title="Audit Trail" sub={`Who did what, when: people, agents and code commits, in one record (${state.project!.standard.split(" · ")[0]} change control).`}>
-        <div className="flex overflow-hidden rounded-md border border-line text-[12px]">
+        <div className="flex overflow-hidden rounded-md border border-line text-sm">
           {(["all", "human", "agent"] as const).map(k => (
             <button key={k} onClick={() => setF(k)} className={`px-3 py-1.5 capitalize ${f === k ? "bg-white/[.08] text-ink" : "text-mute hover:text-ink"}`}>{k === "all" ? "All" : k + "s"}</button>
           ))}
@@ -672,11 +688,11 @@ function Team({ state }: Ctx) {
 }
 
 /* ---------- small renderers ---------- */
-const Empty = ({ children }: { children: React.ReactNode }) => <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-[13px] text-dim">{children}</p>;
+const Empty = ({ children }: { children: React.ReactNode }) => <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-base text-dim">{children}</p>;
 
 function Diff({ src }: { src: string }) {
   return (
-    <pre className="scroll-thin overflow-x-auto rounded-md bg-bg p-3 font-mono text-[11.5px] leading-relaxed">
+    <pre className="scroll-thin overflow-x-auto rounded-md bg-bg p-3 font-mono text-xs leading-relaxed">
       {src.split("\n").map((l, i) => (
         <div key={i} className={l.startsWith("+") && !l.startsWith("+++") ? "text-ok" : l.startsWith("-") && !l.startsWith("---") ? "text-bad" : l.startsWith("@@") ? "text-acc" : "text-mute"}>{l || " "}</div>
       ))}
@@ -686,7 +702,7 @@ function Diff({ src }: { src: string }) {
 
 function Markdown({ src }: { src: string }) {
   const inline = (s: string) => s.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((p, i) =>
-    p.startsWith("**") ? <b key={i}>{p.slice(2, -2)}</b> : p.startsWith("`") ? <code key={i} className="font-mono text-[11px] text-acc">{p.slice(1, -1)}</code> : p);
+    p.startsWith("**") ? <b key={i}>{p.slice(2, -2)}</b> : p.startsWith("`") ? <code key={i} className="font-mono text-xs text-acc">{p.slice(1, -1)}</code> : p);
   const out: React.ReactNode[] = [];
   const lines = src.split("\n");
   for (let i = 0; i < lines.length; i++) {
@@ -698,13 +714,13 @@ function Markdown({ src }: { src: string }) {
         i++;
       }
       i--;
-      out.push(<div key={i} className="my-3 overflow-x-auto"><table className="w-full text-[12px]"><tbody>
+      out.push(<div key={i} className="my-3 overflow-x-auto"><table className="w-full text-sm"><tbody>
         {rows.map((r, j) => <tr key={j} className={j ? "border-t border-line" : "text-dim"}>{r.map((c, k) => <td key={k} className="py-1.5 pr-3 align-top">{inline(c)}</td>)}</tr>)}
       </tbody></table></div>);
     } else if (l.startsWith("# ")) out.push(<h1 key={i} className="mb-3 text-lg font-semibold">{l.slice(2)}</h1>);
-    else if (l.startsWith("## ")) out.push(<h2 key={i} className="mb-1 mt-5 text-[13px] font-semibold text-mute">{l.slice(3)}</h2>);
-    else if (l.startsWith("- ")) out.push(<li key={i} className="ml-4 list-disc text-[13px]">{inline(l.slice(2))}</li>);
-    else if (l.trim()) out.push(<p key={i} className="my-1 text-[13px]">{inline(l.replace(/^_|_$/g, ""))}</p>);
+    else if (l.startsWith("## ")) out.push(<h2 key={i} className="mb-1 mt-5 text-base font-semibold text-mute">{l.slice(3)}</h2>);
+    else if (l.startsWith("- ")) out.push(<li key={i} className="ml-4 list-disc text-base">{inline(l.slice(2))}</li>);
+    else if (l.trim()) out.push(<p key={i} className="my-1 text-base">{inline(l.replace(/^_|_$/g, ""))}</p>);
   }
   return <div>{out}</div>;
 }
