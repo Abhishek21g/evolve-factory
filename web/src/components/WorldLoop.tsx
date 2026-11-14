@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { State } from "@/lib/api";
-import type { Ev } from "@/lib/feed";
+import type { Ev, Replay } from "@/lib/feed";
 import { Badge, PageHead, Replayed, Section } from "@/components/ui";
 import { CockpitCallouts } from "@/components/Callouts";
 
@@ -24,7 +24,7 @@ type Attempt = {
 };
 export type Loop = {
   wo: string; title: string; project: string; device: string; repo: string; threshold: number | null;
-  axis: { unit: string; min: number; max: number } | null; replay?: { wo?: string | null; at: number } | null; attempts: Attempt[]; final?: string;
+  axis: { unit: string; min: number; max: number } | null; replay?: Replay | null; attempts: Attempt[]; final?: string;
 };
 type Props = { state: State; events: Ev[]; live: boolean; checking?: boolean; getJSON: <T>(p: string) => Promise<T | null> };
 

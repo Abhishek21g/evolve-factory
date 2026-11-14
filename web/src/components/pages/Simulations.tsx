@@ -1,5 +1,6 @@
 "use client";
 import { FlaskConical } from "lucide-react";
+import { recordedChips } from "@/lib/api";
 import { blocked, type Ctx } from "@/lib/ctx";
 import { CockpitCallouts } from "@/components/Callouts";
 import { Composer } from "@/components/Composer";
@@ -45,7 +46,7 @@ export function WorldModel({ state, events, post, live, checking, getJSON }: Ctx
     <>
       <PageHead title="Simulations" sub={<>World model: {p.world_model}. Each simulation compiles the real code and puts it in the loop: it decides every action, step by step, in every simulated run.</>} />
       <div className="mb-8 max-w-3xl">
-        <Composer project={p} modes={["simulate"]} onSubmit={ask} disabledReason={blocked(state, live)} />
+        <Composer project={p} modes={["simulate"]} onSubmit={ask} disabledReason={blocked(state, live)} chips={live || checking ? undefined : recordedChips(p.id)} />
       </div>
       {thinking && (
         <p className="mb-6 flex items-center gap-2 rounded-lg border border-run/30 bg-run/5 px-4 py-2.5 text-sm text-run">

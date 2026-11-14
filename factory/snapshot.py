@@ -7,6 +7,9 @@ Asks the server every GET the UI makes (GETs only: the server's state is not tou
   snapshot/<key>.json|.txt    every other answer. With no server, web/src/lib/api.ts reads /snapshot/<key> instead of
                               /api/<path>; key = the decoded path and query with anything but [A-Za-z0-9.-] as "_".
   supply-<project>.json, tower-<project>.json, tower-all.json   the files the supply pages read (web/src/lib/supply.ts)
+  replays (in snapshot.json) + snapshot/replay_id_<id>.json   recorded runs the hosted composer plays in the browser
+                              (web/src/lib/replay.ts): each project's latest finished build per request and what-if per
+                              question from the feed, plus the demo/replay/ what-ifs the feed lacks
 Waits for running jobs and monitors to finish first, so the hosted site never shows one frozen mid-run.
 Absolute paths on the exporting machine become <repo>; status is marked offline (the hosted site cannot run anything).
 """
@@ -75,9 +78,55 @@ def state(pid):
     return s
 
 
+def recordings(states, events):
+    """Runs the hosted composer can replay, keyed (project, kind, prompt): the latest one wins. Feed events are already
+    replay-timed; a demo/replay/ recording is timed the way factory/pipeline.py replays it (gaps / 4, at most 4 s)."""
+    runs, recs, last_whatif = {}, {}, {}
+    for e in events:
+        runs.setdefault(e["run"], []).append(e)
+    for run, raw in runs.items():
+        evs = [{k: v for k, v in e.items() if k != "project"} for e in raw if e["agent"] != "actions"]
+        pid, wo = raw[0]["project"], next((e["wo"] for e in evs if e.get("wo")), None)
+        if pid not in states or not evs:
+            continue
+        title = next((e["title"] for e in evs if e.get("title")), "").split("\n")[0]
+        done = evs[-1]["agent"] == "reviewer" and evs[-1]["state"] != "working" and not evs[-1].get("not_run")
+        if wo and done and any(w["id"] == wo for w in states[pid].get("work_orders") or []):
+            kind = "build"
+        elif not wo and any(e.get("world") for e in evs):
+            kind, last_whatif[pid] = "whatif", run
+        else:
+            continue
+        recs[(pid, kind, title.lower())] = {"project": pid, "kind": kind, "prompt": title, "wo": wo, "at": int(float(run)), "run": run, "events": evs}
+    for r in recs.values():
+        r["callouts"] = f"callouts?project={r['project']}" if r["kind"] == "whatif" and last_whatif.get(r["project"]) == r["run"] else None
+    by_device = {}
+    for pid, s in states.items():
+        by_device.setdefault(s["project"]["device"], pid)
+    for device, rel in (("insulin-pump", "demo/replay"), ("flight-controls", "demo/replay/aircraft")):
+        path = os.path.join(ROOT, rel, "whatif.jsonl")
+        if device not in by_device or not os.path.exists(path):
+            continue
+        evs = [e for e in (json.loads(l) for l in open(path) if l.strip()) if e["agent"] != "actions"]
+        pid, title, t, prev = by_device[device], evs[0].get("title", ""), 0.0, 0.0
+        for e in evs:
+            t, prev = t + min(max(e["t"] - prev, 0) / 4, 4), e["t"]
+            e["t"] = round(t, 2)
+        recs.setdefault((pid, "whatif", title.lower()), {"project": pid, "kind": "whatif", "prompt": title, "wo": None,
+                                                         "at": int(float(evs[0]["run"])), "run": evs[0]["run"], "events": evs, "callouts": None})
+    out = []
+    for n, r in enumerate(sorted(recs.values(), key=lambda r: (r["project"], r["kind"] != "build", -r["at"]))):
+        r["id"] = f"{r['kind']}-{n + 1}"
+        save(f"replay?id={r['id']}", LOCAL_PATH.sub("<repo>", json.dumps({"events": r.pop("events")})))
+        r.pop("run")
+        out.append(r)
+    return out
+
+
 states = {p: state(p) for p in projects}
 events = json.loads(get("events?since=0"))["events"]
-json.dump({"state": state(""), "states": states, "events": events}, open(os.path.join(PUB, "snapshot.json"), "w"))
+replays = recordings(states, events)
+json.dump({"state": state(""), "states": states, "events": events, "replays": replays}, open(os.path.join(PUB, "snapshot.json"), "w"))
 
 wos = [w for s in states.values() for w in s.get("work_orders") or []]
 for w in wos:
