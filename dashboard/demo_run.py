@@ -1,7 +1,8 @@
 """Drive the WO-12 demo story into the dashboard feed.
 
 Agent patches are scripted (stand-in until the runner calls claude/codex for real).
-Gate verdicts are REAL: each candidate is committed in a throwaway worktree and checked by gate/gate.py.
+Gate and world-model verdicts are REAL: each candidate is committed in a throwaway worktree, checked by
+gate/gate.py, then its pump.c is run in 10 simulated patients by sim/world.py (needs .venv, see README).
 
   python3 dashboard/demo_run.py            # live, paced for the stage (open the dashboard first)
   python3 dashboard/demo_run.py --fast     # no pauses
@@ -68,7 +69,11 @@ def gate(name):
         subprocess.run([sys.executable, os.path.join(REPO, "gate/gate.py"), "--repo", tmp,
                         "--safety", os.path.join(tmp, "demo/pump/safety.json"), "--base", "main",
                         "--json", out], capture_output=True)
-        return json.load(open(out))
+        res = json.load(open(out))
+        ev("world", "working", "Running candidate pump.c in 10 simulated patients")
+        subprocess.run([os.path.join(REPO, ".venv/bin/python"), os.path.join(REPO, "sim/world.py"), "--repo", tmp,
+                        "--base", "main", "--wo", WO], capture_output=True)  # emits its own dashboard event
+        return res
     finally:
         subprocess.run(["git", "-C", REPO, "worktree", "remove", "--force", tmp], capture_output=True)
         shutil.rmtree(tmp, ignore_errors=True)

@@ -19,6 +19,21 @@ python3 dashboard/demo_run.py              # in another terminal: plays WO-12 li
 - `gate/gate.py --json out.json` gives the matrix data; pass it as `gate=` on the gate event.
 - No live feed (or `?replay`) plays the recorded run `dashboard/demo-run.jsonl`. That is the stage fallback and what a static Vercel deploy shows. `&speed=2` speeds it up.
 - `demo_run.py`: agent patches are scripted for now; gate verdicts are real (each candidate is checked in a throwaway worktree).
+## World model (simulated patients)
+
+Every candidate change is also run in a world model before it can merge: the candidate's real `demo/pump/pump.c`
+is compiled and put in the loop with 10 simulated adults with type 1 diabetes (simglucose, the open-source
+UVA/Padova simulator). Two fixed scenarios: a large meal, and a 10x dose-entry typo. The check is deterministic
+and judges the change against `main`: it blocks if the change makes any simulated patient fall below 54 mg/dL
+who did not before, and reports risk that already exists on `main` separately.
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r sim/requirements.txt
+.venv/bin/python sim/world.py --repo . --base main      # ~1 min
+```
+
+It runs as the `world-model` check in `gate/checks.json`, and draws blood-sugar traces on the dashboard.
+
 ## Tools, libraries and licenses
 
 Keep this list current; judges require it.
@@ -32,6 +47,8 @@ Keep this list current; judges require it.
 | Claude Code (Anthropic) | coding agent, used to build this project | Anthropic commercial terms |
 | Codex CLI (OpenAI) | coding agent | Apache-2.0 CLI |
 | Cursor | IDE | proprietary |
+| simglucose 0.2.11 (UVA/Padova T1D simulator) | world model, simulated patients | MIT |
+| numpy, pandas, scipy (simglucose deps) | simulation | BSD-3-Clause |
 
 ## Built before the event
 
