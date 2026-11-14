@@ -4,6 +4,7 @@ Needs COMPOSIO_API_KEY and, once, a GitHub account connected for COMPOSIO_USER_I
 click "Connect GitHub" on Home (or open the link printed by `actions.py connect`) and authorize.
 Always runs as its own process, so the slow SDK import and the GitHub call never delay a run:
   actions.py post '<json>'   pipeline, after the verdict (fire-and-forget); reports back as an "actions" event
+  actions.py supplier '<json>' server, after a supplier deliverable is recorded (fire-and-forget): files a GitHub issue
   actions.py status          server, every 30 s; writes .runs/composio.json for the Home card
   actions.py connect         prints a fresh Composio Connect Link for GitHub
 """
@@ -69,6 +70,16 @@ def post(job):
         emit.emit("actions", "blocked", f"Composio could not file the {wo} evidence on GitHub: {why}. The verdict stands.", wo=wo)
 
 
+def supplier(d):
+    """A supplier deliverable was recorded: file a GitHub issue so the supplier-quality team sees it."""
+    owner, repo = _repo()
+    body = (f"**{d['supplier_name']}** submitted **{d['title']}** ({d['kind']}) for **{d['item']}**.\n\n"
+            f"Document: {d['url'] or '(no link)'}\nTrace link: {d['link']}\n\n_Filed by the Certus Factory agent through Composio._")
+    r = _session().execute("GITHUB_CREATE_AN_ISSUE", arguments={
+        "owner": owner, "repo": repo, "title": f"Supplier deliverable for {d['item']}: {d['title'][:80]}", "body": body})
+    print(r.result_type)
+
+
 def status():
     if not os.environ.get("COMPOSIO_API_KEY"):
         st = {"state": "missing key"}
@@ -86,9 +97,11 @@ if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if cmd == "post":
         post(json.loads(sys.argv[2]))
+    elif cmd == "supplier":
+        supplier(json.loads(sys.argv[2]))
     elif cmd == "status":
         print(status())
     elif cmd == "connect":
         print(_session().authorize("github").redirect_url)
     else:
-        sys.exit("usage: actions.py post '<json>' | status | connect")
+        sys.exit("usage: actions.py post '<json>' | supplier '<json>' | status | connect")
