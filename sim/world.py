@@ -114,7 +114,7 @@ def simulate(pump, name, scenario, cr):
     basal = p._params["u2ss"] * p._params["BW"] / 6000  # U/min, simglucose convention
     meal_at = scenario.get("meal_at", MEAL_AT)
     s = pump.sim_new(1)  # adult profile
-    trace, carbs, ext, note = [], 0, False, ""
+    trace, doses, carbs, ext, note = [], [], 0, False, ""
     try:
         for t in range(scenario.get("minutes", MINUTES)):
             bg = int(p.observation.Gsub)
@@ -126,9 +126,10 @@ def simulate(pump, name, scenario, cr):
             dose = max(0.0, pump.sim_delivered(s) - before)
             p.step(Action(CHO=carbs if t == meal_at else 0, insulin=basal + dose))
             trace.append(float(p.observation.Gsub))
+            doses.append(dose)
     finally:
         pump.sim_free(s)
-    return note, trace
+    return note, trace, doses
 
 
 def patient(name, scenario):
@@ -145,14 +146,16 @@ def patient(name, scenario):
     return T1DPatient(params, init_state=x0)
 
 
-def row(sc, name, note, trace):
-    """One patient run, as reported by the gate and the dashboard (trace every 5 min)."""
+def row(sc, name, note, trace, doses=()):
+    """One patient run, as reported by the gate and the dashboard (trace every 5 min; insulin = units the pump
+    code delivered in each 5 min, basal excluded)."""
     return {"scenario": sc["id"], "patient": name, "note": note,
             "min": round(min(trace)), "max": round(max(trace)),
             "hypo": min(trace) < SEVERE_HYPO, "hyper_min": sum(g > HYPER for g in trace),
             "tir": round(100 * sum(70 <= g <= 180 for g in trace) / len(trace)),
             "nadir_at": trace.index(min(trace)),
-            "trace": [round(g) for g in trace[::5]]}
+            "trace": [round(g) for g in trace[::5]],
+            "bolus_u": round(sum(doses), 2), "insulin": [round(sum(doses[i:i + 5]), 3) for i in range(0, len(doses), 5)]}
 
 
 def names(sc):
@@ -189,10 +192,14 @@ def run(repo, base, scenarios=SCENARIOS):
             before = {(r["scenario"], r["patient"]): r for r in cohort(base_src(repo, base, d), scenarios)}
     for r in cand:
         b = before[(r["scenario"], r["patient"])]
-        r["base_min"], r["base_trace"] = b["min"], b["trace"]
+        r["base_min"], r["base_trace"], r["base_bolus_u"], r["base_note"] = b["min"], b["trace"], b["bolus_u"], b["note"]
         r["new_hypo"] = r["hypo"] and not b["hypo"]
         r["preexisting"] = r["hypo"] and b["hypo"]
-    return {"verdict": "BLOCKED" if any(r["new_hypo"] for r in cand) else "PASS", "threshold": SEVERE_HYPO,
+    if base == "none":  # nothing to compare against: the answer is whether any patient is harmed
+        verdict = "UNSAFE" if any(r["hypo"] for r in cand) else "SAFE"
+    else:
+        verdict = "BLOCKED" if any(r["new_hypo"] for r in cand) else "PASS"
+    return {"verdict": verdict, "threshold": SEVERE_HYPO, "hyper": HYPER,
             "step_min": 5, "meal_at": MEAL_AT, "base": base, "scenarios": scenarios, "results": cand}
 
 
@@ -244,7 +251,7 @@ def main(argv=None):
     except Exception:
         pass
     print(report(res))
-    return 0 if res["verdict"] == "PASS" else 1
+    return 0 if res["verdict"] in ("PASS", "SAFE") else 1
 
 
 if __name__ == "__main__":
