@@ -23,6 +23,7 @@ from urllib.parse import parse_qs, urlparse
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "factory"))
+import memory  # noqa: E402
 import store  # noqa: E402
 
 FEED = store.FEED
@@ -99,6 +100,9 @@ class H(SimpleHTTPRequestHandler):
         if u.path == "/api/evidence":
             p = os.path.join(ROOT, ".runs", f"{wo}.evidence.md")
             return self.send(200, open(p).read(), "text/markdown") if os.path.exists(p) else self.send(404, {"error": "none"})
+        if u.path == "/api/memory":
+            hits = memory.recall(q["q"], k=6) if q.get("q") else []
+            return self.send(200, {"backend": memory.backend(), "items": memory.items(), "hits": hits})
         if u.path == "/api/diff":
             return self.send(200, store.diff(wo) or "No code changes yet.", "text/plain")
         if u.path.startswith("/api/"):
@@ -129,6 +133,30 @@ class H(SimpleHTTPRequestHandler):
                     return self.send(409, {"error": "factory busy"})
                 store.log(actor, "started run", w["id"], w["title"])
                 return self.send(202, {"started": w["id"]})
+            if u.path == "/api/memory":
+                if not clip("text", 2000):
+                    return self.send(400, {"error": "text required"})
+                kind = clip("kind", 20) if clip("kind", 20) in ("meeting", "chat", "email", "work_order", "code", "safety_finding") else "meeting"
+                item = {"id": f"mem-{int(__import__('time').time() * 1000)}", "kind": kind, "title": clip("title", 120) or "Untitled note",
+                        "text": clip("text", 2000)}
+                memory.remember([item])
+                store.log(actor, "added to memory", item["title"], f"{kind} · {memory.backend()}")
+                return self.send(201, item)
+            if u.path == "/api/ask":  # Home composer: plain English becomes a work order run, or a world-model question
+                t = clip("text", 500)
+                if not t:
+                    return self.send(400, {"error": "say what you want"})
+                if clip("skill", 20) == "simulate" or re.match(r"\s*what (if|happens)", t, re.I):
+                    if not start("whatif", t):
+                        return self.send(409, {"error": "factory busy"})
+                    store.log(actor, "asked the world model", "world model", t)
+                    return self.send(202, {"started": "whatif"})
+                if busy():
+                    return self.send(409, {"error": "factory busy"})
+                w = store.create_wo(actor, clip("project", 60), t[:120], "")
+                start("build", t, w["id"], wo=w["id"])
+                store.log(actor, "started run", w["id"], t[:120])
+                return self.send(202, {"started": w["id"], "id": w["id"]})
             if u.path == "/api/whatif":
                 if not clip("text") or not start("whatif", clip("text")):
                     return self.send(409, {"error": "factory busy or empty question"})
