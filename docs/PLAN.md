@@ -9,7 +9,7 @@ Sources: Luma page, organizer emails (Carina / Afifa / Vercel / Software Factory
 2. **Hacker agreement** — both of us. Required for check-in. Link in Carina's "EVOLVE is tonight!" email. Make sure Murali signed too.
 3. **Join Discord** (link in emails). Read `#🚀-evolve-start-here`. Rules, judging criteria, sponsor credits, judging slots, schedule all posted there — we missed the opening ceremony that covered them. Questions → `#evolve-help`.
 4. **Late check-in:** you emailed Carina (Fri 3:08 PM) asking for late check-in — no reply yet. Also post in `#evolve-help` so staff expect us. Check-in officially closed 7:00 PM.
-5. **Software Factory:** your account already exists (invite "Abhishek Enaguthi — EVOLVE Hackathon"). Log in at factory.8090.dev, make sure Murali is invited to the same org/project.
+5. **Software Factory:** your account already exists (invite "Abhishek Enaguthi — EVOLVE Hackathon"). Log in at factory.8090.ai, make sure Murali is invited to the same org/project.
 6. Murali GitHub = `Muralikinti` (found, mutual follow).
 
 ## 1. Event facts
@@ -46,7 +46,7 @@ Modules: **Requirements → Blueprints → Work Orders → Feedback**, all linke
 
 | | |
 |---|---|
-| URL | `https://api.factory.8090.dev/v2/mcp` |
+| URL | `https://api.factory.8090.dev/v2/mcp` (MCP endpoint, not a web page: browser shows "Method Not Allowed", that is normal. App UI: factory.8090.ai) |
 | Header | `X-Sofa-Mcp-Project-Id: <project id>` |
 | Auth | Browser OAuth |
 | Clients | Cursor, Claude Code, Codex (setup tabs in Project Settings → Connections → Coding Agent) |
