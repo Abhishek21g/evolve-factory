@@ -39,7 +39,11 @@ fi
 # 2. Web UI: build only when web/ changed since the last build (a cold build is ~30 s)
 if [ ! -f web/out/index.html ] || [ -n "$(find web/src web/public web/package.json -newer web/out/index.html -print -quit)" ]; then
   echo "building web UI..."
-  (cd web && { [ -x node_modules/.bin/next ] || npm ci --no-audit --no-fund --loglevel=error; } && npm run build >/dev/null)
+  # npm writes node_modules/.package-lock.json on install; an older one means new dependencies were pulled since.
+  if [ ! -x web/node_modules/.bin/next ] || [ ! web/node_modules/.package-lock.json -nt web/package-lock.json ]; then
+    npm --prefix web ci --no-audit --no-fund --loglevel=error
+  fi
+  npm --prefix web run build >/dev/null
 fi
 
 # 3. Demo project + a draft work order with the recorded request, so the stage starts one click from "Run"
