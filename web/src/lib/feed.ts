@@ -3,7 +3,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export type GateRow = { id: string; text: string; why: string[]; result: string; hazards: { id: string; title?: string; severity?: string }[] };
 /** Who decided the verdict (gate/verdict.py): the Rust binary or the Python fallback, with the verdict digest. */
-export type Gate = { verdict: string; rows: GateRow[]; checker?: { engine: string; verdict: string; digest: string; label: string } };
+export type Gate = { verdict: string; rows: GateRow[]; checker?: Checker };
+/** gate/verdict.py checker(): the engine that computed the verdict and its digest; `rechecked` for runs recorded before
+ *  the verdict layer existed (factory/store.py re-checks their recorded evidence). */
+export type Checker = { engine: string; verdict: string; digest: string; label: string; rechecked?: boolean };
 export type WorldRun = {
   scenario: string; patient: string; note: string; min: number; max: number; hypo: boolean;
   trace: number[]; base_trace: number[]; base_min: number; new_hypo: boolean; preexisting: boolean;

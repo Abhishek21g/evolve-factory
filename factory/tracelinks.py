@@ -17,6 +17,7 @@ lock = threading.Lock()
 KINDS = ("code", "doc", "test", "url")
 MAX_FILE = 400_000
 STD_DOC = "docs/TRACEABILITY.md"
+GATE_SRC = "gate-rs/src/lib.rs"
 
 # Regulation clauses every hazard / requirement of a device answers to: (label, heading in docs/TRACEABILITY.md).
 CLAUSES = {
@@ -372,7 +373,14 @@ def build(spec, wos, project, dev):
                 for f in code_files for name, s, e in functions(f)
                 if not any(p == f and a <= e and s <= b for p, a, b in code_ranges)]
     return {"device": dev, "github": gh, "tests": tests, "requirements": reqs, "hazards": hazards, "untraced": untraced,
-            **graph(reqs, hazards, wos)}
+            "gate": gate_code(), **graph(reqs, hazards, wos)}
+
+
+def gate_code():
+    """The function that decides every verdict (the Rust verdict layer), as a code target the viewer opens."""
+    loc = locate([GATE_SRC], "evaluate")
+    return {"kind": "code", "label": "certus-gate evaluate()", "path": GATE_SRC, "start": loc[1], "end": loc[2],
+            "note": "Rust verdict layer, #![forbid(unsafe_code)]"} if loc else None
 
 
 def target_id(t):

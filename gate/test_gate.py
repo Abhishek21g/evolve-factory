@@ -1,6 +1,5 @@
 """Self-check: python3 gate/test_gate.py  (builds throwaway git repos, runs the gate and the flight world model, and checks
 the Rust verdict layer against the Python reference)."""
-import glob
 import json
 import os
 import shutil
@@ -74,29 +73,10 @@ with tempfile.TemporaryDirectory() as d:
 
 
 # Deterministic verdict layer: the Rust binary (gate-rs/) and the Python reference (gate/verdict.py) must give identical
-# output on every fixture above and on every recorded run (stage replays, dashboard recording, hosted snapshot, local
-# cache), and the same verdict the recorded run showed. Recordings carry no per-check outcomes, so checks = [].
-def recorded_runs():
-    files = [os.path.join(ROOT, f) for f in ("demo/replay/build.jsonl", "demo/replay/aircraft/build.jsonl", "dashboard/demo-run.jsonl")]
-    files += sorted(glob.glob(os.path.join(ROOT, ".runs/cache/build-*.jsonl")))
-    streams = [(os.path.relpath(f, ROOT), [json.loads(line) for line in open(f) if line.strip()]) for f in files]
-    streams.append(("web/public/snapshot.json", json.load(open(os.path.join(ROOT, "web/public/snapshot.json")))["events"]))
-    for name, evs in streams:
-        world = None
-        for e in evs:
-            if e["agent"] == "gate" and e["state"] == "working":
-                world = None
-            world = e.get("world") or world
-            if e.get("gate") and e["state"] in ("pass", "blocked"):
-                rows = e["gate"]["rows"]
-                air = (world or {}).get("kind") == "aircraft" or any("demo/aircraft" in r.get("test", "") for r in rows)
-                rules = json.load(open(os.path.join(ROOT, "demo/aircraft/safety.json" if air else "demo/pump/safety.json")))
-                yield (f"{name}: {e['msg'][:40]}", verdict.evidence(rules, [], rows, world), "PASS" if e["state"] == "pass" else "BLOCKED")
-
-
+# output on every fixture above and on every recorded run (verdict.recorded()), and the same verdict the run showed.
 if not os.access(verdict.BIN, os.X_OK) and shutil.which("cargo"):
     subprocess.run(["cargo", "build", "--release", "-q"], cwd=os.path.join(ROOT, "gate-rs"), check=True)
-cases = FIXTURES + list(recorded_runs())
+cases = FIXTURES + list(verdict.recorded())
 assert len(cases) >= 12, len(cases)
 rust = os.access(verdict.BIN, os.X_OK)
 for name, inp, want in cases:

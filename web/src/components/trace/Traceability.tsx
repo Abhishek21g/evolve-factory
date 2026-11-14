@@ -5,6 +5,7 @@ import type { State } from "@/lib/api";
 import { githubUrl, where, type HazardRow, type Target, type TraceRow } from "@/lib/trace";
 import { TraceGraph } from "@/components/TraceGraph";
 import { Badge, Button, LOCAL_ONLY, PageHead, Section, TONE_CLS } from "@/components/ui";
+import { GateNote } from "@/components/GateNote";
 import { AddLink, type Draft } from "./AddLink";
 import { CodeLines, Drawer, GithubLink, TestResult, useFile, type Api } from "./Viewer";
 
@@ -105,7 +106,7 @@ export function Traceability({ state, live, item, post, getJSON, text }: Props) 
   </>;
 
   const req = reqs.find(r => r.id === item), haz = hazards.find(h => h.id === item);
-  if (req) return <><RequirementView r={req} hazards={hazards} api={api} ctx={ctx} add={() => setDraft({ item: req.id })} err={err} />{overlays}</>;
+  if (req) return <><RequirementView r={req} hazards={hazards} state={state} api={api} ctx={ctx} add={() => setDraft({ item: req.id })} err={err} />{overlays}</>;
   if (haz) return <><HazardView h={haz} reqs={reqs} ctx={ctx} live={live} add={() => setDraft({ item: haz.id })} err={err} />{overlays}</>;
 
   const n = reqs.length;
@@ -236,8 +237,9 @@ const Back = ({ pid, id }: { pid: string; id: string }) => (
   <div className="mb-1 text-sm text-dim"><a href={`#/p/${pid}/traceability`} className="hover:text-ink">Traceability</a> / {id}</div>
 );
 
-function RequirementView({ r, hazards, api, ctx, add, err }: { r: TraceRow; hazards: HazardRow[]; api: Api; ctx: Ctx; add: () => void; err: string }) {
+function RequirementView({ r, hazards, state, api, ctx, add, err }: { r: TraceRow; hazards: HazardRow[]; state: State; api: Api; ctx: Ctx; add: () => void; err: string }) {
   const code = of(r.targets, "code"), tests = of(r.targets, "test");
+  const last = [...(state.work_orders || [])].reverse().find(w => w.gate?.checker && w.gate.rows.some(x => x.id === r.id));
   const docs = of(r.targets, "doc", "url");
   return (
     <>
@@ -265,7 +267,10 @@ function RequirementView({ r, hazards, api, ctx, add, err }: { r: TraceRow; haza
           </Section>
           <Section title="Regulation"><Chips ts={of(r.targets, "clause")} {...ctx} /></Section>
           <Section title="Simulation scenarios"><Chips ts={of(r.targets, "scenario")} {...ctx} /></Section>
-          <Section title="Work orders · evidence"><Chips ts={of(r.targets, "work_order", "evidence")} {...ctx} /></Section>
+          <Section title="Work orders · evidence">
+            <Chips ts={of(r.targets, "work_order", "evidence")} {...ctx} />
+            {last?.gate?.checker && <div className="mt-2"><span className="font-mono text-xs text-mute">{last.id}</span> <GateNote checker={last.gate.checker} state={state} api={api} /></div>}
+          </Section>
           <Section title="Docs and links"><Chips ts={docs} {...ctx} /></Section>
         </div>
       </div>

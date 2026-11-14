@@ -5,15 +5,18 @@ reference() below, the same rules in Python, decides. gate/test_gate.py asserts 
 Digests: input_sha256 = SHA-256 of the exact evidence bytes, rules_sha256 = of the rule table inside them,
 verdict_sha256 = of "<input_sha256>:<rules_sha256>:<verdict>". Any edit to the evidence changes all of them.
 """
+import glob
 import hashlib
 import json
 import os
 import subprocess
+import threading
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BIN = os.path.join(ROOT, "gate-rs/target/release/certus-gate")
 MAX_INPUT_BYTES = 8 * 1024 * 1024
 RUN_KEYS = ("scenario", "patient", "hypo", "new_hypo", "preexisting")
+SOURCE = "gate-rs/src/lib.rs"
 
 
 def evidence(rules, checks, rows, world):
@@ -49,9 +52,60 @@ def label(out):
     return f"Deterministic gate: {engine} · verdict digest {out['digest']['verdict_sha256'][:12]}"
 
 
+def sentence(chk, par):
+    """One line for the evidence pack: who computed the verdict, its parity with the Python reference, its digest."""
+    rust = chk["engine"] == "rust"
+    who = "certus-gate (Rust, no unsafe code)" if rust else "the Python reference gate (gate/verdict.py)"
+    parity = f", same verdict as the Python reference on {par['same']}/{par['cases']} recorded runs" if rust and par.get("cases") else ""
+    how = "re-checked from the recorded evidence by" if chk.get("rechecked") else "computed by"
+    return f"Verdict {chk['verdict']} {how} {who}{parity}; digest sha256:{chk['digest']} ({SOURCE})"
+
+
 def checker(out):
     """What the dashboard and the evidence pack show about who decided."""
     return {"engine": out["engine"], "verdict": out["verdict"], "digest": out["digest"]["verdict_sha256"], "label": label(out)}
+
+
+def recorded():
+    """(name, verdict input, recorded verdict) of every recorded gate attempt: stage replays, the dashboard recording,
+    the hosted snapshot and the local run cache. Recordings carry no per-check outcomes, so checks = []."""
+    files = [os.path.join(ROOT, f) for f in ("demo/replay/build.jsonl", "demo/replay/aircraft/build.jsonl", "dashboard/demo-run.jsonl")]
+    files += sorted(glob.glob(os.path.join(ROOT, ".runs/cache/build-*.jsonl")))
+    streams = [(os.path.relpath(f, ROOT), [json.loads(line) for line in open(f) if line.strip()]) for f in files if os.path.exists(f)]
+    snap = os.path.join(ROOT, "web/public/snapshot.json")
+    if os.path.exists(snap):
+        streams.append(("web/public/snapshot.json", json.load(open(snap))["events"]))
+    for name, evs in streams:
+        world = None
+        for e in evs:
+            if e["agent"] == "gate" and e["state"] == "working":
+                world = None
+            world = e.get("world") or world
+            if e.get("gate") and e["state"] in ("pass", "blocked"):
+                rows = e["gate"]["rows"]
+                air = (world or {}).get("kind") == "aircraft" or any("demo/aircraft" in r.get("test", "") for r in rows)
+                rules = json.load(open(os.path.join(ROOT, "demo/aircraft/safety.json" if air else "demo/pump/safety.json")))
+                yield (f"{name}: {e['msg'][:40]}", evidence(rules, [], rows, world), "PASS" if e["state"] == "pass" else "BLOCKED")
+
+
+_parity = {"engine": None, "cases": 0, "same": 0}
+
+
+def _check_parity():
+    cases = list(recorded())
+    same = sum(1 for _, inp, _ in cases if {**decide(inp), "engine": "python"} == reference(canonical(inp)))
+    _parity.update(cases=len(cases), same=same)
+
+
+def status():
+    """Which engine decides and, for the Rust one, how many recorded verdicts it reproduces exactly (Python reference).
+    The first call starts the check in the background; it answers with cases = 0 until the check is done."""
+    rust = os.access(BIN, os.X_OK)
+    if _parity["engine"] is None:
+        _parity["engine"] = "rust" if rust else "python"
+        if rust:
+            threading.Thread(target=_check_parity, daemon=True).start()
+    return {**_parity, "source": SOURCE}
 
 
 def _sha(b):
