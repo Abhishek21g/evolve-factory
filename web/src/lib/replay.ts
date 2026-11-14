@@ -18,22 +18,47 @@ export type Played = {
   note: string | null;
 };
 
-export const HOSTED_NOTE = "Plays the closest recorded real run";
+/** A request quoted in a sentence: up to 80 characters, cut at a word. */
+export const quote = (s: string) => s.length <= 80 ? s : `${s.slice(0, 79).replace(/\s+\S*$/, "")}…`;
+/** Said before the closest recording plays when nothing recorded matches the request. */
+export const noMatch = (asked: string, prompt: string) => `No recording of “${quote(asked)}”, so this plays the closest recorded run: “${prompt}”`;
 
 const STOP = new Set(["the", "and", "for", "with", "what", "when", "than", "that", "this", "from", "into", "more", "does", "happens",
-  "should", "would", "could", "can", "are", "was", "our", "its", "two"]);
-const words = (s: string) => new Set((s.toLowerCase().match(/[a-z0-9]+/g) || []).filter(w => !STOP.has(w) && (w.length > 2 || /\d/.test(w))));
+  "should", "would", "could", "can", "are", "was", "our", "its", "two", "has", "have", "they", "their", "there"]);
+/** Words that mean the same thing to the world model. */
+const SAME: Record<string, string> = {
+  kid: "child", kids: "child", children: "child", toddler: "child", teen: "adolescent", teens: "adolescent", teenager: "adolescent",
+  adults: "adult", grams: "g", gram: "g", carb: "carbs", carbohydrates: "carbs", eat: "eats", ate: "eats", eating: "eats", meal: "eats",
+  degree: "degrees", deg: "degrees", vanes: "vane", sensors: "sensor", fail: "fails", failed: "fails", failure: "fails", stuck: "fails",
+  gust: "turbulence", gusts: "turbulence", turbulent: "turbulence", stalls: "stall", boluses: "bolus", doses: "dose", ten: "10",
+};
+/** Who or what is simulated: two requests about different cohorts are different questions. */
+const COHORT = new Set(["adult", "adolescent", "child"]);
+const terms = (s: string) => (s.toLowerCase().match(/\d+(?:\.\d+)?|[a-z]+/g) || []).map(w => SAME[w] || w)
+  .filter(w => /\d/.test(w) || (!STOP.has(w) && w.length > 2));
 
-/** The recording closest to the typed text by shared words; `matched` is false when no word is shared. */
+/** How well a recorded prompt answers the typed text: shared words (numbers count double), and what contradicts it
+ *  (another cohort, or numbers where none agree, e.g. 150 g vs 80 g). */
+function fit(text: string, prompt: string) {
+  const a = new Set(terms(text)), b = new Set(terms(prompt));
+  const shared = [...a].filter(w => b.has(w));
+  const nums = (s: Set<string>) => [...s].filter(w => /\d/.test(w));
+  const cohort = (s: Set<string>) => [...s].filter(w => COHORT.has(w));
+  const clash = (x: string[], y: string[]) => x.length > 0 && y.length > 0 && !x.some(w => y.includes(w));
+  const conflicts = 2 * Number(clash(cohort(a), cohort(b))) + Number(clash(nums(a), nums(b)));  // another cohort is another question
+  const score = shared.reduce((k, w) => k + (/\d/.test(w) ? 2 : 1), 0);
+  return { score, conflicts, rank: score / Math.sqrt(Math.max(1, a.size * b.size)) - conflicts };
+}
+
+/** The recording closest in meaning to the typed text. `matched`: a good match (two or more shared terms, a number
+ *  counting as two, and nothing contradicting); otherwise the closest one plays and the replay says so. */
 export function closest(recs: Recording[], text: string): { rec: Recording; matched: boolean } | null {
-  const a = words(text);
-  let best: Recording | null = null, score = -1;
-  for (const r of recs) {
-    const b = words(r.prompt);
-    const s = [...a].filter(w => b.has(w)).length / Math.sqrt(Math.max(1, a.size * b.size));
-    if (s > score) { best = r; score = s; }
+  let best: { rec: Recording; f: ReturnType<typeof fit> } | null = null;
+  for (const rec of recs) {
+    const f = fit(text, rec.prompt);
+    if (!best || f.rank > best.f.rank) best = { rec, f };
   }
-  return best && { rec: best, matched: score > 0 };
+  return best && { rec: best.rec, matched: best.f.score >= 2 && !best.f.conflicts };
 }
 
 /** The composer's one-click requests on the hosted site: exactly the recorded prompts. */
@@ -78,7 +103,7 @@ export function playedWo(p: Played, evs: Ev[], src?: WorkOrder): WorkOrder {
   const sub = subFor(p);
   return {
     id: p.wo!, project: p.project, title: p.title, created: p.started, requested_by: p.actor,
-    description: p.note ? `${HOSTED_NOTE}: “${p.rec.prompt}”.` : src?.description || "",
+    description: p.note ? `${p.note}.` : "",
     status: verdict ? (verdict.state === "done" ? "Approved" : "Blocked") : "Running",
     gate: last("gate") || null, world: last("world") || null, evidence: last("evidence") || null,
     commits: commits.slice(Math.max(0, commits.length - shown)).map(c => ({ ...c, subject: sub(c.subject) })),

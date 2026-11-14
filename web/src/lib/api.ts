@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Ev, Gate, World } from "./feed";
 import type { Trace } from "./trace";
-import { chips, closest, finished, HOSTED_NOTE, playedAudit, playedWo, reached, replayed, rewrite, roster, verdicts, type Played, type Recording } from "./replay";
+import { chips, closest, finished, noMatch, quote, playedAudit, playedWo, reached, replayed, rewrite, roster, verdicts, type Played, type Recording } from "./replay";
 import snapshot from "../../public/snapshot.json";
 
 export type Member = { id: string; name: string; role: string; kind: "human" | "agent" };
@@ -30,6 +30,8 @@ export type MemoryView = {
 export type State = {
   team: Member[]; devices: Record<string, string>; projects: Project[]; project: Project | null;
   hazards?: Hazard[]; requirements?: Requirement[]; work_orders?: WorkOrder[]; audit: Audit[];
+  /** Older runs and drafts of a request a later work order replaces (factory/store.py superseded): not listed, still open by id. */
+  archived_work_orders?: (WorkOrder & { superseded_by: string })[];
   trace?: Trace;
   agents?: Record<string, AgentLive>; memory?: MemoryItem[];
   status?: {
@@ -205,7 +207,8 @@ export function useFactoryState(projectId: string) {
     }
     if (now.current.playing) return { error: "factory busy" };
     const text = String(body.text || "").trim();
-    const known = [...Object.values(SNAP.states || {}).flatMap(s => s.work_orders || []), ...l.wos,
+    const recorded = Object.values(SNAP.states || {}).flatMap(s => [...(s.work_orders || []), ...(s.archived_work_orders || [])]);
+    const known = [...recorded, ...l.wos,
       ...now.current.played.flatMap(p => (p.wo ? [{ id: p.wo, project: p.project, title: p.title }] : []))];
     const again = path === "run" ? known.find(w => w.id === body.wo) : undefined;
     if (path === "run" && !again) return { error: "unknown work order" };
@@ -214,13 +217,19 @@ export function useFactoryState(projectId: string) {
     if (!["ask", "whatif", "run"].includes(path)) return { error: "Read-only snapshot. Run the factory locally to make changes." };
     const m = closest(recordings(recProject(l, project)).filter(r => r.kind === kind), again?.title || text);
     if (!m) return { error: `No recorded ${kind === "build" ? "work order run" : "what-if"} for this project in the hosted demo.` };
+    // A recorded work order only replays its own request: another recording would show under its title.
+    if (again && !m.matched && recorded.includes(again as WorkOrder)) return { error: `The hosted demo plays recorded runs only, and none is recorded for “${quote(again.title)}”. Run the factory locally (demo/go.sh) to build it.` };
     const data = await fetch(snapFile(`replay?id=${m.rec.id}`, "json")).then(r => (r.ok ? r.json() as Promise<{ events: Ev[] }> : null)).catch(() => null);
     if (!data?.events.length) return { error: "This recorded run is missing from the hosted snapshot." };
     const next = `WO-${Math.max(100, ...known.map(w => Number(w.id.slice(3)) || 0)) + 1}`;
     const started = Date.now() / 1000;
+    const note = m.matched ? null : noMatch(again?.title || text, m.rec.prompt);
+    // No good match: say so first, then the closest recording plays.
+    const events = note ? [{ run: data.events[0].run, t: 0, agent: kind === "build" ? "planner" : "simulation", state: "working", msg: note },
+      ...data.events.map(e => ({ ...e, t: e.t + 2.5 }))] : data.events;
     const p: Played = {
-      rec: m.rec, events: data.events, run: String(Math.floor(started)), project, started, actor, existing: !!again,
-      wo: kind === "build" ? again?.id || next : null, title: (again?.title || text).slice(0, 120), note: m.matched ? null : HOSTED_NOTE,
+      rec: m.rec, events, run: String(Math.floor(started)), project, started, actor, existing: !!again,
+      wo: kind === "build" ? again?.id || next : null, title: (again?.title || text).slice(0, 120), note,
     };
     setPlayed(prev => [...prev, p]);
     keep([...now.current.played, p]);
@@ -229,7 +238,7 @@ export function useFactoryState(projectId: string) {
     (async () => {
       const speed = Number(new URLSearchParams(location.search).get("speed")) || 1;
       let prev = 0;
-      for (const e of data.events) {
+      for (const e of events) {
         await sleep(Math.max(0, e.t - prev) * 1000 / speed);
         prev = e.t;
         setEvents(evs => [...evs, replayed(p, e)]);
@@ -309,7 +318,10 @@ export function useFactoryState(projectId: string) {
     if (!mine.length) return { ...s, status };
     const pevs = allEvents.filter(e => e.project === s.project?.id);
     const wos = new Map((s.work_orders || []).map(w => [w.id, w]));
-    for (const p of mine) if (p.wo) wos.set(p.wo, playedWo(p, pevs, snapWo(p.rec.project, p.rec.wo)));
+    for (const p of mine) if (p.wo) {
+      const w = playedWo(p, pevs, snapWo(p.rec.project, p.rec.wo));
+      wos.set(p.wo, p.existing ? { ...w, description: wos.get(p.wo)?.description || "" } : w);
+    }
     const audit = [...mine.flatMap(p => playedAudit(p, pevs, p.wo ? wos.get(p.wo) : undefined)), ...s.audit].sort((a, b) => b.ts - a.ts);
     return { ...s, status, work_orders: [...wos.values()], audit, agents: roster(pevs) };
   }, [live, projectId, played, playing, allEvents, local]);

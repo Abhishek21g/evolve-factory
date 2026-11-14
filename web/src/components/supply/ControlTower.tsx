@@ -6,7 +6,9 @@ import { RISK_LABEL, money, useLive, type PageCtx, type RiskKind, type Tower } f
 import { plural as n } from "@/lib/utils";
 import { Bar, Items, Pending, Pill, type Tone } from "./common";
 
-const verdictTone = (v?: string | null): Tone => !v ? "idle" : ["PASS", "SAFE", "APPROVED"].includes(v) ? "ok" : "bad";
+const verdictTone = (v?: string | null): Tone => !v ? "idle" : ["PASS", "SAFE", "APPROVED"].includes(v) ? "ok" : v === "AT RISK" ? "warn" : "bad";
+/** "2 of 30 unsafe" for a what-if, "0 new failures caused by the change" for a work order's gate run. */
+const simResult = (s: NonNullable<Tower["safety"]["sim"]>) => s.wo ? `${n(s.new, "new failure")} caused by the change` : `${s.harmed ?? 0} of ${s.runs} unsafe`;
 const and = (xs: string[]) => xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
 const pct = (a: number, b: number) => b ? Math.round((100 * a) / b) : 0;
 
@@ -15,14 +17,15 @@ function brief(t: Tower): { risky: boolean; text: string } {
   const sw = t.software, sf = t.safety, c = t.supply?.counts, f = t.finance;
   const open: string[] = [];
   if (sw.blocked) open.push(`${n(sw.blocked, "change")} blocked by the gate`);
-  if (sf.sim && verdictTone(sf.sim.verdict) === "bad") open.push("a failing simulation");
+  if (sf.sim && verdictTone(sf.sim.verdict) === "bad") open.push(sf.sim.wo ? "a failing simulation" : "an unsafe what-if");
   if (sf.gaps.length) open.push(`${n(sf.gaps.length, "trace gap")} (${sf.gaps.map(g => g.id).join(", ")})`);
   if (c?.missing_deliverable) open.push(n(c.missing_deliverable, "missing supplier deliverable"));
   if (c?.expired_cert) open.push(n(c.expired_cert, "expired certificate"));
   if (c?.import_delay) open.push(`${n(c.import_delay, "import")} held at customs`);
   const soon = c?.expiring_cert || 0;
   const runs = sf.sim?.kind === "aircraft" ? "flights" : "patients";
-  const sim = !sf.sim ? "no simulation has run yet" : verdictTone(sf.sim.verdict) === "ok" ? `the latest simulation passed all ${sf.sim.runs} ${runs}` : "the latest simulation failed";
+  const sim = !sf.sim ? "no simulation has run yet" : verdictTone(sf.sim.verdict) === "ok" ? `the latest simulation passed all ${sf.sim.runs} ${runs}`
+    : sf.sim.wo ? "the latest simulation failed" : `the latest what-if is ${sf.sim.verdict} (${sf.sim.harmed ?? 0} of ${sf.sim.runs} ${runs} unsafe)`;
   const status = open.length ? `At risk: ${and(open)}.` : soon || sw.running ? "On track, with items to watch." : "On track.";
   const fine = `${sw.approved} of ${n(sw.total, "work order")} approved${sw.blocked ? "" : ", nothing blocked by the gate"}, and ${sim}${soon ? `; ${n(soon, "certificate")} ${soon === 1 ? "expires" : "expire"} within 60 days` : ""}.`;
   const spend = f ? ` Factory spend is ${money(f.factory_usd, true)}, ${pct(f.factory_usd, f.budget_usd)}% of its ${money(f.budget_usd)} budget.` : "";
@@ -121,7 +124,7 @@ export function ControlTower({ state, getJSON, live }: PageCtx) {
             <Num n={sf.untraced} label="untraced functions" tone={sf.untraced ? "warn" : "ok"} href={at("traceability")} />
           </div>
           <p className="text-sm text-mute">
-            {sf.sim ? <>Latest: {sf.sim.wo ? <a href={at(`work-orders/${sf.sim.wo}`)} className="text-ink hover:underline">{sf.sim.wo}</a> : <>what-if “{sf.sim.question}”</>} · {n(sf.sim.runs, "run")} · {n(sf.sim.new, "new failure")} caused by the change.</> : "No simulation yet."}
+            {sf.sim ? <>Latest: {sf.sim.wo ? <a href={at(`work-orders/${sf.sim.wo}`)} className="text-ink hover:underline">{sf.sim.wo}</a> : <>what-if “{sf.sim.question}”</>} · {n(sf.sim.runs, "run")} · {simResult(sf.sim)}.</> : "No simulation yet."}
             {" "}{n(t.hazards, "hazard")} and {n(t.requirements, "safety requirement")} under the deterministic gate.
           </p>
           {sf.gaps.length > 0 && <div className="flex flex-wrap items-center gap-1.5 text-xs text-dim">Gaps: <Items ids={sf.gaps.map(g => g.id)} pid={p.id} /></div>}

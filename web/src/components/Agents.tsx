@@ -76,9 +76,10 @@ export function AgentTeam({ state, events, live, post, team }: AgentCtx) {
   const [sel, setSel] = useState("");
   const [text, setText] = useState("");
   const [err, setErr] = useState("");
-  const run = runs.find(r => r.id === sel) || runs[0];
-  const agents = state.team.filter(m => m.kind === "agent");
   const busy = !!state.status?.busy;
+  // A what-if involves two agents; the latest work order run shows the whole team (a run in progress always shows).
+  const run = runs.find(r => r.id === sel) || (busy ? runs[0] : runs.find(r => r.wo) || runs[0]);
+  const agents = state.team.filter(m => m.kind === "agent");
   const wo = (id?: string | null) => state.work_orders?.find(w => w.id === id);
   const draft = [...(state.work_orders || [])].reverse().find(w => w.status === "Draft");
   const act = async (path: string, body: object) => {
@@ -112,7 +113,7 @@ export function AgentTeam({ state, events, live, post, team }: AgentCtx) {
         <Section title={run ? <>Team on {runName(run)}{run.title ? ` · ${run.title}` : ""}<Asked title={run.title} asked={run.asked} /></> : "Team"}
           aside={runs.length > 1 ? (
             <select aria-label="Run" value={run?.id} onChange={e => setSel(e.target.value)} className="cursor-pointer bg-transparent text-sm text-mute outline-none">
-              {runs.map((r, i) => <option key={r.id} value={r.id} className="bg-panel">{i === 0 ? "Latest: " : ""}{runName(r)} · {ago(Number(r.id))}</option>)}
+              {runs.map((r, i) => <option key={r.id} value={r.id} className="bg-panel">{i === 0 ? "Latest: " : ""}{runName(r)}{r.title ? ` · ${r.title.slice(0, 40)}` : ""} · {ago(Number(r.id))}</option>)}
             </select>) : undefined}>
           <div className="grid gap-2.5 sm:grid-cols-2">
             {agents.map(a => {
