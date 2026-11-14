@@ -293,16 +293,17 @@ class H(SimpleHTTPRequestHandler):
                 item = {"id": f"mem-{int(time.time() * 1000)}", "kind": kind, "title": clip("title", 120) or "Untitled note",
                         "text": clip("text", 2000), "project": store.device(clip("project", 60))["id"]}
                 threading.Thread(target=memory.remember, args=([item],), daemon=True).start()
-                store.log(actor, "added to memory", item["title"], f"{kind} · {memory.backend()}")
+                store.log(actor, "added to memory", item["title"], f"{kind} · {memory.backend()}", store.project_id(clip("project", 60)))
                 return self.send(201, item)
             if u.path == "/api/ask":  # Home composer: plain English becomes a work order run, or a world-model question
                 t = clip("text", 500)
                 if not t:
                     return self.send(400, {"error": "say what you want"})
                 if clip("skill", 20) == "simulate" or re.match(r"\s*what (if|happens)", t, re.I):
-                    if not start("whatif", t, project=clip("project", 60)):
+                    pid = store.project_id(clip("project", 60))
+                    if not start("whatif", t, project=pid):
                         return self.send(409, {"error": "factory busy"})
-                    store.log(actor, "asked the world model", "world model", t, clip("project", 60))
+                    store.log(actor, "asked the world model", "world model", t, pid)
                     return self.send(202, {"started": "whatif"})
                 if busy():
                     return self.send(409, {"error": "factory busy"})
@@ -351,9 +352,10 @@ class H(SimpleHTTPRequestHandler):
                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 return self.send(201, d)
             if u.path == "/api/whatif":
-                if not clip("text") or not start("whatif", clip("text"), project=clip("project", 60)):
+                pid = store.project_id(clip("project", 60))
+                if not clip("text") or not start("whatif", clip("text"), project=pid):
                     return self.send(409, {"error": "factory busy or empty question"})
-                store.log(actor, "asked the world model", "world model", clip("text"), clip("project", 60))
+                store.log(actor, "asked the world model", "world model", clip("text"), pid)
                 return self.send(202, {"started": "whatif"})
         except ValueError as e:
             return self.send(400, {"error": str(e)})
@@ -364,6 +366,7 @@ if __name__ == "__main__":
     load_env()
     os.makedirs(os.path.join(ROOT, ".runs"), exist_ok=True)
     store.ensure_projects()
+    store.attribute_audit()
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8787
     print(f"Certus Factory server on http://localhost:{port}  (UI from web/out, memory: {memory.backend()})", flush=True)
     threading.Thread(target=warm, daemon=True).start()

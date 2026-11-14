@@ -46,6 +46,7 @@ DEVICES = {  # repo: code + safety.json; checks: gate config; rules: coding-agen
                         "checks": "gate/checks-aircraft.json", "rules": "demo/aircraft/RULES.md", "replay": "demo/replay/aircraft"},
 }
 DEFAULT_PROJECTS = [("Boeing Flight Controls", "flight-controls")]  # added next to whatever go.sh seeded
+ORG_WIDE = ("signed in", "signed out", "added MCP server", "removed MCP server")  # audit actions shown in every project
 
 
 def _load():
@@ -62,8 +63,15 @@ def _save(d):
 
 
 def _audit(d, actor, action, obj, detail="", project=None):
-    d["audit"].append({"ts": time.time(), "actor": actor, "action": action, "object": obj, "detail": detail,
-                       **({"project": project} if project else {})})
+    a = {"ts": time.time(), "actor": actor, "action": action, "object": obj, "detail": detail}
+    project = project or audit_project(a, d, [])
+    d["audit"].append({**a, **({"project": project} if project else {})})
+
+
+def project_id(pid):
+    """The project an action is for: pid if it exists, else the first project (the one store.device falls back to)."""
+    ps = _load()["projects"]
+    return pid if any(p["id"] == pid for p in ps) else (ps[0]["id"] if ps else "")
 
 
 def safety_spec(project):
@@ -201,18 +209,42 @@ def _load_run(name):
 
 
 def audit_project(a, d, evs):
-    """Project of a human audit entry (None: organization-wide, e.g. memory). Older entries predate the project field."""
+    """Project of a human audit entry: its id, None if organization-wide (ORG_WIDE: shown in every project), or "" if
+    it cannot be attributed (shown in none). Older entries predate the project field."""
     if a.get("project"):
         return a["project"]
+    if a["action"] in ORG_WIDE:
+        return None
     w = next((w for w in d["work_orders"] if w["id"] == a["object"]), None)
     if w:
         return w["project"]
     p = next((p for p in d["projects"] if a["object"] == p["name"] or a["detail"] == p["id"]), None)  # older "ran monitor": project id in detail
     if p:
         return p["id"]
-    if a["object"] == "world model":  # a what-if: the project of the run that asked the same question
-        return next((e["project"] for e in evs if e.get("asked", e.get("title")) == a["detail"]), None)
-    return None
+    if a["object"] == "world model":  # a what-if: its run started as it was asked, else the run that asked the same question
+        whatifs = [e for e in evs if not e.get("wo") and e.get("project")]
+        e = next((e for e in whatifs if abs(float(e["run"]) - a["ts"]) < 5), None) \
+            or next((e for e in whatifs if e.get("asked", e.get("title")) == a["detail"]), None)
+        return e["project"] if e else ""
+    return ""
+
+
+def attribute_audit():
+    """Stamp older audit entries with the project derived from their work order, project or run, so they stay in
+    their project once the event feed they were derived from is reset. Returns how many were stamped."""
+    with lock:
+        d = _load()
+        evs = events()
+        n = 0
+        for a in d["audit"]:
+            if not a.get("project") and a["action"] not in ORG_WIDE:
+                p = audit_project(a, d, evs)
+                if p:
+                    a["project"] = p
+                    n += 1
+        if n:
+            _save(d)
+        return n
 
 
 def state(project_id, running):
