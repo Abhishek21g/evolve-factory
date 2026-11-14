@@ -31,6 +31,10 @@ def load_env():
 
 
 def key():
+    """The API key; re-reads .env while it is missing, so a running server picks up a key added later."""
+    if not os.environ.get("ELEVENLABS_API_KEY"):
+        os.environ.pop("ELEVENLABS_API_KEY", None)
+        load_env()
     return os.environ.get("ELEVENLABS_API_KEY")
 
 

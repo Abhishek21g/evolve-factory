@@ -93,6 +93,10 @@ def agent_id():
     return json.load(open(AGENT_FILE))["agent_id"] if os.path.exists(AGENT_FILE) else None
 
 
+def status():
+    return "connected" if elevenlabs.key() and agent_id() else "no agent" if elevenlabs.key() else "missing key"
+
+
 CALLER = [  # a line captain reporting the sideslip event the world model reproduced
     "Hi, this is Captain Dana Reyes, I fly the 737 on the line. I want to report a problem with the Boeing flight controls.",
     "On approach this morning we flew through a gusty crosswind with some sideslip. The two angle of attack vanes disagreed by "
