@@ -86,7 +86,7 @@ export function Traceability({ state, live, item, post, getJSON, text }: Props) 
       <PageHead title="Traceability" sub={<>Every requirement traced up to its hazard and regulation clause, down to the code lines, test, simulation scenarios, work orders and evidence ({p.standard}). Click anything to open it.</>}>
         <div className="flex overflow-hidden rounded-md border border-line text-sm">
           {(["matrix", "graph"] as const).map(k => (
-            <button key={k} onClick={() => setView(k)} className={`px-3 py-1.5 capitalize ${view === k ? "bg-white/[.08] text-ink" : "text-mute hover:text-ink"}`}>{k}</button>
+            <button key={k} aria-pressed={view === k} onClick={() => setView(k)} className={`px-3 py-1.5 capitalize ${view === k ? "bg-white/[.08] text-ink" : "text-mute hover:text-ink"}`}>{k}</button>
           ))}
         </div>
         <Button primary onClick={() => setDraft({})} disabled={!live || !items.length}><Plus size={14} /> Add trace link</Button>
@@ -169,7 +169,7 @@ export function Traceability({ state, live, item, post, getJSON, text }: Props) 
               </table>
             </div>
           </Section>
-          <Section title="Untraced code" aside="functions in the device code that no requirement traces to (DO-178C: no untraced code)">
+          <Section title="Untraced code" aside={`functions in the device code that no requirement traces to${t.device === "flight-controls" ? " (DO-178C: no untraced code)" : ""}`}>
             {untraced.length ? (
               <div className="divide-y divide-line rounded-lg border border-bad/30 bg-bad/[.03]">
                 {untraced.map(u => (

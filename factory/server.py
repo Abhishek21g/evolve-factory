@@ -212,7 +212,7 @@ class H(SimpleHTTPRequestHandler):
             return self.send(200, {"incidents": incidents.listing(q.get("project"))})
         if u.path == "/api/worldmodel":
             loop = worldmodel.loop(wo)
-            return self.send(200, loop) if loop else self.send(404, {"error": "no simulation for this work order"})
+            return self.send(200, loop or {"wo": None})  # drafts have no loop yet: not an error
         if u.path in ("/api/record", "/api/monitors"):
             pid = q.get("project", "")
             if not any(p["id"] == pid for p in store._load()["projects"]):
