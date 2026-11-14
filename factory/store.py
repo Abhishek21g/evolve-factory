@@ -82,7 +82,10 @@ def create_wo(actor, project, title, description):
         d = _load()
         if not any(p["id"] == project for p in d["projects"]):
             raise ValueError("unknown project")
-        n = [int(w["id"][3:]) for w in d["work_orders"]]
+        # Branches are shared by every checkout of the repo: never reuse a number whose wo/ branch another checkout owns.
+        branches = subprocess.run(["git", "-C", ROOT, "branch", "--list", "wo/WO-*", "--format=%(refname:short)"],
+                                  capture_output=True, text=True).stdout.split()
+        n = [int(w["id"][3:]) for w in d["work_orders"]] + [int(b[6:]) for b in branches if b[6:].isdigit()]
         wo = {"id": f"WO-{max(n + [100]) + 1}", "project": project, "title": title, "description": description,
               "created": time.time(), "requested_by": actor}
         d["work_orders"].append(wo)
