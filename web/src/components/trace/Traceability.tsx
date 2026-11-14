@@ -3,7 +3,9 @@ import { useMemo, useState, type ReactNode } from "react";
 import { BookOpen, Code2, ExternalLink, FileCheck2, FlaskConical, Link2, ListChecks, Plus, Scale, TestTube2, X } from "lucide-react";
 import type { State } from "@/lib/api";
 import { githubUrl, where, type HazardRow, type Target, type TraceRow } from "@/lib/trace";
-import { TraceGraph } from "@/components/TraceGraph";
+import dynamic from "next/dynamic";
+// The graph library is large: load it only when the graph is shown.
+const TraceGraph = dynamic(() => import("@/components/TraceGraph").then(m => m.TraceGraph), { ssr: false, loading: () => <div className="h-[620px] animate-pulse rounded-lg border border-line bg-panel" /> });
 import { Badge, Button, LOCAL_ONLY, PageHead, Section, TONE_CLS } from "@/components/ui";
 import { GateNote } from "@/components/GateNote";
 import { AddLink, type Draft } from "./AddLink";

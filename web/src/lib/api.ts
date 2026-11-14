@@ -288,7 +288,7 @@ export function useFactoryState(projectId: string) {
       const [kind, query = ""] = path.split("?");
       const pid = new URLSearchParams(query).get("project") || "";
       const own = recProject(l, pid);
-      const r = (await replayFile(path, ext)) ?? await fetch(snapFile(own !== pid ? path.replace(`project=${pid}`, `project=${own}`) : path, ext), { cache: "no-store" }).catch(() => null);
+      const r = (await replayFile(path, ext)) ?? await fetch(snapFile(own !== pid ? path.replace(`project=${pid}`, `project=${own}`) : path, ext)).catch(() => null);  // static files: let the browser cache them
       const sync = l.synced[pid];
       if (kind !== "record" || !sync || !r?.ok) return r;
       const rec = await r.json();
