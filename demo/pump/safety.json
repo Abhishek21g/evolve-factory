@@ -33,7 +33,10 @@
       "hazards": [
         "H-1"
       ],
-      "files": [],
+      "files": [
+        "demo/pump/pump.c",
+        "demo/pump/pump.h"
+      ],
       "symbols": [
         "MAX_BOLUS_U",
         "request_bolus"
@@ -46,7 +49,10 @@
       "hazards": [
         "H-2"
       ],
-      "files": [],
+      "files": [
+        "demo/pump/pump.c",
+        "demo/pump/pump.h"
+      ],
       "symbols": [
         "MAX_DAILY_U",
         "delivered_today_u",
@@ -60,7 +66,10 @@
       "hazards": [
         "H-3"
       ],
-      "files": [],
+      "files": [
+        "demo/pump/pump.c",
+        "demo/pump/pump.h"
+      ],
       "symbols": [
         "MIN_BG_FOR_BOLUS",
         "request_bolus"
@@ -73,7 +82,10 @@
       "hazards": [
         "H-4"
       ],
-      "files": [],
+      "files": [
+        "demo/pump/pump.c",
+        "demo/pump/pump.h"
+      ],
       "symbols": [
         "OCCLUSION_KPA",
         "check_occlusion"
@@ -86,7 +98,10 @@
       "hazards": [
         "H-5"
       ],
-      "files": [],
+      "files": [
+        "demo/pump/pump.c",
+        "demo/pump/pump.h"
+      ],
       "symbols": [
         "WATCHDOG_MS",
         "check_watchdog"
