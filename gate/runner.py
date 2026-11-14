@@ -26,6 +26,11 @@ import emit as feed  # noqa: E402  dashboard event feed
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sf  # noqa: E402  Software Factory client
 import verdict  # noqa: E402  deterministic verdict layer (Rust when built, Python reference otherwise)
+sys.path.insert(0, os.path.join(ROOT, "factory"))
+try:
+    import worldmodel  # noqa: E402  structured failure report for the coder's retry
+except Exception:  # the report is an aid for the coder: the gate itself must run without it
+    worldmodel = None
 DEFAULT_AGENT = 'claude -p --permission-mode acceptEdits --allowedTools "Bash(make:*)"'
 AGENT_DOWN = 4
 # Checks come from gate/checks.json in the main checkout (trusted, agents can't edit it).
@@ -105,6 +110,27 @@ def run_checks(checks, wt, base, wo, gate_json):
     parts += [f"{verdict.label(v)}\n\n" + "\n".join(f"- {r}" for r in v["reasons"])]
     head = "## Checks: PASS" if ok else "## Checks: BLOCKED"
     return ok, head + "\n\n" + "\n\n".join(parts) + "\n", v
+
+
+def diagnosis(checks, wt, base, wo, gate, since):
+    """The world model's diagnosis of a blocked attempt (factory/worldmodel.py): violated requirement, when, the causal
+    chain from the simulation trace and the responsible code. Deterministic; empty when there is nothing to add."""
+    world_json = os.path.join(ROOT, ".runs", f"{wo}.world.json")
+    rules = next((c["rules"].format(root=ROOT) for c in checks if c.get("rules")), None)
+    if not worldmodel or not rules or not os.path.exists(world_json) or os.path.getmtime(world_json) < since:
+        return ""  # no simulation of this attempt (e.g. it did not build): nothing to diagnose
+    try:
+        world = json.load(open(world_json))
+        repo = os.path.relpath(os.path.dirname(rules), ROOT)
+        dev = "flight-controls" if world.get("kind") == "aircraft" else "insulin-pump"
+        h, c = worldmodel.SOURCES[dev]
+        base_src = {"h": worldmodel.git_show(base, f"{repo}/{h}"), "c": worldmodel.git_show(base, f"{repo}/{c}")}
+        cand_src = {"h": open(os.path.join(wt, repo, h)).read(), "c": open(os.path.join(wt, repo, c)).read()}
+        d = worldmodel.diagnose(world, json.load(open(rules)), dev, repo, base_src, cand_src, gate)
+        return d["handoff"] if d else ""
+    except Exception as e:
+        print(f"(world-model diagnosis unavailable: {e})", file=sys.stderr)
+        return ""
 
 
 def run_agent(wt, prompt):
@@ -214,6 +240,7 @@ def main(argv=None):
         say("gate", "working", "Running checks", wo=args.wo)
         if os.path.exists(gate_json):
             os.remove(gate_json)
+        checked_at = time.time()
         ok, report, v = run_checks(checks, wt, base_ref, args.wo, gate_json)
         gate = json.load(open(gate_json)) if os.path.exists(gate_json) else {"verdict": "PASS" if ok else "BLOCKED", "rows": []}
         gate["checker"] = verdict.checker(v)
@@ -225,7 +252,8 @@ def main(argv=None):
         if ok:
             break
         # Each attempt is a fresh agent session: resend the Work Order and rules, not just the report.
-        prompt = PROMPT.format(wo=args.wo, text=text, rules=rules) + "\n\n" + RETRY.format(wo=args.wo, report=report)
+        diag = diagnosis(checks, wt, base_ref, args.wo, gate, checked_at)
+        prompt = PROMPT.format(wo=args.wo, text=text, rules=rules) + "\n\n" + RETRY.format(wo=args.wo, report=report + ("\n" + diag if diag else ""))
 
     open(out, "w").write(report)
     print(f"\nreport: {out}\nworktree: {wt} (branch {branch})")
