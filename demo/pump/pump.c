@@ -8,6 +8,10 @@ pump_status request_bolus(pump_state *s, double units, int bg_mg_dl) {
     return OK;
 }
 
+pump_status quick_bolus(pump_state *s, int bg_mg_dl) {
+    return request_bolus(s, 5.0, bg_mg_dl);
+}
+
 pump_status check_occlusion(double line_pressure_kpa) {
     return line_pressure_kpa >= OCCLUSION_KPA ? ALARM_OCCLUSION : OK;
 }
