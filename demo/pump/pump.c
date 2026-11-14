@@ -11,14 +11,15 @@ pump_status request_bolus(pump_state *s, double units, int bg_mg_dl) {
 
 void pump_set_adult(pump_state *s, int adult) { s->adult = adult != 0; }
 
-/* Extended bolus: `units` spread evenly over `minutes`. SR-2 and SR-3 apply as in request_bolus.
- * Rate <= MAX_EXT_RATE_U_H, so no hour delivers more than one max bolus. An entry above MAX_BOLUS_U
- * is accepted only as a confirmation: the same amount must first have been rejected by request_bolus. */
+/* Extended bolus: `units` spread evenly over `minutes` (<= MAX_EXT_MINUTES). SR-2 and SR-3 apply as in
+ * request_bolus. Rate <= MAX_EXT_RATE_U_H, so no hour delivers more than one max bolus. An entry above
+ * MAX_BOLUS_U is accepted only as a confirmation: the same amount must first have been rejected by request_bolus. */
 pump_status request_extended_bolus(pump_state *s, double units, int minutes, int bg_mg_dl) {
     double cap = s->adult ? MAX_EXTENDED_U : MAX_BOLUS_U;
     int confirmed = units <= MAX_BOLUS_U || units == s->confirm_u;
     s->confirm_u = 0;
-    if (units <= 0 || units > cap || minutes <= 0 || !confirmed || s->ext_minutes_left > 0) return REJECT_LIMIT;
+    if (units <= 0 || units > cap + 1e-9 || minutes <= 0 || minutes > MAX_EXT_MINUTES || !confirmed
+        || s->ext_minutes_left > 0) return REJECT_LIMIT;
     if (units * 60.0 > MAX_EXT_RATE_U_H * minutes + 1e-9) return REJECT_LIMIT;
     if (bg_mg_dl < MIN_BG_FOR_BOLUS) return REJECT_LOW_BG;
     if (s->delivered_today_u + units > MAX_DAILY_U) return REJECT_DAILY;

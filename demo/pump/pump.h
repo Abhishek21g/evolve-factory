@@ -8,8 +8,11 @@
 #define OCCLUSION_KPA     80.0  /* SR-4 mitigates H-4 missed delivery from blocked line */
 #define WATCHDOG_MS       2000  /* SR-5 mitigates H-5 runaway delivery on controller hang */
 /* WO-200 extended bolus. MAX_BOLUS_U stays 10 U (Oct 28 clinical safety review). */
-#define MAX_EXTENDED_U    25.0  /* adult extended total; non-adults stay at MAX_BOLUS_U (H-1) */
 #define MAX_EXT_RATE_U_H  MAX_BOLUS_U /* extended delivery never exceeds 10 U in any hour (H-1) */
+/* Meal insulin must finish while the meal is still being absorbed: insulin delivered later keeps acting
+ * after the carbs are gone and causes late hypoglycemia (UVA/Padova: 24 U over 144 min -> 42 mg/dL at ~11 h). */
+#define MAX_EXT_MINUTES   120   /* extended delivery ends within 2 h (H-3) */
+#define MAX_EXTENDED_U    (MAX_EXT_RATE_U_H * MAX_EXT_MINUTES / 60) /* 20 U adult total; non-adults stay at MAX_BOLUS_U (H-1) */
 
 typedef enum { OK = 0, REJECT_LIMIT, REJECT_DAILY, REJECT_LOW_BG, ALARM_OCCLUSION, ALARM_WATCHDOG } pump_status;
 
