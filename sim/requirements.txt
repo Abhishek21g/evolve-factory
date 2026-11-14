@@ -1,0 +1,2 @@
+simglucose==0.2.11
+setuptools<70  # simglucose 0.2.x still imports pkg_resources
