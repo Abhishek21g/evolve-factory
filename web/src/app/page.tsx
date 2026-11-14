@@ -141,13 +141,32 @@ function Projects({ state, post, team, live }: Ctx) {
       <PageHead title="Projects" sub="Each project is a physical-AI product: its code, its hazard log, and a world model to test changes against.">
         <Button primary onClick={() => setOpen(true)} disabled={!live && !state.status?.hosted}><Plus size={14} /> New project</Button>
       </PageHead>
-      <Table head={["Project", "Device", "Standard", "World model", "Owner", "Created"]}
-        empty="No projects yet. Create one to import its hazard log and start work orders."
-        rows={state.projects.map(p => [
-          <a key="n" href={`#/p/${p.id}/overview`} className="whitespace-nowrap font-medium hover:underline">{p.name}</a>,
-          <span key="d" className="whitespace-nowrap">{state.devices[p.device] || p.device}</span>, <span key="s" className="text-mute">{p.standard}</span>,
-          <span key="w" className="text-mute">{p.world_model}</span>, <Who key="o" m={team[p.owner]} />, <span key="c" className="whitespace-nowrap text-mute"><Ago ts={p.created} /></span>,
-        ])} />
+      {state.projects.length ? (
+        <div className="grid gap-3">
+          {state.projects.map(p => {
+            const air = p.device === "flight-controls";
+            return (
+              <a key={p.id} href={`#/p/${p.id}/overview`} aria-label={`Open ${p.name}`}
+                className="group relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 overflow-hidden rounded-xl border border-line bg-panel px-5 py-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-acc/40 hover:bg-white/[.03] hover:shadow-[0_8px_30px_-12px] hover:shadow-acc/30 focus-visible:border-acc/60 focus-visible:outline-none">
+                <span className="pointer-events-none absolute inset-y-0 left-0 w-0.5 bg-acc opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+                <span className="grid size-11 place-items-center rounded-lg border border-line bg-bg text-xl transition-colors group-hover:border-acc/40" aria-hidden>{air ? "✈" : "◉"}</span>
+                <span className="min-w-0">
+                  <span className="flex items-center gap-2">
+                    <span className="truncate text-lg font-semibold tracking-tight">{p.name}</span>
+                    <span className="rounded border border-line px-1.5 py-0.5 text-xs text-mute">{state.devices[p.device] || p.device}</span>
+                  </span>
+                  <span className="mt-0.5 block truncate text-sm text-mute">{p.standard}</span>
+                  <span className="mt-0.5 block truncate text-sm text-dim">{p.world_model}</span>
+                </span>
+                <span className="flex items-center gap-4">
+                  <span className="hidden text-right text-sm text-mute md:block"><Who m={team[p.owner]} /><span className="mt-1 block text-xs text-dim"><Ago ts={p.created} /></span></span>
+                  <span className="grid size-8 place-items-center rounded-full border border-line text-mute transition-all duration-200 group-hover:translate-x-0.5 group-hover:border-acc/50 group-hover:bg-acc group-hover:text-bg" aria-hidden>→</span>
+                </span>
+              </a>
+            );
+          })}
+        </div>
+      ) : <p className="rounded-xl border border-dashed border-line px-4 py-10 text-center text-mute">No projects yet. Create one to import its hazard log and start work orders.</p>}
       {open && <NewProject state={state} post={post} onClose={() => setOpen(false)} />}
     </>
   );

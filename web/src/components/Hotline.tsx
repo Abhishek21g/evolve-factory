@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Conversation } from "@elevenlabs/client";
+import type { Conversation } from "@elevenlabs/client";
 import { Mic, Phone, PhoneOff, Play, Square } from "lucide-react";
 import type { State } from "@/lib/api";
 import { Ago, Badge, Button, PageHead, Section } from "@/components/ui";
@@ -90,6 +90,7 @@ function LiveCall({ post, base, onFiled }: { post: Props["post"]; base: string; 
       const r = await fetch(`${base}/api/hotline/token`, { cache: "no-store" });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "no token");
+      const { Conversation } = await import("@elevenlabs/client");  // voice SDK loads only when a call starts
       conv.current = await Conversation.startSession({
         conversationToken: j.token, connectionType: "webrtc",
         clientTools: {
