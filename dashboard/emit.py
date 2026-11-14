@@ -7,7 +7,7 @@ Agents:  planner, coder-claude, coder-codex, safety, gate, world, reviewer
 States:  idle, working, blocked, pass, done
 A gate event may carry gate=<gate.py --json output> to fill the traceability matrix.
 A world event may carry world=<sim/world.py --json output> to draw the blood-sugar chart.
-Child processes (checks run by the runner) inherit RUN_ID/RUN_T0, so their events join the same run.
+Child processes (checks run by the runner) inherit RUN_ID/RUN_T0/FACTORY_PROJECT, so their events join the same run.
 """
 import json
 import os
@@ -21,6 +21,8 @@ T0 = float(os.environ.setdefault("RUN_T0", str(time.time())))
 
 def emit(agent, state, msg, **data):
     ev = {"run": RUN, "t": round(time.time() - T0, 2), "agent": agent, "state": state, "msg": msg, **data}
+    if os.environ.get("FACTORY_PROJECT"):  # set by factory/server.py: the project this run belongs to
+        ev["project"] = os.environ["FACTORY_PROJECT"]
     with open(FEED, "a") as f:
         f.write(json.dumps(ev) + "\n")
     print(f"[{agent}] {state}: {msg}", flush=True)
