@@ -23,8 +23,9 @@ main=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
 # With ANTHROPIC_API_KEY set, the Claude CLI bills the API instead of the subscription, so its 5-hour limit can't stop a run.
 # Only KEY=value lines are loaded, so a stray pasted value can't abort the script (or echo a secret).
 if [ -f .env ]; then
-  set -a; . <(grep -E '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=' .env); set +a
-  bad=$(grep -nvE '^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=|#|$)' .env | cut -d: -f1 | paste -sd, - || true)
+  # A read loop, not `. <(...)`: macOS bash 3.2 silently sources nothing from a process substitution.
+  while IFS= read -r kv; do export "$kv"; done < <(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' .env)
+  bad=$(grep -nvE '^([A-Za-z_][A-Za-z0-9_]*=|[[:space:]]*#|[[:space:]]*$)' .env | cut -d: -f1 | paste -sd, - || true)
   [ -z "$bad" ] || echo "warning: .env line(s) $bad are not KEY=value and were skipped"
 fi
 if [ ! -x "$PY" ]; then
@@ -72,12 +73,12 @@ fi
 FACTORY_REPLAY=$([ "$MODE" = replay ] && echo 1 || echo 0) nohup "$PY" factory/server.py "$PORT" > .runs/server.log 2>&1 &
 for _ in $(seq 50); do curl -s -o /dev/null "http://localhost:$PORT/api/state" && break; sleep 0.1; done
 
-# 6. Live mode: pre-warm the Home what-if chips in the background, on their own feed so the stage feed stays clean.
-#    Afterwards each answers in seconds from its cached real run (factory/pipeline.py recorded()).
+# 6. Live mode: pre-warm every Home suggestion in the background (real runs on the current pump code, own feed);
+#    afterwards each click replays its real run in seconds. Cold: ~1 min per what-if, ~4 min per build.
 if [ "$MODE" = live ]; then
-  for q in "What if a child eats 80 g and the parent types the dose 10x?" "What if an adult eats 150 g of carbs?"; do
-    env -u RUN_ID -u RUN_T0 EVENTS=.runs/prewarm-events.jsonl "$PY" factory/pipeline.py whatif "$q"
-  done > .runs/prewarm.log 2>&1 &
+  nohup "$PY" factory/pipeline.py prewarm > .runs/prewarm.log 2>&1 &
+  sleep 1
+  echo "pre-warm (tail -f .runs/prewarm.log):"; sed 's/^/  /' .runs/prewarm.log
 fi
 
 # 7. Health check (live mode also checks that the coding agent is logged in, which warms it up)
