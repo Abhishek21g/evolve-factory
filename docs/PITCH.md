@@ -28,12 +28,16 @@ Only say what is in the "Built" column. Items marked *(if built by freeze)* get 
 | `safety-gate` commit status next to `drift-bot` | **Not built** *(if built by freeze)* | Q&A only: "next step." |
 | Claude + Codex in parallel | **Scripted lanes only** *(if built by freeze)* | Don't claim. |
 | SF Automation trigger (WO → Ready starts a run) | **Not built** *(if built by freeze)* | "Next: run as an SF Automation." |
-| HydraDB memory, Composio GitHub/Slack actions | **Wired**, used only if keys are set; recorded replay ran on local fallback | Mention only if the status bar shows them live. |
+| HydraDB memory, Composio GitHub/Slack actions | **Live** when keys are set, also in replay: Context recalls from HydraDB (~0.5 s), Plan recalls a past lesson, each run saves a lesson; Composio files a real GitHub issue with the evidence pack ~4 s after the verdict (needs Connect GitHub once) | "Recalled from our org memory in HydraDB." Each rehearsal files a real issue: close them. |
+| Deterministic gate in Rust | **Built** (`gate-rs/`, `#![forbid(unsafe_code)]`, built by `demo/go.sh` when cargo is present; Python fallback otherwise). The Requirement tests step shows "Deterministic gate: Rust (forbid unsafe) · verdict digest ..." | "The verdict comes from a small Rust checker, no LLM in it." |
 | Org memory (tickets, meetings, Slack, email) | **Example data** written for the demo (`factory/seed_memory.jsonl`) | "Example org memory." |
 | Pump code | **Demo controller** (~45 lines of C, "not a medical device") | "A small pump controller in C." Never say "real pump firmware." |
 | ISO 26262 | **Not in code** (IEC 62304 / ISO 14971 only) | CertusAI / roadmap only. |
-| Hosted backup site | **Public** at https://certus-factory.vercel.app: read-only snapshot of a recorded run, Run disabled, first paint ~0.3 s | Backup only. Demo from `localhost:8787` (`demo/go.sh replay`). |
+| Hosted backup site | **Public** at https://certus-factory.vercel.app: read-only snapshot of the 25 U run (WO-345, end state, older UI until `demo/deploy.sh` is re-run), Run disabled, first paint ~0.3 s | Backup only. Demo from `localhost:8787` (`demo/go.sh replay`). |
 | Tree-sitter call graph | **Not built** | Q&A: "next step." |
+| Supply pages (Control Tower, Suppliers, Supply Chain, Finance) | **Built** on **sample data** (fictional suppliers, prices, budget; the UI says so). Supplier deliverables become real trace links | "Sample suppliers." Never name them as partners. |
+| Safety hotline (Incidents), "Hear the pump" callouts | **Built**; alarms are derived from the simulation trace by code. Voice needs ElevenLabs: hotline not configured and callout clips not synthesized on the stage laptop as of Nov 14 05:45 | Don't click Play or the hotline on stage unless both were set up and tested. |
+| Connected card "8090 Software Factory · work orders via MCP" | UI label; the factory talks to SF over its REST API (row above) | Don't read the label aloud. |
 
 ---
 
@@ -56,17 +60,17 @@ About 440 spoken words. That's about 2:55 at 150 wpm, so there is little silence
 
 > M: I ask the factory for exactly that: raise the single-bolus limit to 25 units. The Safety Analyst maps it to hazards: overdose, daily overdose, low blood sugar. It already says this breaks SR-1.
 
-**[0:50] [DEMO D2] The obvious patch. Screen: SR-1 FAIL, World model BLOCKED: 4 new (holds 30 s).**
+**[0:50] [DEMO D2] The obvious patch. Screen: BLOCKED; M scrolls down one screen to the "15 g snack, dose typed 10x" card (4 / 10) and SR-1 FAIL under it (holds 30 s).**
 
 > M: Here's the obvious patch: bump the cap to 25. The Safety Gate runs the test behind every requirement the diff touches. SR-1 fails. Blocked.
 >
 > M: Then the world model. We compile the candidate's actual C code and put it in the loop with ten simulated type 1 diabetics. A patient means to type 1.5 units and types 15. On main, the pump rejects it. With this patch, it delivers it. Four patients crash below 54. Blocked.
 
-**[1:20] [DEMO D3] The fix. Screen: "Attempt 2", then at 1:28 BLOCKED again with all 5 tests PASS (holds 15 s), "Attempt 3" at 1:42.**
+**[1:21] [DEMO D3] The fix. Screen: "Attempt 2", then at 1:29 BLOCKED again with all 5 tests PASS; M scrolls up to the "120 g meal, correct dose" card (2 / 10, holds 15 s). "Attempt 3" at 1:43.**
 
 > M: Blocked work goes back to the agent with the report. Claude Code, in its own worktree, keeps the 10 unit cap and delivers big meals as an extended bolus, never faster than 10 units an hour. Every unit test passes. The world model blocks it anyway: two patients crash hours after a big meal. So the agent caps the extended bolus at 15 units. It can't touch the tests or the hazard log.
 
-**[1:52] [DEMO D4] Green. Screen: Approved; click Code change, Evidence, Pull request (PR #30).**
+**[1:55] [DEMO D4] Green. Screen: Approved, both scenario cards PASS; click Code change (Esc), Evidence (Esc), Pull request (PR #30).**
 
 > M: All five requirement tests pass. World model: zero new hypoglycemia. It also flags two patients who already crash on main: a new hazard for a human to review.
 >
@@ -74,7 +78,7 @@ About 440 spoken words. That's about 2:55 at 150 wpm, so there is little silence
 
 *The stage replay shows the **Pull request** button (real PR #30), so "No pass, no PR" holds. Say the Software Factory "In Review" clause only if the SF board is on screen; otherwise stop after "the PR goes up with the matrix."*
 
-**[2:20] Why it matters. A.**
+**[2:20] Why it matters. A. M clicks World model loop (failure -> diagnosis -> fix -> PASS), then Traceability > Graph > H-1.**
 
 > A: No LLM decides approval. Tests and physics do. An LLM comment is an opinion. A failing test in a simulated patient is evidence an auditor accepts.
 >
@@ -92,8 +96,8 @@ About 440 spoken words. That's about 2:55 at 150 wpm, so there is little silence
 | Hand to Murali | 0:35 | Cut the DOORS/Jama sentence. |
 | Enter in the Home composer | 0:40 | Type faster; the replay timings below follow Enter. |
 | D2 BLOCKED on screen | 0:50 | (set by the replay) Skip the hazard list in D1. |
-| D3 BLOCKED again on screen | 1:28 | (set by the replay) Drop "Every unit test passes." |
-| D4 green on screen | 1:52 | (set by the replay) Drop the "already crash on main" line. |
+| D3 BLOCKED again on screen | 1:29 | (set by the replay) Drop "Every unit test passes." |
+| D4 green on screen | 1:55 | (set by the replay) Drop the "already crash on main" line. |
 | Close starts | 2:45 | Drop the customer list sentence. |
 
 ---
@@ -198,8 +202,8 @@ Never cut: the hook, BLOCKED on screen, green on screen, "No LLM decides approva
 
 - **Trigger:** nothing visibly moves for 5 s, or any error on screen.
 - **Action:** Murali switches to tab 2 (hosted backup, same pages, read-only) or tab 3 (video). No comment on the switch.
-  Until `demo/deploy.sh` is re-run, the hosted backup shows the older runs (WO-101 Approved, WO-102 Blocked), not
-  the block beat, so prefer the video for D2-D4.
+  The hosted backup holds the 25 U run as WO-345 (Approved, both BLOCKED attempts in Activity) but only its end
+  state, and on the older UI until `demo/deploy.sh` is re-run, so prefer the video for D2-D3.
 - **Line (only if someone asks):** "This is the same run, recorded earlier. The checks are deterministic, so it's identical." Then keep going from the same beat.
 - **Never:** apologize, debug on stage, retype a command, say "it worked earlier."
 - If the projector dies: Abhishek gives the 60-second version from memory, then goes straight to Q&A.
@@ -231,11 +235,11 @@ grey text ("replayed from real run WO-304 · Nov 14, 2:45 AM"); leave it visible
 | 0:08-0:20 | Hook | Home: "Good morning, Abhishek.", composer, "Your agent team" | "This is a one-line change to an insulin pump: raise the max dose from 10 units to 25. Agents can write it in seconds. In medical devices, nobody may merge it without safety evidence." |
 | 0:20-0:33 | Memory | Sidebar **Memory**; header says "Backend: HydraDB". Type `typing errors overdose` in the search box, Enter. In under a second the top hit is "Clinical safety review, Oct 28", relevance 0.84 | "Our agents start from the organization's memory, in HydraDB: tickets, meetings, Slack, email. The clinical team already said typing errors are the top cause of overdoses." |
 | 0:33-0:42 | D1 | **Home**, composer on **Build**, type `Raise the single-bolus limit to 25 U`, Enter. The page opens the new work order; at 0:38 **Hazard analysis** says "... breaks SR-1" | "I give the factory the ticket. The Safety Analyst maps it to hazards and already sees it breaks SR-1." |
-| 0:42-1:10 | D2 BLOCKED | At 0:42: Requirement tests **SR-1 FAIL**; simulation "BLOCKED: 4 new severe-hypo runs"; chart "15 g snack, dose typed 10x" | "Here's the obvious patch. The Safety Gate runs the test behind every requirement it touches: SR-1 fails. Then the world model runs the real C code in simulated patients. A dose typed ten times too big is now delivered. Four patients crash. Blocked." |
+| 0:42-1:10 | D2 BLOCKED | At 0:42: Requirement tests **SR-1 FAIL**; simulation "BLOCKED: 4 new severe-hypo runs"; scroll down one screen to the "15 g snack, dose typed 10x" card | "Here's the obvious patch. The Safety Gate runs the test behind every requirement it touches: SR-1 fails. Then the world model runs the real C code in simulated patients. A dose typed ten times too big is now delivered. Four patients crash. Blocked." |
 | 1:10-1:30 | D3 blocked again | At 1:10: "Attempt 2", all 5 tests PASS, simulation "BLOCKED: 2 new"; chart "120 g meal, correct dose". Activity now lists attempt 2's commit | "The report goes back to Claude Code in its own worktree. It keeps the 10 unit cap and spreads big meals over time. Every unit test passes, and the world model still catches two patients crashing hours later. Blocked again." |
 | 1:30-1:52 | D4 green | At 1:30: "Attempt 3", badge **Approved**, "PASS: 0 new". **Code change** (`MAX_EXTENDED_U 15.0`; `MAX_BOLUS_U` stays 10), Esc. **Evidence**, scroll to the world model table, Esc | "Capped at 15 units, everything passes: five requirement tests, zero new hypoglycemia. It ships with its evidence pack: hazards, requirement to test, every simulated patient." |
 | 1:52-2:00 | PR | **Pull request** opens PR #30 (title `WO-304`) | "No pass, no PR." |
 | 2:00-2:15 | What-if | **Home**, click the chip `What if a child eats 80 g and the parent types the dose 10x?` (it fills the composer), Enter. Simulations opens at once; the answer lands at about 2:07: "2 of 30 simulated runs reach severe hypoglycemia" | "Anyone can ask the world model in plain English. The pump rejects the typo. But one simulated child goes dangerously low even with the dose typed correctly. That's a finding for a human, on today's firmware." |
-| 2:15-2:35 | Close | Sidebar **Traceability**, click **H-1**: its chain lights up through SR-1, `MAX_BOLUS_U`, the SR-1 test, the work order, its simulations and evidence | "Hazard to requirement to code to test to simulated patient, for every change. No LLM decides approval: tests and physics do. Certus Factory, for Software Factory." |
+| 2:15-2:35 | Close | Sidebar **Traceability** (opens on the Matrix), click **Graph**, click **H-1**: its chain lights up through SR-1, `MAX_BOLUS_U`, the SR-1 test, the work order, its simulations and evidence | "Hazard to requirement to code to test to simulated patient, for every change. No LLM decides approval: tests and physics do. Certus Factory, for Software Factory." |
 
 If over time, cut the what-if (2:00-2:15) first, then the Evidence scroll. Never cut BLOCKED, green, or the close.
