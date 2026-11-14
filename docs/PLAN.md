@@ -46,7 +46,7 @@ Modules: **Requirements → Blueprints → Work Orders → Feedback**, all linke
 
 | | |
 |---|---|
-| URL | `https://api.factory.8090.dev/v2/mcp` (MCP endpoint, not a web page: browser shows "Method Not Allowed", that is normal. App UI: factory.8090.ai) |
+| URL | per-org URL from SF Settings → Connections → Coding Agent (`https://api.factory.8090.dev/v3/mcp/org/<org-id>`) (MCP endpoint, not a web page: browser shows "Method Not Allowed", that is normal. App UI: factory.8090.ai) |
 | Header | `X-Sofa-Mcp-Project-Id: <project id>` |
 | Auth | Browser OAuth |
 | Clients | Cursor, Claude Code, Codex (setup tabs in Project Settings → Connections → Coding Agent) |
