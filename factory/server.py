@@ -60,11 +60,12 @@ def composio_status():
 def warm():
     """Background, so the server answers at once: copy local memory into HydraDB and open the connection with a
     first recall; keep the Composio connection status fresh (it flips to connected soon after GitHub is authorized)."""
+    memory.recall("bolus limit")  # first: an outage is detected within 2 s and every run after that skips HydraDB
     try:
         memory.seed()
     except Exception as e:
         print(f"[memory] HydraDB seed failed (local store still works): {e}", flush=True)
-    memory.recall("bolus limit")
+    threading.Thread(target=count_memory, daemon=True).start()
     if os.path.exists(os.path.join(ROOT, ".runs", "composio.json")):
         os.remove(os.path.join(ROOT, ".runs", "composio.json"))
     while os.environ.get("COMPOSIO_API_KEY"):
@@ -75,12 +76,20 @@ def warm():
         time.sleep(30)
 
 
+def count_memory():
+    """Keep the Memory page's per-collection counts (read from HydraDB) fresh, off the request path."""
+    while True:
+        memory.refresh_inventory()
+        time.sleep(30)
+
+
 def start(kind, *args, wo=None, project=""):
     with lock:
         if busy():
             return False
         env = {k: v for k, v in os.environ.items() if k not in ("RUN_ID", "RUN_T0")}  # fresh dashboard run
         env["FACTORY_PROJECT"] = project  # which project's code, safety spec, gate and world model
+        env["HYDRADB_FAILED_AT"] = str(memory.failed_at())
         log = open(os.path.join(ROOT, ".runs", "server-job.log"), "w")
         job["proc"] = subprocess.Popen([PY, os.path.join(ROOT, "factory/pipeline.py"), kind, *args], cwd=ROOT, env=env,
                                        stdout=log, stderr=subprocess.STDOUT)
@@ -139,9 +148,11 @@ class H(SimpleHTTPRequestHandler):
         if u.path == "/api/evidence":
             p = os.path.join(ROOT, ".runs", f"{wo}.evidence.md")
             return self.send(200, open(p).read(), "text/markdown") if os.path.exists(p) else self.send(404, {"error": "none"})
-        if u.path == "/api/memory":
-            hits = memory.recall(q["q"], k=6) if q.get("q") else []
-            return self.send(200, {"backend": memory.backend(), "items": memory.items(), "hits": hits})
+        if u.path == "/api/memory":  # ?q=recall query &project=ID (scope to its device; omit for all)
+            dev = store.device(q["project"])["id"] if q.get("project") else None
+            hits, info = memory.search(q["q"], k=8, project=dev, collections=memory.COLLECTIONS) if q.get("q") else ([], None)
+            return self.send(200, {"backend": memory.backend(), "items": memory.items(dev)[:300], "hits": hits, "recall": info,
+                                   "inventory": memory.inventory(), "project": dev})
         if u.path == "/api/diff":
             return self.send(200, store.diff(wo) or "No code changes yet.", "text/plain")
         if u.path.startswith("/api/"):
@@ -175,10 +186,10 @@ class H(SimpleHTTPRequestHandler):
             if u.path == "/api/memory":
                 if not clip("text", 2000):
                     return self.send(400, {"error": "text required"})
-                kind = clip("kind", 20) if clip("kind", 20) in ("meeting", "chat", "email", "work_order", "code", "safety_finding") else "meeting"
+                kind = clip("kind", 20) if clip("kind", 20) in ("meeting", "chat", "email", "ticket", "review", "work_order", "code", "safety_finding") else "meeting"
                 item = {"id": f"mem-{int(time.time() * 1000)}", "kind": kind, "title": clip("title", 120) or "Untitled note",
-                        "text": clip("text", 2000)}
-                memory.remember([item])
+                        "text": clip("text", 2000), "project": store.device(clip("project", 60))["id"]}
+                threading.Thread(target=memory.remember, args=([item],), daemon=True).start()
                 store.log(actor, "added to memory", item["title"], f"{kind} · {memory.backend()}")
                 return self.send(201, item)
             if u.path == "/api/ask":  # Home composer: plain English becomes a work order run, or a world-model question
