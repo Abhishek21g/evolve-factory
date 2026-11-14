@@ -160,8 +160,22 @@ def state(project_id, running):
         for c in w["commits"]:
             audit.append({"ts": float(c["ts"]), "actor": "coder-claude",  # wo/ branches are written by the coding agent
                           "action": "committed code", "object": w["id"], "detail": f"{c['sha'][:7]} {c['subject']}"})
+    out["agents"] = agent_roster(evs)
     out.update({"hazards": spec["hazards"], "requirements": spec["requirements"], "work_orders": wos,
                 "audit": sorted(audit, key=lambda a: -a["ts"])[:300], "trace": trace(spec, wos)})
+    return out
+
+
+def agent_roster(evs):
+    """Per agent: what it is doing now (latest run), how many steps it has finished, last action."""
+    last_run = evs[-1]["run"] if evs else None
+    out = {}
+    for e in evs:
+        a = out.setdefault(e["agent"], {"id": e["agent"], "done": 0, "blocked": 0, "msg": "", "state": "idle", "ts": 0, "wo": None})
+        a["done"] += e["state"] in ("done", "pass")
+        a["blocked"] += e["state"] == "blocked"
+        a["msg"], a["ts"], a["wo"] = e["msg"], float(e["run"]) + e["t"], e.get("wo")
+        a["state"] = e["state"] if e["run"] == last_run else "idle"
     return out
 
 

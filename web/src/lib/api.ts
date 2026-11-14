@@ -14,11 +14,14 @@ export type WorkOrder = {
   commits: { sha: string; author: string; ts: string; subject: string }[];
 };
 export type Audit = { ts: number; actor: string; action: string; object: string; detail: string };
+export type AgentLive = { id: string; done: number; blocked: number; msg: string; state: string; ts: number; wo: string | null };
+export type MemoryItem = { id: string; kind: string; title: string; text: string; score?: number };
 export type TraceNode = { id: string; kind: string; label: string; sub: string; tone: string };
 export type State = {
   team: Member[]; devices: Record<string, string>; projects: Project[]; project: Project | null;
   hazards?: Hazard[]; requirements?: Requirement[]; work_orders?: WorkOrder[]; audit: Audit[];
   trace?: { nodes: TraceNode[]; edges: { source: string; target: string }[] };
+  agents?: Record<string, AgentLive>; memory?: MemoryItem[];
   status?: { online: boolean; busy: boolean; job: string | null; running: string | null; memory: string; composio: boolean; software_factory: boolean };
 };
 
@@ -93,5 +96,11 @@ export function useFactoryState(projectId: string) {
     return r.ok ? r.text() : "Not found.";
   }, []);
 
-  return { state, events, live, post, text };
+  const getJSON = useCallback(async <T,>(path: string): Promise<T | null> => {
+    if (base.current === null) return null;
+    const r = await fetch(`${base.current}/api/${path}`, { cache: "no-store" });
+    return r.ok ? r.json() : null;
+  }, []);
+
+  return { state, events, live, post, text, getJSON };
 }
