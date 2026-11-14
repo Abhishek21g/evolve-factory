@@ -128,12 +128,13 @@ The full script is in [docs/DEMO.md](docs/DEMO.md), and the spoken pitch is in [
 | Memory | Search and add org memory (tickets, meeting notes, chats, emails, code notes, past runs) |
 | Work Orders | Each run: hazard analysis, attempts, gate matrix, world model, evidence pack, code change, PR |
 | Simulations | Real charts per simulated run. Pump: glucose per virtual patient, candidate vs `main`, the 70–180 band, the 54 and 250 lines, insulin delivered by `pump.c`, pass/fail per patient. Aircraft: AoA vs the stall line |
-| Requirements, Traceability, Audit trail | Hazard log; hazard → requirement → test → work order graph; who (human or agent) did what |
+| Requirements, Traceability, Audit trail | Hazard log; a clickable trace matrix and graph per project: regulation clause → hazard → requirement → code lines → test → simulation scenario → work order → evidence. Code opens at the exact lines (and on GitHub), docs open at the section; people add or remove links (saved to `trace/links-<device>.json`); gaps auditors look for are flagged red. Who (human or agent) did what |
 
 ## Run the pieces on their own
 
 ```bash
 .venv/bin/python gate/test_gate.py                            # gate self-test, incl. Rust/Python verdict parity
+.venv/bin/python factory/test_tracelinks.py                 # trace file endpoint traversal guard + link validation
 (cd gate-rs && cargo test --release)                          # Rust verdict layer: unit + property tests
 make -s -C demo/aircraft test                                 # aircraft requirement tests
 .venv/bin/python sim/world.py --repo . --base main            # pump world model on main, ~25 s
