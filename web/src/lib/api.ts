@@ -9,7 +9,7 @@ export type Hazard = { id: string; title: string; severity?: string };
 export type Requirement = { id: string; text: string; hazards: string[]; symbols?: string[]; test?: string };
 export type WorkOrder = {
   id: string; project: string; title: string; description: string; created: number; requested_by: string;
-  status: "Draft" | "Running" | "Approved" | "Blocked" | "Stopped";
+  status: "Draft" | "Running" | "Approved" | "Blocked" | "Stopped" | "Not run";
   gate?: { verdict: string; rows: GateRow[] } | null; world?: World | null;
   evidence?: { decision: string; headline: string } | null;
   commits: { sha: string; author: string; ts: string; subject: string }[];
