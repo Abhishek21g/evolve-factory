@@ -7,6 +7,7 @@
 LLM steps call $AGENT_JSON_CMD (default: claude -p). If it fails, a deterministic fallback keeps the run going,
 and the dashboard says so. Approval itself is never an LLM decision: gate tests + world model decide.
 """
+import fcntl
 import hashlib
 import json
 import os
@@ -248,10 +249,18 @@ def _title(text):
     return " ".join(text.splitlines()[0].lower().split()) if text.strip() else ""
 
 
+def _cached(kind, text):
+    """Cache path for this request on the current pump code: builds start from origin/<base>, what-ifs simulate this
+    checkout. A pump change gives a new key, so a cached run is never older than the firmware it describes."""
+    rev = f"origin/{os.environ.get('FACTORY_BASE') or 'main'}" if kind == "build" else "HEAD"
+    pump = subprocess.run(["git", "-C", ROOT, "rev-parse", f"{rev}:demo/pump"], capture_output=True, text=True).stdout.strip()
+    return os.path.join(CACHE, f"{kind}-{hashlib.sha1((_title(text) + pump).encode()).hexdigest()[:12]}")
+
+
 def recorded(kind, text):
     """A real earlier run of the same request (same title): this machine's cache first, then the stage recording.
     Live mode replays it in seconds instead of waiting minutes on agents; new requests still run for real."""
-    p = os.path.join(CACHE, f"{kind}-{hashlib.sha1(_title(text).encode()).hexdigest()[:12]}")
+    p = _cached(kind, text)
     if os.path.exists(p + ".jsonl"):
         return p
     stage = os.path.join(REPLAY, kind)
@@ -259,7 +268,7 @@ def recorded(kind, text):
     return stage if _title(first.get("title", "")) == _title(text) else None
 
 
-def save(kind, text, wo=None):
+def save(kind, text, wo=None, p=None):
     """Cache this process's finished live run so the same request answers instantly next time."""
     evs = [json.loads(line) for line in open(emit.FEED) if line.strip()]
     rec = [e for e in evs if e["run"] == emit.RUN and (not wo or e.get("wo") == wo) and e["agent"] != "actions"]
@@ -267,7 +276,7 @@ def save(kind, text, wo=None):
     if not done:
         return
     os.makedirs(CACHE, exist_ok=True)
-    p = os.path.join(CACHE, f"{kind}-{hashlib.sha1(_title(text).encode()).hexdigest()[:12]}")
+    p = p or _cached(kind, text)
     if wo:
         open(p + ".diff.txt", "w").write(store.diff(wo))
         json.dump(store.git_changes(wo), open(p + ".commits.json", "w"))
@@ -317,14 +326,43 @@ def replay(src, wo=None):
     return 0 if not wo or rec[-1]["state"] == "done" else 1
 
 
+# Every one-click request on Home (SUGGEST in web/src/app/page.tsx); keep the two lists in sync.
+HOME = [("whatif", "What if a child eats 80 g and the parent types the dose 10x?"), ("whatif", "What if an adult eats 150 g of carbs?"),
+        ("build", "Let adults take larger meal boluses"), ("build", "Add an alarm when the extended bolus is interrupted")]
+
+
+def prewarm():
+    """Run each Home suggestion for real once per pump version (demo/go.sh live starts this in the background), so a
+    click on stage replays a fresh real run. Own feed, no PRs, no Composio side effects; one pre-warm at a time."""
+    lock = open(os.path.join(RUNS, "prewarm.lock"), "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print("pre-warm already running")
+        return 0
+    env = {k: v for k, v in os.environ.items() if k not in ("RUN_ID", "RUN_T0", "FACTORY_PR", "COMPOSIO_API_KEY")}
+    env.update(FACTORY_CACHE="0", EVENTS=os.path.join(RUNS, "prewarm-events.jsonl"))
+    for i, (kind, text) in enumerate(HOME, 1):
+        if os.path.exists(_cached(kind, text) + ".jsonl"):
+            print(f"cached: {text}", flush=True)
+            continue
+        print(f"warming: {text}", flush=True)
+        subprocess.run([PY, os.path.abspath(__file__), kind, text, *([f"WO-WARM{i}"] if kind == "build" else [])], env=env)
+        print(f"{'ready' if os.path.exists(_cached(kind, text) + '.jsonl') else 'FAILED'}: {text}", flush=True)
+    return 0
+
+
 if __name__ == "__main__":
-    # pipeline.py build "<request>" [WO-101]   |   pipeline.py whatif "<question>"
+    # pipeline.py build "<request>" [WO-101]   |   pipeline.py whatif "<question>"   |   pipeline.py prewarm
     # FACTORY_REPLAY=1 always plays the stage recording; FACTORY_CACHE=0 forces a fresh live run.
+    if sys.argv[1] == "prewarm":
+        sys.exit(prewarm())
     kind, text, wo = sys.argv[1], sys.argv[2], (sys.argv[3:4] or [None])[0]
     src = os.path.join(REPLAY, kind) if os.environ.get("FACTORY_REPLAY") == "1" else \
         None if os.environ.get("FACTORY_CACHE") == "0" else recorded(kind, text)
     if src:
         sys.exit(replay(src, wo))
+    key = _cached(kind, text)  # before the run: the runner's fetch may move origin/main
     rc = build(text, wo) if kind == "build" else whatif(text)
-    save(kind, text, wo)
+    save(kind, text, wo, key)
     sys.exit(rc)
