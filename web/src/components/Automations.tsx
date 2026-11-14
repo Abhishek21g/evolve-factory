@@ -30,14 +30,14 @@ type Evidence = { md: string; diagnoses?: Diag[]; tests?: { id: string; result: 
 type Props = { state: State; live: boolean; getJSON: <T>(p: string) => Promise<T | null>; post: (p: string, b: object) => Promise<{ error?: string }> };
 
 /** Server data, or the snapshot copy (web/public) when there is no server; polled fast while something runs. */
-function usePolled<T>(getJSON: Props["getJSON"], path: string, file: string, fast: (t: T) => boolean) {
+function usePolled<T>(getJSON: Props["getJSON"], live: boolean, path: string, file: string, fast: (t: T) => boolean) {
   const [data, setData] = useState<T | null | undefined>(undefined);
   const [nonce, setNonce] = useState(0);
   const load = useCallback(async () => {
     const d = (await getJSON<T>(path)) ?? await fetch(`/${file}`).then(r => (r.ok ? r.json() : null)).catch(() => null);
-    setData(d);
+    setData(d ?? (live ? null : undefined));  // not yet connected: no "not synced" flash
     return d;
-  }, [getJSON, path, file]);
+  }, [getJSON, live, path, file]);
   useEffect(() => {
     let stop = false, timer: ReturnType<typeof setTimeout>;
     const tick = async () => {
@@ -79,7 +79,7 @@ const short = (path: string) => path.split("/").slice(-1)[0];
 export function SourceOfRecord({ state, live, getJSON, post }: Props) {
   const pid = state.project!.id;
   const fast = useCallback((r: Record_) => !!r.resyncing, []);
-  const [rec, reload] = usePolled<Record_>(getJSON, `record?project=${pid}`, `record-${pid}.json`, fast);
+  const [rec, reload] = usePolled<Record_>(getJSON, live, `record?project=${pid}`, `record-${pid}.json`, fast);
   const [err, setErr] = useState("");
   const resync = async () => {
     setErr("");
@@ -87,7 +87,7 @@ export function SourceOfRecord({ state, live, getJSON, post }: Props) {
     if (r.error) setErr(r.error);
     reload();
   };
-  if (rec === undefined) return null;
+  if (rec === undefined) return <PageHead title="Source of Record" />;
   if (!rec) return <><PageHead title="Source of Record" /><p className="text-[13px] text-mute">Not synced yet. Run the factory locally to resync.</p></>;
   const n = (s: Row["status"]) => rec.rows.filter(r => r.status === s).length;
   const ch = rec.history[0];
@@ -214,7 +214,7 @@ export function Automations({ state, live, getJSON, post }: Props) {
   const pid = state.project!.id;
   const air = state.project!.device === "flight-controls";
   const fast = useCallback((m: Monitors) => m.monitors.some(x => x.running), []);
-  const [view, reload] = usePolled<Monitors>(getJSON, `monitors?project=${pid}`, `monitors-${pid}.json`, fast);
+  const [view, reload] = usePolled<Monitors>(getJSON, live, `monitors?project=${pid}`, `monitors-${pid}.json`, fast);
   const [open, setOpen] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const run = async (id: string) => {
@@ -223,7 +223,7 @@ export function Automations({ state, live, getJSON, post }: Props) {
     if (r.error) setErr(r.error);
     reload();
   };
-  if (view === undefined) return null;
+  if (view === undefined) return <PageHead title="Automations" />;
   if (!view) return <><PageHead title="Automations" /><p className="text-[13px] text-mute">No monitor runs yet. Run the factory locally to start the monitoring agents.</p></>;
   const runs = view.monitors.flatMap(m => m.runs.map(r => ({ ...r, name: m.name }))).sort((a, b) => b.started - a.started);
   return (
