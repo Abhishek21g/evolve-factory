@@ -2,9 +2,12 @@
 import json
 import os
 import sys
+import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "factory"))
+sys.path.insert(0, os.path.join(ROOT, "gate"))
+import runner  # noqa: E402
 import worldmodel  # noqa: E402
 
 
@@ -29,6 +32,22 @@ assert sc["facts"]["t_stall"] == 25.5 and sc["moment"]["t"] == 25.5
 assert d["changed"][0]["symbol"] == "AOA_DISAGREE_DEG" and (d["changed"][0]["base"], d["changed"][0]["cand"]) == ("5.5", "5.0")
 assert {r["line"] for r in d["refs"]} >= {17, 19, 20}, d["refs"]
 assert d["headline"].startswith("vane disagree 5.3° > 5.0° threshold → stall protection inhibited"), d["headline"]
+# The runner hands the same report to the coder on its retry (gate/runner.py diagnosis()).
+with tempfile.TemporaryDirectory() as wt:
+    os.makedirs(os.path.join(wt, "demo/aircraft"))
+    for k, f in (("h", "fcc.h"), ("c", "fcc.c")):
+        open(os.path.join(wt, "demo/aircraft", f), "w").write(cand[k])
+    wj = os.path.join(ROOT, ".runs", "WO-TESTDIAG.world.json")
+    os.makedirs(os.path.dirname(wj), exist_ok=True)
+    json.dump(worlds[0], open(wj, "w"))
+    try:
+        checks = json.load(open(os.path.join(ROOT, "gate/checks-aircraft.json")))
+        report = runner.diagnosis(checks, wt, "HEAD", "WO-TESTDIAG", gates[0], 0)
+        stale = runner.diagnosis(checks, wt, "HEAD", "WO-TESTDIAG", gates[0], os.path.getmtime(wj) + 1)
+    finally:
+        os.remove(wj)
+assert "Violated SR-3" in report and "AOA_DISAGREE_DEG" in report and "6 of 18" in report, report
+assert stale == "", "a world.json older than the attempt must not be diagnosed"
 assert worldmodel.diagnose(worlds[1], spec, "flight-controls", "demo/aircraft", {"h": h, "c": c}, {"h": h, "c": c}) is None
 
 # Insulin pump: the recorded WO-304 run. Attempt 1 breaks SR-1; attempt 2 harms patients with every unit test passing.
