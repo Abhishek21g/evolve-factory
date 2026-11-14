@@ -15,6 +15,7 @@ import memory  # noqa: E402
 import monitors  # noqa: E402
 import record  # noqa: E402
 import store  # noqa: E402
+import supply  # noqa: E402
 import worldmodel  # noqa: E402
 
 pub = os.path.join(ROOT, "web", "public")
@@ -50,4 +51,8 @@ for p in store._load()["projects"]:  # source of record and monitoring-agent run
             ev = monitors.evidence(r["id"])
             if ev:
                 json.dump(ev, open(os.path.join(pub, f"monitor-{r['id']}.json"), "w"))
+for pid in states:  # suppliers, supply chain, finance and control tower per project
+    json.dump(supply.view(pid), open(os.path.join(pub, f"supply-{pid}.json"), "w"))
+    json.dump(supply.tower(pid), open(os.path.join(pub, f"tower-{pid}.json"), "w"))
+json.dump({"projects": supply.towers()}, open(os.path.join(pub, "tower-all.json"), "w"))
 print(f"snapshot: {len(states)} projects, {len(wos)} work orders, {len(evs)} events")
