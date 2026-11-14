@@ -45,13 +45,14 @@ python3 dashboard/demo_run.py              # in another terminal: plays WO-12 li
 
 Every candidate change is also run in a world model before it can merge: the candidate's real `demo/pump/pump.c`
 is compiled and put in the loop with 10 simulated adults with type 1 diabetes (simglucose, the open-source
-UVA/Padova simulator). Two fixed scenarios: a large meal, and a 10x dose-entry typo. The check is deterministic
+UVA/Padova simulator). Two fixed scenarios: a large meal, and a 10x dose-entry typo, each observed for 12 hours so
+late lows from an extended bolus (nadir up to ~11 h after the meal) are not missed. The check is deterministic
 and judges the change against `main`: it blocks if the change makes any simulated patient fall below 54 mg/dL
 who did not before, and reports risk that already exists on `main` separately.
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r sim/requirements.txt
-.venv/bin/python sim/world.py --repo . --base main      # ~1 min
+.venv/bin/python sim/world.py --repo . --base main      # ~20 s (patients run in parallel)
 ```
 
 It runs as the `world-model` check in `gate/checks.json`, and draws blood-sugar traces on the dashboard.
