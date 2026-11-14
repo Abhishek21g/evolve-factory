@@ -40,7 +40,7 @@ export type State = {
 
 /** Where the factory server may be: same origin, NEXT_PUBLIC_FACTORY_URL, or the default local port. A hosted page
  *  probes localhost only when opened with ?live: otherwise the browser asks every visitor for local-network access. */
-const BASES = () => ["", ...(process.env.NEXT_PUBLIC_FACTORY_URL ? [process.env.NEXT_PUBLIC_FACTORY_URL] : []),
+export const BASES = () => ["", ...(process.env.NEXT_PUBLIC_FACTORY_URL ? [process.env.NEXT_PUBLIC_FACTORY_URL] : []),
   ...(["localhost", "127.0.0.1"].includes(location.hostname) || new URLSearchParams(location.search).has("live") ? ["http://localhost:8787"] : [])];
 /** factory/snapshot.py: one state per project (`states`), events stamped with their project. */
 const SNAP = snapshot as unknown as { state: State; states?: Record<string, State>; events: Ev[] };
