@@ -14,7 +14,7 @@ export type Scenario = {
   fallback?: string; meal_at?: number; minutes?: number;
 };
 export type World = {
-  verdict: string; threshold: number; hyper?: number; step_min: number; meal_at: number; base: string; question?: string;
+  verdict: string; threshold: number; hyper?: number; step_min: number; meal_at: number; base: string; question?: string; asked?: string;
   scenarios?: Scenario[]; results: WorldRun[]; kind?: string;
   axis?: { unit: string; min: number; max: number; band: [number, number]; threshold_label: string; event_label: string; above?: boolean; time_unit: string; subject: string };
 };
@@ -22,7 +22,7 @@ export type Hit = { kind: string; title: string; text: string; score?: number; c
 /** Where a memory call was served from and how long it took (factory/memory.py search/remember). */
 export type Recall = { backend: string; ms: number; collections?: string[]; collection?: string };
 export type Ev = {
-  run: string; t: number; agent: string; state: string; msg: string; wo?: string; title?: string; project?: string;
+  run: string; t: number; agent: string; state: string; msg: string; wo?: string; title?: string; asked?: string; project?: string;
   gate?: Gate; world?: World; memory?: Hit[];
   lessons?: Hit[]; lesson?: { title: string; summary: string; source: string }; recall?: Recall;
   analysis?: { hazards?: string[]; requirements?: string[]; risk?: string; guidance?: string; new_hazard?: string };

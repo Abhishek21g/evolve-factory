@@ -15,7 +15,7 @@ export type WorkOrder = {
   evidence?: { decision: string; headline: string } | null;
   commits: { sha: string; author: string; ts: string; subject: string }[];
 };
-export type Audit = { ts: number; actor: string; action: string; object: string; detail: string };
+export type Audit = { ts: number; actor: string; action: string; object: string; detail: string; asked?: string };
 export type AgentLive = { id: string; done: number; blocked: number; msg: string; state: string; ts: number; wo: string | null };
 export type MemoryItem = { id: string; kind: string; title: string; text: string; score?: number; project?: string; collection?: string; synthetic?: boolean };
 /** kinds: per project (device id), "" = all projects. */

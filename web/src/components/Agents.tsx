@@ -4,7 +4,7 @@ import { ArrowUp, Bot, Brain, Code2, FileCheck2, FlaskConical, Github, ListCheck
 import type { Member, State } from "@/lib/api";
 import type { Ev } from "@/lib/feed";
 import { WorldChart } from "@/components/WorldChart";
-import { Badge, Button, PageHead, Replayed, Section, Table, ago, inputCls } from "@/components/ui";
+import { Asked, Badge, Button, PageHead, Replayed, Section, Table, ago, inputCls } from "@/components/ui";
 
 export type AgentCtx = {
   state: State; events: Ev[]; live: boolean; team: Record<string, Member>;
@@ -56,12 +56,12 @@ const Icon = ({ id }: { id: string }) => <AgentIcon id={id} />;
 const Empty = ({ children }: { children: React.ReactNode }) => <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-base text-dim">{children}</p>;
 const at = (e: Ev) => Number(e.run) + e.t;
 
-type Run = { id: string; evs: Ev[]; wo: string | null; title?: string };
+type Run = { id: string; evs: Ev[]; wo: string | null; title?: string; asked?: string };
 /** Runs in the event feed, newest first. */
 function toRuns(events: Ev[]): Run[] {
   const m = new Map<string, Ev[]>();
   for (const e of events) m.set(e.run, [...(m.get(e.run) || []), e]);
-  return [...m.entries()].reverse().map(([id, evs]) => ({ id, evs, wo: evs.find(e => e.wo)?.wo || null, title: evs.find(e => e.title)?.title?.split("\n")[0] }));
+  return [...m.entries()].reverse().map(([id, evs]) => ({ id, evs, wo: evs.find(e => e.wo)?.wo || null, title: evs.find(e => e.title)?.title?.split("\n")[0], asked: evs.find(e => e.title)?.asked }));
 }
 const runName = (r: Run) => r.wo || "What-if";
 
@@ -109,7 +109,7 @@ export function AgentTeam({ state, events, live, post, team }: AgentCtx) {
       </p>
 
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <Section title={run ? `Team on ${runName(run)}${run.title ? ` · ${run.title}` : ""}` : "Team"}
+        <Section title={run ? <>Team on {runName(run)}{run.title ? ` · ${run.title}` : ""}<Asked title={run.title} asked={run.asked} /></> : "Team"}
           aside={runs.length > 1 ? (
             <select aria-label="Run" value={run?.id} onChange={e => setSel(e.target.value)} className="cursor-pointer bg-transparent text-sm text-mute outline-none">
               {runs.map((r, i) => <option key={r.id} value={r.id} className="bg-panel">{i === 0 ? "Latest: " : ""}{runName(r)} · {ago(Number(r.id))}</option>)}
@@ -190,7 +190,7 @@ export function AgentPage({ state, events, team, id }: AgentCtx & { id: string }
         {last ? <>
           <p className={`text-md ${last.state === "blocked" ? "text-bad" : ""}`}>{last.msg}</p>
           <p className="mt-1 text-sm text-dim">
-            {active ? "Working on " : `${inRun ? "Waiting on the team" : "Idle"} · ${word(last.state) === "working" ? "stopped" : word(last.state)} on `}<RunLink r={run} pid={p.id} />{run.title ? ` · ${run.title}` : ""} · {ago(at(last))}
+            {active ? "Working on " : `${inRun ? "Waiting on the team" : "Idle"} · ${word(last.state) === "working" ? "stopped" : word(last.state)} on `}<RunLink r={run} pid={p.id} />{run.title ? ` · ${run.title}` : ""}<Asked title={run.title} asked={run.asked} /> · {ago(at(last))}
           </p>
         </> : <p className="text-base text-mute">Idle. {a.name} has not run yet{id === "actions" ? " (connect GitHub on Home)" : ""}.</p>}
       </div>
@@ -213,7 +213,7 @@ export function AgentPage({ state, events, team, id }: AgentCtx & { id: string }
             <Table head={["Run", "Request", "Result", "When"]} empty="No runs yet."
               rows={mine.map(r => {
                 const s = steps(r), e = s[s.length - 1];
-                return [<RunLink key="r" r={r} pid={p.id} />, <span key="t" className="line-clamp-1 text-mute">{r.title || "—"}</span>,
+                return [<RunLink key="r" r={r} pid={p.id} />, <span key="t" className="line-clamp-1 text-mute">{r.title || "—"}<Asked title={r.title} asked={r.asked} /></span>,
                   <span key="x" className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm"><Dot s={e.state} /> {word(e.state)} · {s.length} step{s.length === 1 ? "" : "s"}</span>,
                   <span key="w" className="whitespace-nowrap text-mute">{ago(at(e))}</span>];
               })} />

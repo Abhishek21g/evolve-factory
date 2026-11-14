@@ -1,6 +1,6 @@
 "use client";
 import type { Member, State } from "@/lib/api";
-import { Who, Table, ago } from "@/components/ui";
+import { Asked, Who, Table, ago } from "@/components/ui";
 
 /* Small renderers shared by several pages. */
 export const Empty = ({ children }: { children: React.ReactNode }) => <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-base text-dim">{children}</p>;
@@ -49,6 +49,6 @@ export function AuditTable({ rows, team, pid }: { rows: State["audit"]; team: Re
           : <Who key="w" m={team[a.actor] || { id: a.actor, name: a.actor, role: "", kind: "human" }} />,
         <span key="a" className="whitespace-nowrap">{a.action === "done" || a.action === "pass" ? "completed" : a.action}</span>,
         <span key="o" className="whitespace-nowrap font-mono text-sm">{a.object}</span>,
-        <span key="d" className="line-clamp-2 text-sm text-mute">{a.detail}</span>])} />
+        <span key="d" className="line-clamp-2 text-sm text-mute">{a.detail}<Asked title={a.detail} asked={a.asked} /></span>])} />
   );
 }
