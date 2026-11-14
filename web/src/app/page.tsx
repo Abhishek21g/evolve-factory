@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Activity, ArrowUp, Bot, Boxes, Brain, FileCheck2, FlaskConical, GitBranch, GitPullRequest, Home, ListChecks, Network, Plus, Play, Search, ShieldAlert, Users,
 } from "lucide-react";
-import { useFactoryState, type MemoryItem, type Member, type State, type WorkOrder } from "@/lib/api";
+import { useFactoryState, type MemoryView, type Member, type State, type WorkOrder } from "@/lib/api";
 import type { Ev } from "@/lib/feed";
 import { WorldChart } from "@/components/WorldChart";
 import { TraceGraph } from "@/components/TraceGraph";
@@ -289,54 +289,96 @@ function HomePage({ state, post, team, me, live, base }: Ctx) {
 }
 
 /* ---------- memory (context layer) ---------- */
+const COLLS: [string, string][] = [
+  ["org_memory", "Tickets, meetings, chats, emails, reviews, code notes"],
+  ["regulatory_kb", "Standards and the hazard log, per project"],
+  ["factory_lessons", "One lesson per finished work order, written by the factory"],
+];
+const served = (r?: { backend: string; ms: number } | null) => r?.backend === "HydraDB" ? `HydraDB · ${r.ms} ms` : "local copy (HydraDB unreachable)";
+
 function Memory({ state, post, getJSON, live }: Ctx) {
-  const [data, setData] = useState<{ backend: string; items: MemoryItem[]; hits: MemoryItem[] } | null>(null);
+  const p = state.project!;
+  const [data, setData] = useState<MemoryView | null>(null);
   const [q, setQ] = useState("");
+  const [all, setAll] = useState(false);
+  const [kind, setKind] = useState("");
   const [adding, setAdding] = useState(false);
-  const load = async (query = "") => setData((await getJSON(`memory?q=${encodeURIComponent(query)}`)) ||
-    { backend: state.status?.memory || "local", items: state.memory || [], hits: [] });
-  useEffect(() => { load(); }, [live]); // eslint-disable-line react-hooks/exhaustive-deps
-  const items = data?.hits.length ? data.hits : data?.items || [];
+  const load = async (query = "", everyProject = all) => setData(await getJSON<MemoryView>(
+    `memory?q=${encodeURIComponent(query)}${everyProject ? "" : `&project=${p.id}`}`) ||
+    { backend: state.status?.memory || "local", items: (state.memory || []).filter(m => everyProject || !m.project || m.project === p.device), hits: [] });
+  useEffect(() => { load(q, all); }, [live, all, p.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const base = data?.hits.length ? data.hits : data?.items || [];
+  const kinds = Object.entries(base.reduce<Record<string, number>>((m, it) => ({ ...m, [it.kind]: (m[it.kind] || 0) + 1 }), {})).sort((a, b) => b[1] - a[1]);
+  const items = base.filter(m => !kind || m.kind === kind);
+  const inv = data?.inventory;
+  const chip = (on: boolean) => `rounded-full border px-2.5 py-0.5 text-[12px] ${on ? "border-white/30 bg-white/[.08] text-ink" : "border-line text-mute hover:text-ink"}`;
   return (
     <>
-      <PageHead title="Memory" sub={<>The organization&apos;s context layer: tickets, meeting notes, chats, emails, code notes and past runs. Agents recall it before every change. Backend: <b className="text-ink">{data?.backend === "HydraDB" ? "HydraDB" : state.status?.hydradb === "falling back" ? "local (HydraDB unreachable, retrying)" : "local (add HYDRADB_API_KEY for HydraDB)"}</b></>}>
+      <PageHead title="Memory" sub={<>The factory&apos;s context layer in HydraDB: org memory, the regulatory knowledge base and lessons from every finished work order, scoped by project. Agents recall it before every change and write back after every verdict. Backend: <b className="text-ink">{data?.backend === "HydraDB" ? "HydraDB" : state.status?.hydradb === "falling back" ? "local (HydraDB unreachable, retrying)" : "local (add HYDRADB_API_KEY for HydraDB)"}</b></>}>
         <Button primary onClick={() => setAdding(true)} disabled={!live}><Plus size={14} /> Add memory</Button>
       </PageHead>
-      <form onSubmit={e => { e.preventDefault(); load(q); }} className="mb-6 flex gap-2">
+      <div className="mb-2 grid gap-2.5 sm:grid-cols-3">
+        {COLLS.map(([c, desc]) => {
+          const n = inv?.collections[c];
+          return (
+            <div key={c} className="rounded-lg border border-line bg-panel p-3">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="font-mono text-[12px] text-ink">{c}</span>
+                <span className="text-[18px] font-semibold tabular-nums">{n ? (all ? n.total : n.projects[p.device] || 0) : "—"}</span>
+              </div>
+              <p className="mt-0.5 text-[11.5px] text-dim">{desc}</p>
+              {n && <p className="mt-1.5 line-clamp-1 text-[11px] text-mute">{Object.entries(n.kinds[all ? "" : p.device] || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${v} ${k.replace("_", " ")}`).join(" · ")}</p>}
+            </div>
+          );
+        })}
+      </div>
+      <p className="mb-6 text-[11.5px] text-dim">{inv ? <>Counts {all ? "across all projects" : `for ${p.name}`} served by <b className="text-mute">{served(inv)}</b> · database default-tenant · {inv.backend === "HydraDB" ? `read ${ago(inv.at)}` : "HydraDB counts appear once it answers"}</> : null}</p>
+      <form onSubmit={e => { e.preventDefault(); load(q); }} className="mb-3 flex gap-2">
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-dim" />
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Ask what the agents would recall, e.g. bigger meal boluses for adults"
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={p.device === "flight-controls" ? "Ask what the agents would recall, e.g. AoA disagree alert threshold" : "Ask what the agents would recall, e.g. bigger meal boluses for adults"}
             className={inputCls + " pl-8"} aria-label="Search memory" />
         </div>
         <Button type="submit" disabled={!live}>Recall</Button>
+        {data?.hits.length ? <Button onClick={() => { setQ(""); load(""); }}>Clear</Button> : null}
       </form>
-      {data?.hits.length ? <p className="-mt-3 mb-3 text-[12px] text-dim">Top {data.hits.length} items the agents would read for this request · recalled by <b className="text-ink">{data.backend}</b></p> : null}
+      <div className="mb-3 flex flex-wrap items-center gap-1.5">
+        <button className={chip(!all)} onClick={() => setAll(false)}>{p.name}</button>
+        <button className={chip(all)} onClick={() => setAll(true)}>All projects</button>
+        <span className="mx-1 h-4 border-l border-line" />
+        <button className={chip(!kind)} onClick={() => setKind("")}>All types · {base.length}</button>
+        {kinds.map(([k, n]) => <button key={k} className={chip(kind === k)} onClick={() => setKind(kind === k ? "" : k)}>{k.replace("_", " ")} · {n}</button>)}
+      </div>
+      {data?.hits.length ? <p className="mb-3 text-[12px] text-dim">Top {data.hits.length} items the agents would read for this request · recalled by <b className="text-ink">{served(data.recall)}</b> from {data.recall?.collections?.join(", ")}</p> : null}
       <div className="divide-y divide-line rounded-lg border border-line">
         {items.map(m => (
           <div key={m.id} className="px-4 py-3">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="rounded bg-white/[.05] px-1.5 py-0.5 font-mono text-[10px] uppercase text-mute">{m.kind.replace("_", " ")}</span>
               <span className="text-[13px] font-medium">{m.title}</span>
-              {m.score !== undefined && <span className="ml-auto font-mono text-[11px] text-dim">relevance {m.score}</span>}
+              {m.synthetic && <span className="rounded border border-line px-1.5 py-px text-[10px] text-dim">synthetic</span>}
+              <span className="ml-auto flex items-center gap-2 font-mono text-[11px] text-dim">
+                {m.collection || "org_memory"}{m.score !== undefined && <> · relevance {m.score}</>}
+              </span>
             </div>
             <p className="mt-1 text-[12.5px] leading-relaxed text-mute">{m.text}</p>
           </div>
         ))}
         {!items.length && <p className="px-4 py-6 text-center text-[13px] text-dim">Nothing remembered yet.</p>}
       </div>
-      {adding && <AddMemory post={post} onClose={() => { setAdding(false); load(); }} />}
+      {adding && <AddMemory post={post} project={p.id} onClose={() => { setAdding(false); setTimeout(() => load(), 300); }} />}
     </>
   );
 }
 
-function AddMemory({ post, onClose }: { post: Ctx["post"]; onClose: () => void }) {
+function AddMemory({ post, project, onClose }: { post: Ctx["post"]; project: string; onClose: () => void }) {
   const [kind, setKind] = useState("meeting");
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [err, setErr] = useState("");
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const r = await post("memory", { kind, title, text });
+    const r = await post("memory", { kind, title, text, project });
     if (r.error) return setErr(r.error);
     onClose();
   };
@@ -345,7 +387,7 @@ function AddMemory({ post, onClose }: { post: Ctx["post"]; onClose: () => void }
       <form onSubmit={submit} className="space-y-4">
         <Field label="Type">
           <select className={inputCls} value={kind} onChange={e => setKind(e.target.value)}>
-            {["meeting", "chat", "email", "work_order", "code", "safety_finding"].map(k => <option key={k} value={k}>{k.replace("_", " ")}</option>)}
+            {["meeting", "chat", "email", "ticket", "review", "work_order", "code", "safety_finding"].map(k => <option key={k} value={k}>{k.replace("_", " ")}</option>)}
           </select>
         </Field>
         <Field label="Title"><input className={inputCls} value={title} onChange={e => setTitle(e.target.value)} placeholder="Design review, Nov 14" /></Field>
@@ -448,6 +490,7 @@ function WorkOrderView({ state, events, post, text, team, id, live }: Ctx & { id
   const run = mine.filter(e => e.run === lastRun);
   const step = (agent: string) => [...run].reverse().find(e => e.agent === agent || (agent === "coder-claude" && e.agent.startsWith("coder")));
   const pr = [...run].reverse().find(e => e.pr)?.pr;
+  const past = [...run].reverse().find(e => e.lessons && e.agent === "planner");
   const busy = state.status?.busy;
   const start = async () => { const r = await post("run", { wo: id }); setErr(r.error || ""); };
   const open = async (kind: "evidence" | "diff", title: string) => setDoc({ title, body: await text(`${kind}?wo=${id}`) });
@@ -484,6 +527,7 @@ function WorkOrderView({ state, events, post, text, team, id, live }: Ctx & { id
                     </div>
                   ) : <div className={`text-[12px] leading-snug ${t === "bad" ? "text-bad" : "text-dim"}`}>{e?.msg || desc}</div>}
                   {agent === "gate" && e && w.gate?.checker && <div className="mt-0.5 font-mono text-[10px] text-mute">{w.gate.checker.label}</div>}
+                  {agent === "planner" && past && past !== e && <div className="mt-1 line-clamp-3 text-[11.5px] leading-snug text-mute" title={past.msg}>Memory: {past.msg}</div>}
                 </li>
               );
             })}

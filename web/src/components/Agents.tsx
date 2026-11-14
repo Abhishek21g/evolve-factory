@@ -17,9 +17,9 @@ export const AGENT_ICON: Record<string, string> = {
 
 /** What each agent can do, from factory/pipeline.py and gate/runner.py. */
 const SKILLS: Record<string, string[]> = {
-  planner: ["Turns a plain-English request into a work order", "Hands the plan and safety guidance to the coding agent", "Stamps every step with the work order ID"],
-  memory: ["Recalls tickets, meetings, chats, emails and code notes", "Remembers every finished run for next time", "HydraDB when configured, local otherwise"],
-  safety: ["Maps a change to hazards and safety requirements (ISO 14971)", "Tells the coder how to implement it safely", "Proposes new hazards for the log"],
+  planner: ["Turns a plain-English request into a work order", "Recalls similar past work orders and their verdicts from HydraDB", "Hands the plan, safety guidance and past fixes to the coding agent"],
+  memory: ["Recalls org memory and the project's regulatory knowledge from HydraDB", "Saves a lesson to HydraDB after every verdict: failed requirements, hazards, the fix", "2 s timeout with a local fallback, so recall never stalls a run"],
+  safety: ["Maps a change to hazards and safety requirements (ISO 14971, ARP4761)", "Checks past verdicts on similar changes before deciding", "Tells the coder how to implement it safely"],
   "coder-claude": ["Implements the change in its own git worktree", "Retries with the gate's findings (up to 3 attempts)", "Commits on the work order's wo/ branch"],
   "coder-codex": ["Parallel coder in its own worktree", "Not used by the current pipeline"],
   gate: ["Runs the unit test of every affected safety requirement", "Blocks edits to protected safety evidence", "Deterministic: no LLM in the verdict"],
@@ -214,12 +214,31 @@ export function AgentPage({ state, events, team, id }: AgentCtx & { id: string }
 function Output({ evs }: { evs: Ev[] }) {
   const find = <K extends keyof Ev>(k: K) => [...evs].reverse().find(e => e[k])?.[k];
   const mem = find("memory"), an = find("analysis"), gate = find("gate"), world = find("world"), ev = find("evidence"), pr = find("pr");
+  const memEv = [...evs].reverse().find(e => e.memory), lesEv = [...evs].reverse().find(e => e.lessons), saved = [...evs].reverse().find(e => e.lesson);
   const sc = ([...evs].reverse().find(e => (e as { scenarios?: unknown }).scenarios) as { scenarios?: { id: string; label: string; carbs: number; cohort: string }[] } | undefined)?.scenarios;
-  if (!mem && !an && !gate && !world && !ev && !pr && !sc) return <Empty>No artifact from this step; its log above is the output.</Empty>;
+  if (!mem && !lesEv && !saved && !an && !gate && !world && !ev && !pr && !sc) return <Empty>No artifact from this step; its log above is the output.</Empty>;
+  const via = (r?: Ev["recall"]) => r ? (r.backend === "HydraDB" ? `HydraDB · ${r.ms} ms` : "local memory (HydraDB unreachable)") : "";
+  const tag = (k: string) => <span className="mr-2 rounded bg-white/[.05] px-1.5 py-0.5 font-mono text-[10px] uppercase text-mute">{k.replace("_", " ")}</span>;
   return (
     <div className="space-y-4 text-[13px]">
-      {mem && <ul className="divide-y divide-line rounded-lg border border-line">{mem.map((h, i) => (
-        <li key={i} className="px-3 py-2"><span className="mr-2 rounded bg-white/[.05] px-1.5 py-0.5 font-mono text-[10px] uppercase text-mute">{h.kind.replace("_", " ")}</span>{h.title}</li>))}</ul>}
+      {saved?.lesson && <div className="rounded-lg border border-line px-3 py-2">
+        <div className="text-[11px] text-dim">Lesson saved to {via(saved.recall)} · {saved.lesson.source.split(" · ")[1]}</div>
+        <div className="mt-0.5 font-medium">{saved.lesson.title}</div>
+        <p className="mt-0.5 text-[12.5px] text-mute">{saved.lesson.summary}</p>
+      </div>}
+      {lesEv && <div>
+        <div className="mb-1.5 text-[11px] text-dim">Similar past work orders recalled from {via(lesEv.recall)} · factory_lessons</div>
+        {lesEv.lessons!.length ? <ul className="divide-y divide-line rounded-lg border border-line">{lesEv.lessons!.map((h, i) => (
+          <li key={i} className="px-3 py-2">{tag("lesson")}<span className="font-medium">{h.title}</span>
+            <p className="mt-0.5 text-[12.5px] text-mute">{h.summary}</p></li>))}</ul>
+          : <Empty>No similar past work order yet. This run&apos;s lesson is saved for the next one.</Empty>}
+      </div>}
+      {mem && <div>
+        {memEv?.recall && <div className="mb-1.5 text-[11px] text-dim">Recalled from {via(memEv.recall)} · {memEv.recall.collections?.join(", ")}</div>}
+        <ul className="divide-y divide-line rounded-lg border border-line">{mem.map((h, i) => (
+          <li key={i} className="flex items-baseline gap-2 px-3 py-2"><span className="min-w-0">{tag(h.kind)}{h.title}</span>
+            {h.collection && <span className="ml-auto shrink-0 font-mono text-[10.5px] text-dim">{h.collection}</span>}</li>))}</ul>
+      </div>}
       {an && <dl className="grid grid-cols-[110px_minmax(0,1fr)] gap-x-3 gap-y-1.5">
         {([["Hazards", an.hazards?.join(", ")], ["Requirements", an.requirements?.join(", ")], ["Risk", an.risk], ["Guidance", an.guidance], ["New hazard", an.new_hazard]] as const)
           .filter(([, v]) => v).flatMap(([k, v]) => [<dt key={k} className="text-dim">{k}</dt>, <dd key={k + "v"} className="text-mute">{v}</dd>])}
