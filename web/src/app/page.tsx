@@ -301,19 +301,34 @@ function AddMemory({ post, project, onClose }: { post: Ctx["post"]; project: str
 
 /* ---------- requirements ---------- */
 function Requirements({ state }: Ctx) {
-  const open = (id: string) => <a href={`#/p/${state.project!.id}/traceability/${id}`} className="font-mono text-sm font-semibold hover:underline">{id}</a>;
-  const reqsFor = (h: string) => (state.requirements || []).filter(r => r.hazards.includes(h)).map(r => r.id).join(", ");
+  const open = (id: string) => <a href={`#/p/${state.project!.id}/traceability/${id}`} className="whitespace-nowrap font-mono text-sm font-semibold hover:underline">{id}</a>;
+  const reqs = state.requirements || [];
+  const fixes = Object.fromEntries((state.trace?.hazards || []).map(h => [h.id, h.fixes || []]));
+  const mitigatedBy = (h: string) => {
+    const ids = reqs.filter(r => r.hazards.includes(h)).map(r => r.id);
+    if (ids.length) return <span className="font-mono text-sm text-mute">{ids.join(", ")}</span>;
+    return fixes[h]?.length
+      ? <span className="text-sm text-mute">{fixes[h].map(w => <a key={w} href={`#/p/${state.project!.id}/work-orders/${w}`} className="font-mono hover:text-ink hover:underline">{w}</a>)} (approved fix, no requirement yet)</span>
+      : <span className="text-sm text-bad">none</span>;
+  };
+  const dal = reqs.some(r => r.dal);
+  const gh = state.trace?.github;
+  const doc = (anchor: string, label: string) => gh?.repo
+    ? <a key={anchor} href={`${gh.repo}/blob/${gh.sha}/docs/TRACEABILITY.md#${anchor}`} target="_blank" rel="noopener" className="text-acc hover:underline">{label}</a> : label;
   return (
     <>
-      <PageHead title="Requirements" sub={`Hazard log and the safety requirements that mitigate each hazard (${state.project?.standard || "ISO 14971"}). Imported from the repository; agents cannot edit them.`} />
+      <PageHead title="Requirements" sub={<>Hazard log and the safety requirements that mitigate each hazard ({state.project?.standard || "ISO 14971"}). Imported from the repository; agents cannot edit them.
+        {dal && <> How each level and objective maps to trace evidence: {doc("development-assurance-levels", "assurance levels")}, {doc("arp4754a-development-assurance-level-assignment", "ARP4754A")}, {doc("do-178c-annex-a-objectives", "DO-178C objectives")}, {doc("faa-stages-of-involvement-soi-1-4", "SOI 1-4")}, {doc("do-254-airborne-electronic-hardware", "DO-254")}.</>}</>} />
       <Section title="Hazards">
         <Table head={["ID", "Hazard", "Severity", "Mitigated by"]} rows={(state.hazards || []).map(h => [
           <span key="i">{open(h.id)}</span>, h.title, <Badge key="s" tone={["S3", "Catastrophic", "Hazardous"].includes(h.severity || "") ? "FAIL" : "Stopped"}>{h.dal ? `${h.severity} · DAL ${h.dal}` : h.severity}</Badge>,
-          <span key="m" className="font-mono text-sm text-mute">{reqsFor(h.id)}</span>])} />
+          <span key="m">{mitigatedBy(h.id)}</span>])} />
       </Section>
       <Section title="Safety requirements">
-        <Table head={["ID", "Requirement", "Hazards", "Code", "Verified by"]} rows={(state.requirements || []).map(r => [
+        <Table head={["ID", "Requirement", "Hazards", ...(dal ? ["DAL", "DO-178C objectives"] : []), "Code", "Verified by"]} rows={reqs.map(r => [
           <span key="i">{open(r.id)}</span>, r.text, <span key="h" className="font-mono text-sm text-mute">{r.hazards.join(", ")}</span>,
+          ...(dal ? [<span key="d" className="whitespace-nowrap text-sm">{r.dal ? `DAL ${r.dal}` : ""}</span>,
+            <span key="o" className="text-sm text-mute">{(r.objectives || []).join(" · ")}</span>] : []),
           <span key="c" className="font-mono text-xs text-mute">{(r.symbols || []).slice(0, 2).join(", ")}</span>,
           <span key="t" className="text-mute">unit test {r.id} · world model</span>])} />
       </Section>
