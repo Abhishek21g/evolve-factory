@@ -19,7 +19,7 @@ Modules:
 - **Durable agents** run in the cloud.
 
 Integration surface:
-- **MCP server** `https://api.factory.8090.dev/v2/mcp`, header `X-Sofa-Mcp-Project-Id`, browser OAuth. Works in Cursor, Claude Code, Codex. Tools: list/read WOs, read linked context, update status, link PR, search KB, manage automations.
+- **MCP server** per-org URL from SF Settings → Connections → Coding Agent (`https://api.factory.8090.dev/v3/mcp/org/<org-id>`), header `X-Sofa-Mcp-Project-Id`, browser OAuth. Works in Cursor, Claude Code, Codex. Tools: list/read WOs, read linked context, update status, link PR, search KB, manage automations.
 - **REST API** (docs.8090.ai/api-reference) — drive agents/automations from our own pipeline.
 - **Codebase Connection** — GitHub App indexes repo (5–10 min initial). PR auto-links to WO if title/body has `WO-123`.
 - Model-agnostic: Claude (Fable/Opus/Sonnet), GPT-6.x, Gemini, Kimi K3, GLM.
