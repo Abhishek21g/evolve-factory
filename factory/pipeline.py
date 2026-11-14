@@ -297,6 +297,7 @@ def replay(src, wo=None):
         time.sleep(min(max(e["t"] - prev, 0) / speed, cap))
         prev = e["t"]
         kw = {k: v for k, v in e.items() if k not in ("run", "t", "agent", "state", "msg", "wo")}
+        kw.setdefault("replay", {"wo": old, "at": int(float(rec[0]["run"]))})  # the UI says which real run this is
         if wo:
             kw["wo"] = wo
             for key in ("gate", "world"):

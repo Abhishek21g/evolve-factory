@@ -16,6 +16,7 @@ export type Ev = {
   gate?: { verdict: string; rows: GateRow[] }; world?: World; memory?: Hit[];
   analysis?: { hazards?: string[]; requirements?: string[]; risk?: string; guidance?: string; new_hazard?: string };
   evidence?: { wo: string; decision: string; headline: string }; candidate?: string; pr?: string;
+  replay?: { wo?: string | null; at: number };
 };
 export type Status = { online: boolean; busy: boolean; job: string | null; memory: string; composio: boolean; software_factory: boolean };
 export type Mode = "connecting" | "live" | "replay";

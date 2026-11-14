@@ -39,10 +39,10 @@ Only say what is in the "Built" column. Items marked *(if built by freeze)* get 
 
 ## 1. Three-minute pitch (spoken)
 
-About 410 spoken words. That's about 2:45 at 150 wpm, leaving about 15 s of silence while the screen does the talking.
+About 440 spoken words. That's about 2:55 at 150 wpm, so there is little silence: if a run-through goes over, cut from the list in section 6.
 **A** = Abhishek, **M** = Murali.
 
-**[0:00] Hook. A, no slides, just the diff on screen.**
+**[0:00] Hook. A, no slides, Home on screen.**
 
 > A: This is a one-line change to an insulin pump. Raise the max dose from 10 units to 25, so adults can cover a big meal. Looks harmless. In our simulator, it sends four patients into severe hypoglycemia.
 
@@ -52,23 +52,21 @@ About 410 spoken words. That's about 2:45 at 150 wpm, leaving about 15 s of sile
 >
 > A: 8090 already traces every change back to intent. We built the next stage: before an agent's change can merge, it has to prove it's safe. Murali.
 
-**[0:35] [DEMO D1] M drives.**
+**[0:35] [DEMO D1] M drives: types "Raise the single-bolus limit to 25 U" in the Home composer, Enter at 0:40.**
 
-> M: Here's the Work Order: "Let adults take larger meal boluses." The Safety Analyst maps it to hazards: overdose, daily overdose, low blood sugar.
+> M: I ask the factory for exactly that: raise the single-bolus limit to 25 units. The Safety Analyst maps it to hazards: overdose, daily overdose, low blood sugar. It already says this breaks SR-1.
 
-**[0:55] [DEMO D2] The obvious patch.**
+**[0:50] [DEMO D2] The obvious patch. Screen: SR-1 FAIL, World model BLOCKED: 4 new (holds 30 s).**
 
 > M: Here's the obvious patch: bump the cap to 25. The Safety Gate runs the test behind every requirement the diff touches. SR-1 fails. Blocked.
 >
 > M: Then the world model. We compile the candidate's actual C code and put it in the loop with ten simulated type 1 diabetics. A patient means to type 1.5 units and types 15. On main, the pump rejects it. With this patch, it delivers it. Four patients crash below 54. Blocked.
 
-**[1:30] [DEMO D3] The fix.**
+**[1:20] [DEMO D3] The fix. Screen: "Attempt 2", then at 1:28 BLOCKED again with all 5 tests PASS (holds 15 s), "Attempt 3" at 1:42.**
 
-> M: Blocked work goes back to the agent with the report. Here's what Claude Code actually built, in its own worktree: it keeps the 10 unit cap and delivers big meals as an extended bolus, never faster than 10 units an hour. It can't touch the tests or the hazard log.
+> M: Blocked work goes back to the agent with the report. Claude Code, in its own worktree, keeps the 10 unit cap and delivers big meals as an extended bolus, never faster than 10 units an hour. Every unit test passes. The world model blocks it anyway: two patients crash hours after a big meal. So the agent caps the extended bolus at 15 units. It can't touch the tests or the hazard log.
 
-*Screen during D3: the agent's first fix (attempt 2) is also BLOCKED: all 5 tests pass, but two patients crash hours after a large meal. Optional line: "Even the agent's first fix passed every unit test, and the world model still caught two patients crashing hours later." The final code caps the extended bolus at 15 U.*
-
-**[1:50] [DEMO D4] Green.**
+**[1:52] [DEMO D4] Green. Screen: Approved; click Code change, Evidence, Pull request (PR #30).**
 
 > M: All five requirement tests pass. World model: zero new hypoglycemia. It also flags two patients who already crash on main: a new hazard for a human to review.
 >
@@ -92,8 +90,10 @@ About 410 spoken words. That's about 2:45 at 150 wpm, leaving about 15 s of sile
 |---|---|---|
 | End of hook | 0:12 | Re-read the hook. It must be automatic. |
 | Hand to Murali | 0:35 | Cut the DOORS/Jama sentence. |
-| D2 BLOCKED on screen | 1:05 | Skip "Here's the Work Order" and just point at it. |
-| D4 green on screen | 1:55 | Drop the "already crash on main" line. |
+| Enter in the Home composer | 0:40 | Type faster; the replay timings below follow Enter. |
+| D2 BLOCKED on screen | 0:50 | (set by the replay) Skip the hazard list in D1. |
+| D3 BLOCKED again on screen | 1:28 | (set by the replay) Drop "Every unit test passes." |
+| D4 green on screen | 1:52 | (set by the replay) Drop the "already crash on main" line. |
 | Close starts | 2:45 | Drop the customer list sentence. |
 
 ---
@@ -169,7 +169,7 @@ Bonus if asked "what did you build tonight vs before": everything in the repo wa
 
 ### Pre-flight (T-15 min, every time)
 
-- `demo/go.sh replay` ends with **READY** (~3 s warm). It starts the server in replay mode, seeds a draft work order and warms everything. `demo/go.sh check` re-checks any time.
+- `demo/go.sh replay` ends with **READY** (~2 s warm, ~30 s in a fresh worktree). It starts the server in replay mode, seeds a draft work order and warms everything. `demo/go.sh check` re-checks any time.
 - The stage demo is replay (no LLM on stage). Live (`demo/go.sh live`) needs `claude` logged in or `ANTHROPIC_API_KEY` in `.env`.
 - `python3 gate/sf.py health` returns OK if we show the SF beat. If not, cut the SF sentence.
 - Tabs open in this order: (1) Home `localhost:8787/#/p/insulin-pump-firmware/overview`, (2) hosted backup https://certus-factory.vercel.app, (3) backup video, (4) PR #30 page.
@@ -200,6 +200,8 @@ Never cut: the hook, BLOCKED on screen, green on screen, "No LLM decides approva
 
 - **Trigger:** nothing visibly moves for 5 s, or any error on screen.
 - **Action:** Murali switches to tab 2 (hosted backup, same pages, read-only) or tab 3 (video). No comment on the switch.
+  Until `demo/deploy.sh` is re-run, the hosted backup shows the older runs (WO-101 Approved, WO-102 Blocked), not
+  the block beat, so prefer the video for D2-D4.
 - **Line (only if someone asks):** "This is the same run, recorded earlier. The checks are deterministic, so it's identical." Then keep going from the same beat.
 - **Never:** apologize, debug on stage, retype a command, say "it worked earlier."
 - If the projector dies: Abhishek gives the 60-second version from memory, then goes straight to Q&A.
@@ -217,9 +219,9 @@ Record from the real run (gate and world model verdicts are real). Voice: Abhish
 | 0:20–0:32 | Safety Analyst lane: H-1, H-2, H-3, SR-1 to SR-3 | "The Safety Analyst maps it to hazards: overdose, daily overdose, low blood sugar." |
 | 0:32–0:45 | Gate matrix, SR-1 row red, **BLOCKED** | "The obvious patch goes to the Safety Gate. It runs the test behind every affected requirement. SR-1 fails. Blocked." |
 | 0:45–1:02 | World model chart: four traces dropping under the 54 line, grey main traces flat | "Then the world model. The actual C code runs in ten simulated diabetic patients. A dose typed ten times too big used to be rejected. Now it's delivered. Four patients crash. Blocked." |
-| 1:02–1:18 | "Attempt 2: fixing what the gate blocked", then **Code change**: `request_extended_bolus`, rate limit comment | "Here's what Claude Code actually built. It keeps the 10 unit cap and delivers big meals slowly, never faster than 10 units an hour. It can't touch the tests." |
-| 1:18–1:32 | Gate all green, world model PASS, 0 new | "All five requirement tests pass. Zero new hypoglycemia across every simulated patient." |
-| 1:32–1:48 | Evidence pack scrolling: hazards, matrix, simulation table, proposed H-6 | "Every change ships with its evidence pack: hazards, requirement to test, every patient, and a new hazard proposed for a human." |
+| 1:02–1:18 | "Attempt 2: BLOCKED": all 5 tests PASS, "120 g meal, correct dose" chart with 2 late crashes; then **Code change**: `request_extended_bolus`, `MAX_EXTENDED_U 15.0` | "Claude Code keeps the 10 unit cap and delivers big meals slowly. Its first try passes every test, and two patients still crash hours later. Blocked again. So it caps the extended bolus at 15 units." |
+| 1:18–1:32 | **Approved**: "all checks passed", world model "PASS: 0 new" | "All five requirement tests pass. Zero new hypoglycemia across every simulated patient." |
+| 1:32–1:48 | Evidence pack scrolling: hazard analysis with the proposed new hazard, requirement -> test table, world model table | "Every change ships with its evidence pack: hazards, requirement to test, every patient, and a new hazard proposed for a human." |
 | 1:48–2:00 | PR #30 page (`WO-304` title, checks report); SF Work Order In Review only if recorded live | "No pass, no PR. Tests and physics decide, not an LLM. Safety Gate, for Software Factory." |
 
 If the PR and SF In Review shots weren't captured from a real `runner.py --pr` run, end on the evidence pack and say: "Tests and physics decide, not an LLM. Safety Gate, for Software Factory." Don't show a PR we didn't open.
