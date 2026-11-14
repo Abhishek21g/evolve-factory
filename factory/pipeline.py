@@ -26,7 +26,12 @@ RUNS = os.path.join(ROOT, ".runs")
 JSON_AGENT = os.environ.get("AGENT_JSON_CMD", "claude -p")
 
 
+WO = None  # work order this run belongs to (stamped on every event)
+
+
 def ev(agent, state, msg, **kw):
+    if WO and "wo" not in kw:
+        kw["wo"] = WO
     try:
         emit.emit(agent, state, msg, **kw)
     except Exception:
@@ -80,21 +85,22 @@ def safety_analysis(intent, spec, hits):
     return out
 
 
-def build(intent):
-    wo = next_wo()
+def build(intent, wo=None):
+    global WO
+    wo = WO = wo or next_wo()
     ev("planner", "working", f'New request from the operator: "{intent}"', wo=wo, title=intent)
     hits = memory.recall(intent, k=5)
     ev("memory", "done", f"Recalled {len(hits)} items from {memory.backend()} (tickets, meetings, chats, emails, code)",
        wo=wo, memory=[{k: h.get(k) for k in ("kind", "title", "text", "score")} for h in hits])
     spec = json.load(open(os.path.join(ROOT, "demo/pump/safety.json")))
     analysis = safety_analysis(intent, spec, hits)
-    ev("planner", "done", f"{wo} created; coding agent works in its own git worktree", wo=wo, title=intent)
+    ev("planner", "done", f"Plan ready for {wo}; Claude Code works in its own git worktree", wo=wo, title=intent)
 
     text = (f"{intent}\n\nSafety Analyst guidance: {analysis.get('guidance', '')}\n\nRelevant organization memory:\n"
             + "\n".join(f"- [{h['kind']}] {h['title']}: {h['text']}" for h in hits))
     tf = os.path.join(RUNS, f"{wo}.request.txt")
     open(tf, "w").write(text)
-    p = subprocess.run([PY, os.path.join(ROOT, "gate/runner.py"), "--wo", wo, "--text-file", tf] + sys.argv[3:],
+    p = subprocess.run([PY, os.path.join(ROOT, "gate/runner.py"), "--wo", wo, "--text-file", tf],
                        cwd=ROOT, capture_output=True, text=True)
     open(os.path.join(RUNS, f"{wo}.runner.log"), "w").write(p.stdout + p.stderr)
     passed = p.returncode == 0
@@ -189,4 +195,5 @@ def whatif(question):
 
 
 if __name__ == "__main__":
-    sys.exit({"build": build, "whatif": whatif}[sys.argv[1]](sys.argv[2]))
+    # pipeline.py build "<request>" [WO-101]   |   pipeline.py whatif "<question>"
+    sys.exit({"build": build, "whatif": whatif}[sys.argv[1]](*sys.argv[2:4]))
