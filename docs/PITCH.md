@@ -147,7 +147,7 @@ Rule: one voice at a time. The person not speaking looks at the screen, not the 
 
 9. **What if a change touches code no requirement covers?** (A) The Safety Analyst proposes a new hazard for human review, like H-6 for stacked extended boluses in our WO-101 run. The world model also flags risk that already exists on main as a new hazard ticket, not as this change's fault.
 
-10. **How long does it take?** (M) Gate: under a second. World model: about a minute on a laptop (10 patients, 6 simulated hours, candidate and main). The coding agent takes a few minutes. That's a fraction of the weeks a manual review takes.
+10. **How long does it take?** (M) Gate: under a second. World model: about 20 seconds on a laptop (10 patients, 12 simulated hours, candidate and main). The coding agent takes a few minutes. That's a fraction of the weeks a manual review takes.
 
 11. **What if the live demo fails?** (M) The gate and world model are deterministic, so a recorded run is the same run. We switch to it. LLM steps also have deterministic fallbacks, so the pipeline still finishes offline.
 
