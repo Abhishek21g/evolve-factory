@@ -13,6 +13,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOCAL = os.path.join(ROOT, ".runs", "memory.jsonl")
 SEED = os.path.join(ROOT, "factory", "seed_memory.jsonl")
 DB, COLL = "certus_factory", "org_memory"
+STOP = {"the", "and", "for", "let", "take", "with", "what", "that", "thi", "from", "any", "are", "into"}
 
 
 def _key():
@@ -79,10 +80,11 @@ def recall(query, k=5):
                 return hits
         except Exception as e:  # fall back to local so a network blip never stops the factory
             print(f"[memory] HydraDB recall failed, using local: {e}", flush=True)
-    words = set(re.findall(r"[a-z0-9]{3,}", query.lower()))
+    stem = lambda t: {re.sub(r"s$", "", re.sub(r"(ing|ed|es|s)$", "", w)) for w in re.findall(r"[a-z0-9]{3,}", t.lower())} - STOP  # noqa: E731
+    words = stem(query)
     scored = []
     for it in _local_items():
-        body = set(re.findall(r"[a-z0-9]{3,}", (it["title"] + " " + it["text"]).lower()))
+        body = stem(it["title"] + " " + it["text"])
         overlap = len(words & body)
         if overlap:
             scored.append({**it, "score": round(overlap / max(len(words), 1), 3)})

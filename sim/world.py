@@ -141,8 +141,11 @@ def base_src(repo, base, d):
 
 def run(repo, base, scenarios=SCENARIOS):
     cand = cohort(os.path.join(repo, "demo/pump"), scenarios)
-    with tempfile.TemporaryDirectory() as d:
-        before = {(r["scenario"], r["patient"]): r for r in cohort(base_src(repo, base, d), scenarios)}
+    if base == "none":  # what-if: no comparison, just answer the question on this firmware
+        before = {(r["scenario"], r["patient"]): r for r in cand}
+    else:
+        with tempfile.TemporaryDirectory() as d:
+            before = {(r["scenario"], r["patient"]): r for r in cohort(base_src(repo, base, d), scenarios)}
     for r in cand:
         b = before[(r["scenario"], r["patient"])]
         r["base_min"], r["base_trace"] = b["min"], b["trace"]
