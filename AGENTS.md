@@ -21,6 +21,6 @@
 - GitHub history was rewritten (Nov 14) to remove private docs. Branch new worktrees off a fresh `origin/main`; never push a branch based on the old history (rebase with `git rebase --onto origin/main <old-base>` first).
 - Verify gate changes with `.venv/bin/python gate/test_gate.py` (the venv has simglucose for `sim/`).
 - Check `.env` keys by name only; never print their values.
-- Vercel: the hosted demo is https://certus-factory-ten.vercel.app (project `certus-factory` on account `eabhishek2005-4053`). Deploy only there; never create new projects, and don't use the old account or the stale `certus-factory.vercel.app`.
+- Vercel: the hosted demo is https://certus-factory-ten.vercel.app (project `certus-factory` on account `eabhishek2005-4053`). Deploy only there with `demo/deploy.sh`; never create new projects, and don't use the old account or the stale `certus-factory.vercel.app`. Keep the project disconnected from GitHub: a Git build of the repo root serves a 404.
 - `demo/deploy.sh` exports the static snapshot from the running factory server (default the stage on 8787), so hosted matches localhost; without a server it ships the committed `web/public/snapshot` data.
 - The stage checkout `~/evolve-factory-stage` serves the demo (`demo/go.sh replay`) on port 8787. Don't restart it from other worktrees; use your own port, and symlink `web/node_modules` from it instead of fresh npm installs.
