@@ -92,13 +92,19 @@ export function Table({ head, rows, empty }: { head: ReactNode[]; rows: ReactNod
   );
 }
 
+/** Tooltip on actions that need the factory server (agents, git, the simulator): disabled on the hosted site. */
+export const LOCAL_ONLY = "Runs on the local factory server";
+
 export const Button = ({ children, onClick, primary, disabled, type = "button", title }:
-  { children: ReactNode; onClick?: () => void; primary?: boolean; disabled?: boolean; type?: "button" | "submit"; title?: string }) => (
-  <KitButton type={type} onClick={onClick} disabled={disabled} title={title} variant={primary ? "default" : "outline"} size="lg"
-    className="px-3 font-medium">
-    {children}
-  </KitButton>
-);
+  { children: ReactNode; onClick?: () => void; primary?: boolean; disabled?: boolean; type?: "button" | "submit"; title?: string }) => {
+  const b = (
+    <KitButton type={type} onClick={onClick} disabled={disabled} title={title} variant={primary ? "default" : "outline"} size="lg"
+      className="px-3 font-medium">
+      {children}
+    </KitButton>
+  );
+  return disabled && title ? <span title={title} className="inline-flex">{b}</span> : b;  // a disabled button shows no tooltip of its own
+};
 
 export const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   <label className="block text-sm font-medium text-mute">

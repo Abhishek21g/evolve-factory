@@ -7,6 +7,8 @@ export type Target = {
 export type TraceRow = { id: string; text: string; hazards: string[]; dal: string; targets: Target[]; gaps: string[] };
 export type HazardRow = {
   id: string; title: string; severity: string; dal: string; fha: string; requirements: string[]; targets: Target[]; gaps: string[];
+  /** Approved work orders whose safety analysis targeted this hazard while no requirement names it: they close the gap. */
+  fixes?: string[];
 };
 export type TraceNode = { id: string; kind: string; label: string; sub: string; tone: string; target?: Target | null };
 export type Github = { repo: string; sha: string };
