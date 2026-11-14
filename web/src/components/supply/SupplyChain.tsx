@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { ArrowRight, Plus, X } from "lucide-react";
 import { plural as n } from "@/lib/utils";
-import { Button, PageHead, Section, Table } from "@/components/ui";
+import { Button, LOCAL_ONLY, PageHead, Section, Table } from "@/components/ui";
 import { FLAG_LABEL, RISK_LABEL, money, useLive, type Part, type PartFlag, type PageCtx, type RiskKind, type SupplyView } from "@/lib/supply";
 import { Dot, Items, Pending, Pill, SampleBox, StatCard, type Tone } from "./common";
 import { Invite, SupplierWorkspace, SuppliersTab, partsOf, supplierHref } from "./Suppliers";
@@ -43,7 +43,7 @@ export function SupplyChain(ctx: PageCtx & { item: string }) {
   return (
     <>
       <PageHead title="Supply chain" sub={<>Parts, raw materials, imports and the suppliers behind them for {p.name}: each part traces to its supplier, the raw materials inside it, where they come from, and the hazards and requirements it could affect.</>}>
-        {tab === "suppliers" && <Button primary onClick={() => setInviting(true)} disabled={!live}><Plus size={14} /> Connect a supplier team</Button>}
+        {tab === "suppliers" && <Button primary onClick={() => setInviting(true)} disabled={!live} title={live ? undefined : LOCAL_ONLY}><Plus size={14} /> Connect a supplier team</Button>}
       </PageHead>
       <div className="mb-4 rounded-lg border border-line bg-panel px-4 py-3 text-sm">
         <b>Where do raw materials and imports go?</b> <span className="text-mute">Here. Each part below lists its raw materials with their country of origin and HS tariff code, the part&apos;s customs status and lead time, and risk flags (single source, long lead, import delay, expiring supplier certificate) linked to the requirements and hazards they put at risk. Suppliers shows who makes each part, their certificates and deliverables.</span>

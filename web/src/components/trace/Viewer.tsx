@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ExternalLink, Play, X } from "lucide-react";
-import { Badge, Button } from "@/components/ui";
+import { Badge, Button, LOCAL_ONLY } from "@/components/ui";
 import { githubUrl, loadFile, slug, where, type Github, type RepoFile, type Target } from "@/lib/trace";
 
 export type Api = {
@@ -180,7 +180,7 @@ export function TestResult({ api, t }: { api: Api; t: Target }) {
       Latest result {result ? <Badge>{result}</Badge> : <span className="text-dim">not run yet</span>}
       {run && <span className="text-dim">ran just now</span>}
       {t.cmd && <code className="font-mono text-xs text-dim">{t.cmd}</code>}
-      <span className="ml-auto"><Button onClick={again} disabled={!api.live || busy}><Play size={13} /> {busy ? "Running…" : "Run tests"}</Button></span>
+      <span className="ml-auto"><Button onClick={again} disabled={!api.live || busy} title={api.live ? undefined : LOCAL_ONLY}><Play size={13} /> {busy ? "Running…" : "Run tests"}</Button></span>
     </div>
   );
 }
