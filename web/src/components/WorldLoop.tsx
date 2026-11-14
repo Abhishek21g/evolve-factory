@@ -7,7 +7,7 @@ import { Badge, PageHead, Replayed, Section } from "@/components/ui";
 /* Types of factory/worldmodel.py loop() */
 type Step = { t: number; kind: "scenario" | "code" | "sim" | "violation"; text: string };
 type Changed = { symbol: string; base: string | null; cand: string; file: string; line: number; text: string };
-type Diag = {
+export type Diag = {
   failing: number; total: number; headline: string; explain: string; handoff: string; uncovered: boolean;
   scenarios: { scenario: string; label: string; failing: number; total: number; run: string; moment: { t: number; label: string; value: number };
     facts: { protect?: number; stall?: number; t_stall?: number | null }; violations: { req: string; at: number; evidence: string }[]; chain: Step[] }[];
@@ -169,7 +169,7 @@ const KIND: Record<Step["kind"], [string, string]> = {
   scenario: ["text-acc", "scenario"], code: ["text-warn", "code"], sim: ["text-run", "simulation"], violation: ["text-bad", "violation"],
 };
 
-function DiagnosisCard({ d, air }: { d: Diag; air: boolean }) {
+export function DiagnosisCard({ d, air }: { d: Diag; air: boolean }) {
   const sc = d.scenarios[0];
   return (
     <div className="rounded-lg border border-bad/30 bg-bad/[.03] p-4">

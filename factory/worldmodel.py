@@ -131,7 +131,8 @@ def aircraft_monitors(run, sc, world, cert):
     # SR-3: above the protect AoA with agreeing sources, protection must start trimming within 1 s (or already be at authority)
     if agree:
         k = int(1.0 / dt)
-        i = _first(aoa, lambda i: aoa[i] > protect and trim[i] < auth - EPS and trim[min(i + k, n - 1)] <= trim[i] + EPS)
+        i = _first(aoa, lambda i: aoa[i] > protect and trim[i] < auth - EPS and i + k < n
+                   and not any(trim[j + 1] > trim[j] + EPS for j in range(i, i + k)))
         if i is not None:
             held = sum(1 for j in range(i, n) if aoa[j] > protect and trim[j] <= EPS) * dt
             out.append({"req": "SR-3", "at": t(i), "evidence":
@@ -256,11 +257,11 @@ def pump_chain(sc, facts, viol, changed, refs, run, world):
     chain = [{"t": facts["meal_at"], "kind": "scenario", "text": f"{sc.get('label') or sc.get('id')}: meal and bolus request"}]
     for c in changed:
         chain.append({"t": facts["meal_at"], "kind": "code", "text": limit_text(c)})
-    main = f" (main: {facts['base_note']})" if facts.get("base_note") else ""
+    main = f" (main: {facts['base_note']})" if facts.get("base_note") and facts["base_note"] != facts["note"] else ""
     chain.append({"t": facts["meal_at"], "kind": "sim", "text": f"pump.c decides: {facts['note']}{main}"})
     if facts["t_low"] is not None:
         chain.append({"t": facts["t_low"], "kind": "sim", "text": f"Blood glucose falls below {SEVERE_HYPO} mg/dL"})
-    chain.append({"t": facts["nadir_at"], "kind": "sim", "text": f"Nadir {facts['min']} mg/dL" + (f" (main: {facts['base_min']} mg/dL)" if facts.get("base_min") is not None else "")})
+    chain.append({"t": facts["nadir_at"], "kind": "sim", "text": f"Nadir {facts['min']} mg/dL" + (f" (main: {facts['base_min']} mg/dL)" if facts.get("base_min") not in (None, facts["min"]) else "")})
     for v in viol:
         chain.append({"t": v["at"], "kind": "violation", "text": f"{v['req']} violated: {v['evidence']}"})
     return sorted(chain, key=lambda c: (c["t"], ["scenario", "code", "sim", "violation"].index(c["kind"])))
@@ -275,7 +276,7 @@ def pump_headline(facts, viol, changed):
     ext = [c for c in changed if "EXT" in c["symbol"]] if "extended" in facts["note"] else []
     bits = [f"{c['symbol']} changed from {c['base']} to {c['cand']}" if c["base"] is not None else f"new limit {c['symbol']} = {c['cand']}"
             for c in (ext or changed)[:1]]
-    bits.append(f"pump.c {facts['note']}")
+    bits.append(f"pump.c result: {facts['note']}")
     if facts["t_low"] is not None:
         bits.append(f"BG < {SEVERE_HYPO} at {facts['t_low'] / 60:.1f} h (nadir {facts['min']})")
     return " → ".join(bits)
