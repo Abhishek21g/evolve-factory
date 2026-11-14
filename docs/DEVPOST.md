@@ -4,11 +4,13 @@
 
 Repo: https://github.com/Abhishek21g/evolve-factory · Hosted backup (read-only): https://certus-factory-ten.vercel.app
 
+Demo video: (link coming)
+
 ## Inspiration
 
-Coding agents can change an insulin pump or a flight control law in seconds. In medical devices, cars and aircraft, nobody can merge that change without safety evidence: which hazards it touches, which requirements cover them, which tests prove they still hold. Today that evidence is weeks of manual traceability work. Speed isn't the bottleneck. Proof is.
+Coding agents can change an insulin pump or a flight control law in seconds. In medical devices, cars and aircraft, nobody can merge that change without safety evidence: which hazards it touches, which requirements cover them, which tests show they still hold. Today that evidence is weeks of manual traceability work. Speed isn't the bottleneck. Evidence is.
 
-8090's Software Factory traces every change back to intent: requirements, blueprints, work orders. CertusAI (our startup) traces safety evidence: hazards, requirements and tests under IEC 62304, ISO 14971 and, next, aerospace standards. Boeing asked CertusAI about DO-254, and mentors asked to see the factory on aerospace software. We wanted the stage between intent and evidence: before an agent's change can merge, it has to prove it's safe, and the proof can't come from another LLM's opinion.
+8090's Software Factory traces every change back to intent: requirements, blueprints, work orders. CertusAI (our startup) traces safety evidence: hazards, requirements and tests under IEC 62304, ISO 14971 and, next, aerospace standards. Boeing asked CertusAI about DO-254, and mentors asked to see the factory on aerospace software. We wanted the stage between intent and evidence: before an agent's change can merge, it has to pass deterministic safety checks, and the verdict can't come from another LLM's opinion.
 
 ## What it does
 
@@ -65,7 +67,7 @@ You sign in (or open the app with `?demo` to enter the demo workspace) and pick 
 
 ## Why not just Claude Code?
 
-Claude is the builder; we're the inspector. Claude Code writes good code, but in a regulated domain the question isn't whether the code looks right. It's whether you can prove it's safe. The factory wraps Claude Code in four things it can't provide for itself:
+Claude is the builder; we're the inspector. Claude Code writes good code, but in a regulated domain the question isn't whether the code looks right. It's whether it passes the safety checks, with evidence an auditor can read. The factory wraps Claude Code in four things it can't provide for itself:
 
 - **A deterministic gate it can't talk past.** Requirement tests and exit codes decide. The agent can't edit the tests, the safety spec or the gate.
 - **Simulation evidence before merge.** The candidate's real compiled code runs in simulated patients or aircraft.
