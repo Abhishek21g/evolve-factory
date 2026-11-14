@@ -30,7 +30,9 @@ extended bolus landed):
 
 Same story as PITCH D2-D4: say "here's the obvious patch," never "the agent wrote this patch."
 `demo/go.sh live` runs everything for real (~3.5 min per run; needs the `claude` CLI logged in, or
-`ANTHROPIC_API_KEY` in `.env`).
+`ANTHROPIC_API_KEY` in `.env`). `go.sh` loads only `KEY=value` lines from `.env`; any other line (e.g. a stray
+pasted key) prints `warning: .env line(s) N are not KEY=value and were skipped` and the start continues. Fix that
+line before a live run if it was meant to be the key.
 
 | Stage (measured Nov 14, M-series Mac) | Live | Replay |
 |---|---|---|
