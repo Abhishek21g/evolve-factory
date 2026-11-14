@@ -7,6 +7,7 @@
 LLM steps call $AGENT_JSON_CMD (default: claude -p). If it fails, a deterministic fallback keeps the run going,
 and the dashboard says so. Approval itself is never an LLM decision: gate tests + world model decide.
 """
+import hashlib
 import json
 import os
 import re
@@ -20,6 +21,7 @@ sys.path.insert(0, os.path.join(ROOT, "factory"))
 import emit  # noqa: E402
 import memory  # noqa: E402
 import actions  # noqa: E402
+import store  # noqa: E402
 
 PY = os.path.join(ROOT, ".venv/bin/python")
 RUNS = os.path.join(ROOT, ".runs")
@@ -228,24 +230,56 @@ def whatif(question):
 
 
 REPLAY = os.path.join(ROOT, "demo", "replay")
+CACHE = os.path.join(RUNS, "cache")
 
 
-def replay(kind, text, wo=None):
-    """FACTORY_REPLAY=1: play the recorded real run demo/replay/<kind>.jsonl (made by demo/record.py) instead of
-    calling agents, so a stage demo can never wait on an LLM. Gaps are divided by REPLAY_SPEED and capped at
+def _title(text):
+    return " ".join(text.splitlines()[0].lower().split()) if text.strip() else ""
+
+
+def recorded(kind, text):
+    """A real earlier run of the same request (same title): this machine's cache first, then the stage recording.
+    Live mode replays it in seconds instead of waiting minutes on agents; new requests still run for real."""
+    p = os.path.join(CACHE, f"{kind}-{hashlib.sha1(_title(text).encode()).hexdigest()[:12]}")
+    if os.path.exists(p + ".jsonl"):
+        return p
+    stage = os.path.join(REPLAY, kind)
+    first = json.loads(open(stage + ".jsonl").readline()) if os.path.exists(stage + ".jsonl") else {}
+    return stage if _title(first.get("title", "")) == _title(text) else None
+
+
+def save(kind, text, wo=None):
+    """Cache this process's finished live run so the same request answers instantly next time."""
+    evs = [json.loads(line) for line in open(emit.FEED) if line.strip()]
+    rec = [e for e in evs if e["run"] == emit.RUN and (not wo or e.get("wo") == wo)]
+    done = rec and (rec[-1]["agent"] == "reviewer" and not rec[-1].get("not_run") if wo else any(e.get("world") for e in rec))
+    if not done:
+        return
+    os.makedirs(CACHE, exist_ok=True)
+    p = os.path.join(CACHE, f"{kind}-{hashlib.sha1(_title(text).encode()).hexdigest()[:12]}")
+    if wo:
+        open(p + ".diff.txt", "w").write(store.diff(wo))
+        json.dump(store.git_changes(wo), open(p + ".commits.json", "w"))
+        if os.path.exists(os.path.join(RUNS, f"{wo}.evidence.md")):
+            open(p + ".evidence.md", "w").write(open(os.path.join(RUNS, f"{wo}.evidence.md")).read())
+    open(p + ".jsonl", "w").write("".join(json.dumps(e) + "\n" for e in rec))
+
+
+def replay(src, wo=None):
+    """Play the real run recorded at <src>.jsonl (demo/record.py for the stage, save() for the cache) instead of
+    calling agents, so a demo never waits on an LLM. Gaps are divided by REPLAY_SPEED and capped at
     REPLAY_MAX_GAP seconds; a BLOCKED gate verdict stays on screen for REPLAY_HOLD seconds so it can be narrated.
     Messages, gate rows, simulations, evidence and PR link are the recorded ones."""
     speed, cap = float(os.environ.get("REPLAY_SPEED", "4")), float(os.environ.get("REPLAY_MAX_GAP", "4"))
     hold = float(os.environ.get("REPLAY_HOLD", "30"))
-    rec = [json.loads(line) for line in open(os.path.join(REPLAY, f"{kind}.jsonl")) if line.strip()]
+    rec = [json.loads(line) for line in open(src + ".jsonl") if line.strip()]
     old = rec[0].get("wo")
     sub = (lambda s: s.replace(old, wo)) if old and wo else (lambda s: s)  # noqa: E731
     os.makedirs(RUNS, exist_ok=True)
     if wo:
         for ext in ("evidence.md", "diff.txt", "commits.json"):
-            src = os.path.join(REPLAY, f"{kind}.{ext}")
-            if os.path.exists(src):
-                open(os.path.join(RUNS, f"{wo}.{ext}"), "w").write(sub(open(src).read()))
+            if os.path.exists(f"{src}.{ext}"):
+                open(os.path.join(RUNS, f"{wo}.{ext}"), "w").write(sub(open(f"{src}.{ext}").read()))
     prev = 0.0
     for e in rec:
         time.sleep(min(max(e["t"] - prev, 0) / speed, cap))
@@ -266,6 +300,12 @@ def replay(kind, text, wo=None):
 
 if __name__ == "__main__":
     # pipeline.py build "<request>" [WO-101]   |   pipeline.py whatif "<question>"
-    if os.environ.get("FACTORY_REPLAY") == "1":
-        sys.exit(replay(*sys.argv[1:4]))
-    sys.exit({"build": build, "whatif": whatif}[sys.argv[1]](*sys.argv[2:4]))
+    # FACTORY_REPLAY=1 always plays the stage recording; FACTORY_CACHE=0 forces a fresh live run.
+    kind, text, wo = sys.argv[1], sys.argv[2], (sys.argv[3:4] or [None])[0]
+    src = os.path.join(REPLAY, kind) if os.environ.get("FACTORY_REPLAY") == "1" else \
+        None if os.environ.get("FACTORY_CACHE") == "0" else recorded(kind, text)
+    if src:
+        sys.exit(replay(src, wo))
+    rc = build(text, wo) if kind == "build" else whatif(text)
+    save(kind, text, wo)
+    sys.exit(rc)
