@@ -16,7 +16,7 @@ demo/go.sh replay        # only if nothing is running: ~3 s warm, ~40 s in a fre
 2. Open `http://localhost:8787/`. You should see **Sign in** with "live factory" under it.
 3. Never click on camera: **Call safety hotline** (starts a real ElevenLabs agent session), **Run again**,
    **New work order**, any **Connect** button, **Continue with SSO / GitHub**. They work, but they are not replay.
-4. Backup if the server dies: the hosted read-only snapshot, https://certus-factory.vercel.app (open with `?demo`).
+4. Backup if the server dies: the hosted read-only snapshot, https://certus-factory-ten.vercel.app (open with `?demo`).
    It shows end states only (the run does not animate).
 
 What the replay shows (the recording is real run WO-304, Nov 14 03:00; the UI says "replayed from real run WO-304"):

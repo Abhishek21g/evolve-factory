@@ -19,7 +19,7 @@ import tracelinks
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PATH = os.path.join(ROOT, ".runs", "incidents.json")
-HOSTED = "https://certus-factory.vercel.app"
+HOSTED = "https://certus-factory-ten.vercel.app"
 lock = threading.Lock()
 DEVICE_WORDS = {
     "flight-controls": {"boeing", "737", "aircraft", "airplane", "plane", "flight", "pilot", "aoa", "angle", "attack", "vane",

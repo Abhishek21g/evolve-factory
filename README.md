@@ -21,7 +21,7 @@ factory adds what a regulated team needs before merge:
 - an evidence pack for every change, including the blocked ones.
 
 Built at EVOLVE, the 8090 AI Hackathon (Nov 13–14, 2026). Devpost write-up: [docs/DEVPOST.md](docs/DEVPOST.md).
-Hosted read-only backup: https://certus-factory.vercel.app
+Hosted read-only backup: https://certus-factory-ten.vercel.app
 
 ## Architecture
 

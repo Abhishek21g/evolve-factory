@@ -2,7 +2,7 @@
 
 **Tagline:** A software factory for safety-critical code. Claude is the builder; we're the inspector. Deterministic tests and simulation decide whether a change ships.
 
-Repo: https://github.com/Abhishek21g/evolve-factory · Hosted backup (read-only): https://certus-factory.vercel.app
+Repo: https://github.com/Abhishek21g/evolve-factory · Hosted backup (read-only): https://certus-factory-ten.vercel.app
 
 ## Inspiration
 
@@ -85,7 +85,7 @@ In the pump run, Claude Code's own first fix passed every unit test and was stil
 - **MCP.** `factory/mcp_server.py` exposes the safety record read-only over stdio and Streamable HTTP (`/mcp`).
 - **simglucose** (open-source UVA/Padova type 1 diabetes simulator). This is the pump's world model. `sim/shim.c` binds the candidate's compiled `pump.c` through `ctypes` and steps it once per simulated minute, so the code under review decides every dose. It's deterministic: fixed cohort, fixed scenarios, no sensor noise. Patients run in parallel.
 - **Flight world model** (`sim/flight.py`, plain Python). A 50 Hz longitudinal model with a stall break at 15 deg AoA and nacelle pitch-up, and two AoA vanes feeding the candidate's compiled `fcc.c`. It uses textbook-scale coefficients, not certification data.
-- **Vercel.** It hosts a read-only snapshot of recorded runs at https://certus-factory.vercel.app (`demo/deploy.sh`), our stage backup.
+- **Vercel.** It hosts a read-only snapshot of recorded runs at https://certus-factory-ten.vercel.app (`demo/deploy.sh`), our stage backup.
 - **QA.** A Playwright suite (`web/qa/`) opens every page of both projects, clicks every button, tab and link (side effects answered by the test), and fails on console errors, failed requests, dead controls, layout overflow or one project's content leaking into the other.
 - **Stack.** Python stdlib server (`factory/server.py`), a static Next.js 15 / React 19 / Tailwind 4 / shadcn UI, C code built with `make`, and git worktrees.
 - **Always live.** `demo/go.sh replay` plays the recorded real runs with the gaps compressed, so nothing on stage waits on an LLM. In live mode, `go.sh` pre-warms every Home suggestion on the current pump code, and a request that has already run answers instantly from its cached real run.

@@ -12,7 +12,7 @@ import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PORT = next((a for a in sys.argv[1:] if a.isdigit()), "8787")
-HOSTED = os.environ.get("DEMO_URL", "https://certus-factory.vercel.app")
+HOSTED = os.environ.get("DEMO_URL", "https://certus-factory-ten.vercel.app")
 problems, notes = [], []
 
 
