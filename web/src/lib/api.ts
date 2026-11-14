@@ -5,7 +5,7 @@ import snapshot from "../../public/snapshot.json";
 
 export type Member = { id: string; name: string; role: string; kind: "human" | "agent" };
 export type Project = { id: string; name: string; device: string; repo: string; standard: string; world_model: string; created: number; owner: string };
-export type Hazard = { id: string; title: string; severity?: string };
+export type Hazard = { id: string; title: string; severity?: string; dal?: string };
 export type Requirement = { id: string; text: string; hazards: string[]; symbols?: string[]; test?: string };
 export type WorkOrder = {
   id: string; project: string; title: string; description: string; created: number; requested_by: string;
