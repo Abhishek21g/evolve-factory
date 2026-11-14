@@ -7,6 +7,7 @@
 #define AOA_PROTECT_DEG    12.0  /* SR-3: protection trims nose down above this AoA (H-2 stall) */
 #define AOA_RELEASE_DEG    10.0  /* SR-4: protection trims back to zero below this AoA, never latches (H-1) */
 #define AOA_DISAGREE_DEG    5.5  /* SR-2: sources further apart are invalid, protection inhibited (H-1); 737 MAX AD 2020-24-02 value */
+#define AOA_DISAGREE_ALERT_DEG 5.0 /* H-3: crew AOA DISAGREE alert above this split; alert only, never changes trim */
 #define AOA_MIN_VALID_DEG -10.0  /* SR-2: readings outside the vane's range are sensor failures (H-1) */
 #define AOA_MAX_VALID_DEG  30.0
 #define MAX_NOSE_DOWN_DEG   2.5  /* SR-1: total nose-down stabilizer authority; the pilot can always overpower it (H-1, H-4) */
@@ -17,6 +18,7 @@ typedef struct {
     double aoa_deg;    /* AoA the protection used last cycle (mean of both sources) */
     int    aoa_valid;  /* last cycle: both sources in range and agreeing */
     int    active;     /* protection is holding or adding nose-down trim */
+    int    aoa_disagree; /* last cycle: a vane out of range or vanes differ by more than AOA_DISAGREE_ALERT_DEG */
 } fcc_state;
 
 void   fcc_init(fcc_state *s);

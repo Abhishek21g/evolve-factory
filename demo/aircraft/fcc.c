@@ -6,6 +6,7 @@ void fcc_init(fcc_state *s) {
     s->aoa_deg = 0.0;
     s->aoa_valid = 0;
     s->active = 0;
+    s->aoa_disagree = 0;
 }
 
 static int in_range(double a) {
@@ -15,6 +16,7 @@ static int in_range(double a) {
 double fcc_step(fcc_state *s, double aoa_l_deg, double aoa_r_deg, double dt_s) {
     double step = TRIM_RATE_DEG_S * dt_s;
     s->aoa_valid = in_range(aoa_l_deg) && in_range(aoa_r_deg) && fabs(aoa_l_deg - aoa_r_deg) <= AOA_DISAGREE_DEG;
+    s->aoa_disagree = !in_range(aoa_l_deg) || !in_range(aoa_r_deg) || fabs(aoa_l_deg - aoa_r_deg) > AOA_DISAGREE_ALERT_DEG;
     s->aoa_deg = (aoa_l_deg + aoa_r_deg) / 2.0;
     if (!s->aoa_valid)
         s->active = 0;  /* never act on AoA data we cannot trust */
@@ -29,3 +31,6 @@ double fcc_step(fcc_state *s, double aoa_l_deg, double aoa_r_deg, double dt_s) {
         s->trim_deg = 0.0;
     return s->trim_deg;
 }
+
+/* AOA DISAGREE crew alert (H-3). Read-only: does not affect the trim command. */
+int fcc_aoa_disagree(const fcc_state *s) { return s->aoa_disagree; }
