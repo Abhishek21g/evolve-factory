@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Safety Gate Control Room</title>
+<style>
+:root {
+  --bg: #0f0f0f; --panel: #171717; --line: #262626; --text: #ededed; --mute: #8a8a8a;
+  --blue: #4c8dff; --green: #3ecf8e; --red: #ff5d5d; --amber: #f5b14c;
+  font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); }
+header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; padding: 16px 24px; border-bottom: 1px solid var(--line); }
+header h1 { font-size: 15px; font-weight: 600; margin: 0; }
+.wo { color: var(--mute); }
+.wo b { color: var(--text); font-weight: 600; }
+.verdict { margin-left: auto; padding: 6px 14px; border-radius: 6px; font-weight: 700; letter-spacing: .04em; border: 1px solid var(--line); color: var(--mute); }
+.verdict.blocked { background: #3a1414; border-color: var(--red); color: var(--red); }
+.verdict.pass { background: #0f2e22; border-color: var(--green); color: var(--green); }
+.mode { font-size: 12px; color: var(--mute); }
+main { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; padding: 16px 24px; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 16px; } header { padding: 16px; } }
+h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); margin: 0 0 10px; font-weight: 600; }
+.lanes { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.lane { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-height: 150px; transition: border-color .3s; }
+.lane.working { border-color: var(--blue); }
+.lane.blocked { border-color: var(--red); }
+.lane.pass, .lane.done { border-color: #2a4a3c; }
+.lane .top { display: flex; align-items: center; gap: 8px; }
+.lane .name { font-weight: 600; }
+.lane .role { color: var(--mute); font-size: 12px; margin: 2px 0 10px; }
+.pill { margin-left: auto; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #222; color: var(--mute); text-transform: uppercase; letter-spacing: .05em; }
+.working .pill { background: #16264a; color: var(--blue); }
+.blocked .pill { background: #3a1414; color: var(--red); }
+.pass .pill, .done .pill { background: #0f2e22; color: var(--green); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #333; flex: none; }
+.working .dot { background: var(--blue); animation: pulse 1s infinite; }
+.blocked .dot { background: var(--red); }
+.pass .dot, .done .dot { background: var(--green); }
+@keyframes pulse { 50% { opacity: .3; } }
+.lane .msg { font-size: 13px; }
+.lane ol { margin: 10px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--mute); max-height: 72px; overflow: hidden; }
+.lane ol li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+section.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--mute); font-weight: 500; font-size: 12px; }
+td.r { font-weight: 700; }
+td.r.PASS { color: var(--green); }
+td.r.FAIL { color: var(--red); }
+.sub { color: var(--mute); font-size: 12px; }
+.log { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; max-height: 340px; overflow: auto; }
+.log div { padding: 2px 0; border-bottom: 1px solid #1d1d1d; }
+.log .t { color: var(--mute); display: inline-block; width: 52px; }
+.log .a { display: inline-block; width: 110px; color: var(--blue); }
+.log .blocked { color: var(--red); }
+.log .pass { color: var(--green); }
+.empty { color: var(--mute); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Safety Gate Control Room</h1>
+  <div class="wo" id="wo">Waiting for a Work Order…</div>
+  <span class="mode" id="mode"></span>
+  <div class="verdict" id="verdict">IDLE</div>
+</header>
+<main>
+  <div>
+    <h2>Agent team</h2>
+    <div class="lanes" id="lanes"></div>
+  </div>
+  <div>
+    <section class="card">
+      <h2>Traceability matrix <span class="sub" id="cand"></span></h2>
+      <div id="matrix"><p class="empty">No gate run yet.</p></div>
+    </section>
+    <section class="card">
+      <h2>Event log</h2>
+      <div class="log" id="log"></div>
+    </section>
+  </div>
+</main>
+<script>
+const AGENTS = [
+  ["planner", "Planner", "Reads the Work Order and plans the change"],
+  ["safety", "Safety Analyst", "Maps the change to hazards and requirements"],
+  ["coder-claude", "Coder · Claude Code", "Implements in its own worktree"],
+  ["coder-codex", "Coder · Codex", "Implements in parallel worktree"],
+  ["gate", "Safety Gate", "Runs the tests behind each affected requirement"],
+  ["reviewer", "Reviewer", "Opens the PR with evidence"],
+];
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let run = null, seen = 0;
+
+function reset() {
+  $("lanes").innerHTML = AGENTS.map(([id, name, role]) => `
+    <div class="lane idle" id="lane-${id}">
+      <div class="top"><span class="dot"></span><span class="name">${name}</span><span class="pill">idle</span></div>
+      <div class="role">${role}</div>
+      <div class="msg"></div><ol></ol>
+    </div>`).join("");
+  $("log").innerHTML = ""; $("matrix").innerHTML = '<p class="empty">No gate run yet.</p>';
+  $("verdict").className = "verdict"; $("verdict").textContent = "IDLE"; $("cand").textContent = "";
+  $("wo").textContent = "Waiting for a Work Order…"; seen = 0;
+}
+
+function apply(e) {
+  if (e.run !== run) { run = e.run; reset(); }
+  if (e.title) $("wo").innerHTML = `<b>${esc(e.wo)}</b> ${esc(e.title)}`;
+  const lane = $("lane-" + e.agent);
+  if (lane) {
+    lane.className = "lane " + e.state;
+    lane.querySelector(".pill").textContent = e.state;
+    const prev = lane.querySelector(".msg").textContent;
+    if (prev) lane.querySelector("ol").insertAdjacentHTML("afterbegin", `<li>${esc(prev)}</li>`);
+    lane.querySelector(".msg").textContent = e.msg;
+  }
+  if (e.gate) {
+    $("verdict").className = "verdict " + e.gate.verdict.toLowerCase();
+    $("verdict").textContent = "SAFETY GATE: " + e.gate.verdict;
+    $("cand").textContent = e.candidate ? "· " + e.candidate : "";
+    $("matrix").innerHTML = e.gate.rows.length ? `<table>
+      <tr><th>Requirement</th><th>Hazard</th><th>Triggered by</th><th>Result</th></tr>
+      ${e.gate.rows.map(r => `<tr><td><b>${esc(r.id)}</b><div class="sub">${esc(r.text)}</div></td>
+        <td>${r.hazards.map(h => `${esc(h.id)} <span class="sub">${esc(h.title || "")}${h.severity ? " · " + esc(h.severity) : ""}</span>`).join("<br>")}</td>
+        <td class="sub">${esc(r.why.join(", "))}</td><td class="r ${esc(r.result)}">${esc(r.result)}</td></tr>`).join("")}
+    </table>` : '<p class="empty">No safety requirements affected.</p>';
+  }
+  const t = Number(e.t).toFixed(1).padStart(5, " ");
+  $("log").insertAdjacentHTML("afterbegin",
+    `<div><span class="t">${t}s</span><span class="a">${esc(e.agent)}</span><span class="${esc(e.state)}">${esc(e.msg)}</span></div>`);
+}
+
+const parse = txt => txt.split("\n").filter(Boolean).map(l => JSON.parse(l));
+
+async function live() {
+  // ponytail: polls the whole file each second; fine for a demo-sized feed, switch to SSE if it grows
+  const r = await fetch("events.jsonl?" + Date.now(), { cache: "no-store" });
+  if (!r.ok) return false;
+  const evs = parse(await r.text());
+  if (evs.length && evs[0].run !== run) seen = 0;
+  if (evs.length < seen) seen = 0;
+  evs.slice(seen).forEach(apply);
+  seen = evs.length;
+  return true;
+}
+
+async function replay(file) {
+  $("mode").textContent = "replay of recorded run";
+  const evs = parse(await (await fetch(file)).text());
+  const speed = Number(new URLSearchParams(location.search).get("speed") || 1);
+  for (;;) {
+    run = null;
+    for (let i = 0; i < evs.length; i++) {
+      apply(evs[i]);
+      const gap = i + 1 < evs.length ? evs[i + 1].t - evs[i].t : 6;
+      await new Promise(res => setTimeout(res, Math.max(gap, 0.9) * 1000 / speed));
+    }
+  }
+}
+
+reset();
+const q = new URLSearchParams(location.search);
+(async () => {
+  if (q.has("replay") || !(await live().catch(() => false))) return replay(q.get("replay") || "demo-run.jsonl");
+  $("mode").textContent = "live";
+  setInterval(() => live().catch(() => {}), 1000);
+})();
+</script>
+</body>
+</html>
