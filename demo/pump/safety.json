@@ -1,0 +1,97 @@
+{
+  "hazards": [
+    {
+      "id": "H-1",
+      "title": "Insulin overdose (single bolus)",
+      "severity": "S3"
+    },
+    {
+      "id": "H-2",
+      "title": "Cumulative daily overdose",
+      "severity": "S3"
+    },
+    {
+      "id": "H-3",
+      "title": "Hypoglycemia from bolus at low BG",
+      "severity": "S3"
+    },
+    {
+      "id": "H-4",
+      "title": "Missed delivery from occluded line",
+      "severity": "S2"
+    },
+    {
+      "id": "H-5",
+      "title": "Runaway delivery on controller hang",
+      "severity": "S3"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "SR-1",
+      "text": "Single bolus never exceeds 10 U",
+      "hazards": [
+        "H-1"
+      ],
+      "files": [],
+      "symbols": [
+        "MAX_BOLUS_U",
+        "request_bolus"
+      ],
+      "test": "make -s -C demo/pump test_safety && demo/pump/test_safety SR-1"
+    },
+    {
+      "id": "SR-2",
+      "text": "Daily total never exceeds 60 U",
+      "hazards": [
+        "H-2"
+      ],
+      "files": [],
+      "symbols": [
+        "MAX_DAILY_U",
+        "delivered_today_u",
+        "request_bolus"
+      ],
+      "test": "make -s -C demo/pump test_safety && demo/pump/test_safety SR-2"
+    },
+    {
+      "id": "SR-3",
+      "text": "No bolus when BG below 70 mg/dL",
+      "hazards": [
+        "H-3"
+      ],
+      "files": [],
+      "symbols": [
+        "MIN_BG_FOR_BOLUS",
+        "request_bolus"
+      ],
+      "test": "make -s -C demo/pump test_safety && demo/pump/test_safety SR-3"
+    },
+    {
+      "id": "SR-4",
+      "text": "Occlusion alarm at line pressure >= 80 kPa",
+      "hazards": [
+        "H-4"
+      ],
+      "files": [],
+      "symbols": [
+        "OCCLUSION_KPA",
+        "check_occlusion"
+      ],
+      "test": "make -s -C demo/pump test_safety && demo/pump/test_safety SR-4"
+    },
+    {
+      "id": "SR-5",
+      "text": "Watchdog alarm after 2000 ms without heartbeat",
+      "hazards": [
+        "H-5"
+      ],
+      "files": [],
+      "symbols": [
+        "WATCHDOG_MS",
+        "check_watchdog"
+      ],
+      "test": "make -s -C demo/pump test_safety && demo/pump/test_safety SR-5"
+    }
+  ]
+}
