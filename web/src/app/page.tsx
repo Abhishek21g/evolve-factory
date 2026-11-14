@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity, ArrowUp, BookCheck, Bot, Check, ChevronsUpDown, Info, Orbit, Boxes, Brain, FileCheck2, FlaskConical, GitBranch, GitPullRequest, Home, ListChecks, Network, Phone, Plus, Play, Search, ShieldAlert, Timer, Users,
+  Activity, ArrowUp, BookCheck, Bot, Check, ChevronsUpDown, Info, Orbit, Boxes, Brain, FileCheck2, FlaskConical, GitBranch, GitPullRequest, Handshake, Home, ListChecks, Network, Package, Phone, Plus, Play, Radar, Search, ShieldAlert, Timer, Users, Wallet,
 } from "lucide-react";
 import { useFactoryState, type MemoryView, type Member, type State, type WorkOrder } from "@/lib/api";
 import type { Ev } from "@/lib/feed";
@@ -16,6 +16,10 @@ import { Automations, SourceOfRecord } from "@/components/Automations";
 import { CockpitCallouts } from "@/components/Callouts";
 import { Incidents } from "@/components/Hotline";
 import { Ago, Avatar, Badge, Button, Field, Modal, PageHead, Replayed, Section, Table, Who, ago, inputCls } from "@/components/ui";
+import { AllTowers, ControlTower } from "@/components/supply/ControlTower";
+import { Finance } from "@/components/supply/Finance";
+import { Suppliers } from "@/components/supply/Suppliers";
+import { SupplyChain } from "@/components/supply/SupplyChain";
 
 /* ---------- routing: #/p/<project>/<page>[/<wo>] ---------- */
 function useRoute() {
@@ -26,7 +30,7 @@ function useRoute() {
     return () => removeEventListener("hashchange", f);
   }, []);
   const [, , project = "", page = "overview", item = ""] = (hash || "/").split("/");
-  return { project: hash.startsWith("/p/") ? project : "", page, item };
+  return { project: hash.startsWith("/p/") ? project : "", page: hash === "/control-tower" ? "control-tower" : page, item };
 }
 const go = (h: string) => { location.hash = h; };
 
@@ -55,7 +59,11 @@ export default function App() {
           </div>
         )}
         {route.project && !p && !unknown ? null :
-          !p ? <Projects {...ctx} /> :
+          !p ? (route.page === "control-tower" ? <AllTowers {...ctx} /> : <Projects {...ctx} />) :
+          route.page === "control-tower" ? <ControlTower {...ctx} /> :
+          route.page === "suppliers" ? <Suppliers {...ctx} item={route.item} /> :
+          route.page === "supply-chain" ? <SupplyChain {...ctx} /> :
+          route.page === "finance" ? <Finance {...ctx} /> :
           route.page === "requirements" ? <Requirements {...ctx} /> :
           route.page === "work-orders" && route.item ? <WorkOrderView {...ctx} id={route.item} /> :
           route.page === "work-orders" ? <WorkOrders {...ctx} /> :
@@ -81,9 +89,10 @@ type Ctx = { state: State; events: Ev[]; live: boolean; post: (p: string, b: obj
 /* ---------- sidebar ---------- */
 function Sidebar({ state, project, page, me, setMe, live }: { state: State; project?: string; page: string; me: string; setMe: (id: string) => void; live: boolean }) {
   const nav = [
-    ["overview", "Home", Home], ["agents", "Agents", Bot], ["memory", "Memory", Brain], null,
+    ["control-tower", "Control Tower", Radar], ["overview", "Home", Home], ["agents", "Agents", Bot], ["memory", "Memory", Brain], null,
     ["requirements", "Requirements", ShieldAlert], ["work-orders", "Work Orders", ListChecks], ["world-loop", "World Model", Orbit], ["world-model", "Simulations", FlaskConical],
-    ["traceability", "Traceability", Network], ["source-of-record", "Source of Record", BookCheck], ["automations", "Automations", Timer], ["incidents", "Incidents", Phone], null, ["audit", "Audit Trail", Activity], ["team", "Team", Users],
+    ["traceability", "Traceability", Network], ["source-of-record", "Source of Record", BookCheck], ["automations", "Automations", Timer], ["incidents", "Incidents", Phone], null,
+    ["suppliers", "Suppliers", Handshake], ["supply-chain", "Supply Chain", Package], ["finance", "Finance", Wallet], null, ["audit", "Audit Trail", Activity], ["team", "Team", Users],
   ] as const;
   const humans = state.team.filter(m => m.kind === "human");
   const item = (active: boolean) => `group flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm font-medium transition-colors ${active ? "bg-white/[.07] text-ink" : "text-mute hover:bg-white/[.04] hover:text-ink"}`;
@@ -98,9 +107,14 @@ function Sidebar({ state, project, page, me, setMe, live }: { state: State; proj
       </a>
       {project && <ProjectSwitcher state={state} project={project} page={page} />}
       <nav aria-label="Main" className="scroll-thin flex-1 space-y-0.5 overflow-y-auto px-3 py-2">
-        <a href="#/" aria-current={!project ? "page" : undefined} className={item(!project)}>
+        <a href="#/" aria-current={!project && page !== "control-tower" ? "page" : undefined} className={item(!project && page !== "control-tower")}>
           <Boxes size={16} className="shrink-0" /> All projects
         </a>
+        {!project && (
+          <a href="#/control-tower" aria-current={page === "control-tower" ? "page" : undefined} className={item(page === "control-tower")}>
+            <Radar size={16} className={`shrink-0 ${page === "control-tower" ? "text-acc" : ""}`} /> Control Tower
+          </a>
+        )}
         {project && <div className="my-2 h-px bg-line" />}
         {project && nav.map((n, i) => !n ? <div key={i} className="my-2 h-px bg-line" /> : (([k, l, Icon]) => (
           <a key={k} href={`#/p/${project}/${k}`} aria-current={page === k ? "page" : undefined} className={item(page === k)}>
