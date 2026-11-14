@@ -8,6 +8,7 @@ import type { Ev } from "@/lib/feed";
 import { WorldChart } from "@/components/WorldChart";
 import { TraceGraph } from "@/components/TraceGraph";
 import { AGENT_ICON, AgentPage, AgentTeam } from "@/components/Agents";
+import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { Avatar, Badge, Button, Field, Modal, PageHead, Replayed, Section, Table, Who, ago, inputCls } from "@/components/ui";
 
 /* ---------- routing: #/p/<project>/<page>[/<wo>] ---------- */
@@ -80,6 +81,7 @@ function Sidebar({ state, project, page, me, setMe, live }: { state: State; proj
         </div>
         <ChevronDown size={14} className="ml-auto text-dim" />
       </a>
+      {project && <ProjectSwitcher state={state} project={project} page={page} />}
       <nav className="flex-1 space-y-0.5 p-2 text-[13px]">
         <a href="#/" className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 ${!project ? "bg-white/[.06] text-ink" : "text-mute hover:bg-white/[.04] hover:text-ink"}`}>
           <Boxes size={15} /> Projects
@@ -145,7 +147,7 @@ function NewProject({ state, post, onClose }: { state: State; post: Ctx["post"];
         <Field label="Name"><input className={inputCls} value={name} onChange={e => setName(e.target.value)} autoFocus /></Field>
         <Field label="Device and world model">
           <select className={inputCls} value={device} onChange={e => setDevice(e.target.value)}>
-            {Object.entries(state.devices).map(([k, l]) => <option key={k} value={k}>{l} · simulated patients</option>)}
+            {Object.entries(state.devices).map(([k, l]) => <option key={k} value={k}>{l} · world model</option>)}
             {soon.map(s => <option key={s} disabled>{s} · world model coming</option>)}
           </select>
         </Field>
@@ -158,6 +160,13 @@ function NewProject({ state, post, onClose }: { state: State; post: Ctx["post"];
 }
 
 /* ---------- home: agent-first, like Software Factory ---------- */
+const SUGGEST_BY_DEVICE: Record<string, readonly (readonly ["build" | "simulate", string])[]> = {
+  "flight-controls": [
+    ["build", "Add AoA disagree alert when the two sensors differ by more than 5 degrees"],
+    ["simulate", "What if the left AoA vane fails at 30 degrees?"],
+    ["simulate", "What if the pilot pulls to a stall in heavy turbulence?"],
+  ],
+};
 const SUGGEST = [
   ["build", "Let adults take larger meal boluses"],
   ["build", "Add an alarm when the extended bolus is interrupted"],
@@ -223,7 +232,7 @@ function HomePage({ state, post, team, me, live, base }: Ctx) {
         {err && <p className="mt-2 text-[12px] text-bad">{err}</p>}
         {busy && <p className="mt-2 text-[12px] text-run">Agents are working on <a href={`#/p/${p.id}/${state.status?.running ? `work-orders/${state.status.running}` : "world-model"}`} className="underline">{state.status?.running || "a simulation"}</a>. <a href={`#/p/${p.id}/agents`} className="underline">Watch the team</a></p>}
         <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-          {SUGGEST.map(([m, t]) => (
+          {(SUGGEST_BY_DEVICE[p.device] || SUGGEST).map(([m, t]) => (
             <button key={t} onClick={() => { setMode(m); setText(t); }}
               className="rounded-full border border-line px-2.5 py-1 text-[12px] text-mute hover:border-white/20 hover:text-ink">{t}</button>
           ))}
@@ -354,10 +363,10 @@ function Requirements({ state }: Ctx) {
   const reqsFor = (h: string) => (state.requirements || []).filter(r => r.hazards.includes(h)).map(r => r.id).join(", ");
   return (
     <>
-      <PageHead title="Requirements" sub="Hazard log (ISO 14971) and the safety requirements that mitigate each hazard. Imported from the repository; agents cannot edit them." />
+      <PageHead title="Requirements" sub={`Hazard log and the safety requirements that mitigate each hazard (${state.project?.standard || "ISO 14971"}). Imported from the repository; agents cannot edit them.`} />
       <Section title="Hazards">
         <Table head={["ID", "Hazard", "Severity", "Mitigated by"]} rows={(state.hazards || []).map(h => [
-          <b key="i" className="font-mono text-[12px]">{h.id}</b>, h.title, <Badge key="s" tone={h.severity === "S3" ? "FAIL" : "Stopped"}>{h.severity}</Badge>,
+          <b key="i" className="font-mono text-[12px]">{h.id}</b>, h.title, <Badge key="s" tone={["S3", "Catastrophic", "Hazardous"].includes(h.severity || "") ? "FAIL" : "Stopped"}>{h.dal ? `${h.severity} · DAL ${h.dal}` : h.severity}</Badge>,
           <span key="m" className="font-mono text-[12px] text-mute">{reqsFor(h.id)}</span>])} />
       </Section>
       <Section title="Safety requirements">
@@ -508,7 +517,8 @@ function WorldModel({ state, events, post, live }: Ctx) {
   const p = state.project!;
   const [q, setQ] = useState("");
   const [err, setErr] = useState("");
-  const latestEv = [...events].reverse().find(e => e.world?.question);
+  const air = p.device === "flight-controls";
+  const latestEv = [...events].reverse().find(e => e.world?.question && (e.world.kind === "aircraft") === air);
   const latest = latestEv?.world;
   const plan = events.find(e => e.run === latestEv?.run && e.agent === "simulation" && e.state === "done");
   const thinking = state.status?.job === "whatif";
@@ -518,7 +528,7 @@ function WorldModel({ state, events, post, live }: Ctx) {
   const ask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!q.trim()) return;
-    const r = await post("whatif", { text: q });
+    const r = await post("whatif", { text: q, project: p.id });
     setErr(r.error || ""); if (!r.error) setQ("");
   };
   return (
@@ -526,7 +536,7 @@ function WorldModel({ state, events, post, live }: Ctx) {
       <PageHead title="Simulations" sub={<>World model: {p.world_model}. Each simulation compiles the real firmware and puts it in the loop: it decides every action, step by step, in every simulated run.</>} />
       <form onSubmit={ask} className="mb-8 flex flex-col gap-2 md:flex-row">
         <input value={q} onChange={e => setQ(e.target.value)} className={inputCls + " md:flex-1"} aria-label="Ask the world model"
-          placeholder="Ask a what-if, e.g. What if a child eats 80 g and the parent types the dose 10x?" />
+          placeholder={air ? "Ask a what-if, e.g. What if the left AoA vane fails at 30 degrees?" : "Ask a what-if, e.g. What if a child eats 80 g and the parent types the dose 10x?"} />
         <Button primary type="submit" disabled={!live || state.status?.busy}><FlaskConical size={14} /> Simulate</Button>
       </form>
       {err && <p className="-mt-6 mb-6 text-[12px] text-bad">{err}</p>}
@@ -544,7 +554,15 @@ function WorldModel({ state, events, post, live }: Ctx) {
           <WorldChart world={woSim.world} />
         </Section>
       )}
-      {p.device === "insulin-pump" && (
+      {air ? (
+        <Section title="Gate scenarios" aside="run on every work order · 6 aircraft configs each · 60 s">
+          <Table head={["Scenario", "What happens", "Blocks when"]} rows={[
+            ["Sideslip stall", "Idle thrust, pilot pulls toward 16 deg AoA; a sideslip splits the two AoA vanes by 5.3 deg", "any flight newly above the 15 deg stall AoA"],
+            ["Vane failure", "Left AoA vane fails at 22 deg in a climb", "any flight newly stalling or losing > 300 ft"],
+            ["Turbulence", "Moderate vertical gusts at cruise", "any flight newly stalling or losing > 300 ft"],
+          ]} />
+        </Section>
+      ) : (
         <Section title="Gate scenarios" aside="run on every work order · 10 virtual adults each · 12 h">
           <Table head={["Scenario", "What happens", "Blocks when"]} rows={[
             ["Large meal", "120 g meal, user asks for the correct dose; extended bolus if the pump supports it", "any patient newly below 54 mg/dL"],
