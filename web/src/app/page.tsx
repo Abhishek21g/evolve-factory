@@ -66,7 +66,7 @@ type Ctx = { state: State; events: Ev[]; live: boolean; post: (p: string, b: obj
 function Sidebar({ state, project, page, me, setMe, live }: { state: State; project?: string; page: string; me: string; setMe: (id: string) => void; live: boolean }) {
   const nav = [
     ["overview", "Home", Home], ["agents", "Agents", Bot], ["memory", "Memory", Brain], null,
-    ["requirements", "Requirements", ShieldAlert], ["work-orders", "Work Orders", ListChecks], ["world-model", "World Model", FlaskConical],
+    ["requirements", "Requirements", ShieldAlert], ["work-orders", "Work Orders", ListChecks], ["world-model", "Simulations", FlaskConical],
     ["traceability", "Traceability", Network], null, ["audit", "Audit Trail", Activity], ["team", "Team", Users],
   ] as const;
   const humans = state.team.filter(m => m.kind === "human");
@@ -468,15 +468,22 @@ function WorkOrderView({ state, events, post, text, team, id, live }: Ctx & { id
                     <a href={`#/p/${w.project}/agents/${agent}`} className={`text-[13px] font-medium hover:underline ${t === "idle" ? "text-mute" : ""}`}>{label}</a>
                     {e && <span className="font-mono text-[10px] text-dim">{e.t.toFixed(0)}s</span>}
                   </div>
-                  <div className={`text-[12px] leading-snug ${t === "bad" ? "text-bad" : "text-dim"}`}>{e?.msg || desc}</div>
+                  {agent === "safety" && e?.analysis ? (
+                    <div className="text-[12px] leading-snug text-dim">
+                      <div className="font-mono text-[11px] text-mute">{[...(e.analysis.hazards || []), ...(e.analysis.requirements || [])].join(" ")}</div>
+                      <div className="line-clamp-2" title={e.analysis.risk}>Risk: {e.analysis.risk}</div>
+                    </div>
+                  ) : <div className={`text-[12px] leading-snug ${t === "bad" ? "text-bad" : "text-dim"}`}>{e?.msg || desc}</div>}
                 </li>
               );
             })}
           </ol>
         </Section>
         <div className="min-w-0">
-          <Section title="World model" aside={w.world ? `${w.world.results.length} simulated patients · grey = main` : undefined}>
-            {w.world ? <WorldChart world={w.world} /> : <Empty>Runs after the requirement tests: the candidate firmware drives simulated patients.</Empty>}
+          <Section title="Simulation: candidate firmware vs main" aside="world model">
+            {w.world ? <WorldChart world={w.world} /> : step("gate")?.state === "working"
+              ? <Empty>Simulating the candidate firmware in the world model…</Empty>
+              : <Empty>Runs with the requirement tests: the candidate firmware is compiled into the world model and every simulated run is compared with main.</Empty>}
           </Section>
           <Section title="Requirement tests">
             {w.gate?.rows.length ? (
@@ -495,14 +502,18 @@ function WorkOrderView({ state, events, post, text, team, id, live }: Ctx & { id
   );
 }
 
-/* ---------- world model ---------- */
+/* ---------- world model: simulations ---------- */
 function WorldModel({ state, events, post, live }: Ctx) {
   const p = state.project!;
   const [q, setQ] = useState("");
   const [err, setErr] = useState("");
   const latestEv = [...events].reverse().find(e => e.world?.question);
   const latest = latestEv?.world;
+  const plan = events.find(e => e.run === latestEv?.run && e.agent === "simulation" && e.state === "done");
   const thinking = state.status?.job === "whatif";
+  const nowRun = [...events].reverse().find(e => e.agent === "simulation")?.run;
+  const now = thinking ? [...events].reverse().find(e => e.run === nowRun && !e.wo) : undefined;
+  const woSim = [...(state.work_orders || [])].reverse().find(w => w.world);
   const ask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!q.trim()) return;
@@ -511,22 +522,35 @@ function WorldModel({ state, events, post, live }: Ctx) {
   };
   return (
     <>
-      <PageHead title="World Model" sub={<>{p.world_model}. The real firmware is compiled and put in the loop: it decides every dose.</>} />
+      <PageHead title="Simulations" sub={<>World model: {p.world_model}. Each simulation compiles the real firmware and puts it in the loop: it decides every action, step by step, in every simulated run.</>} />
       <form onSubmit={ask} className="mb-8 flex flex-col gap-2 md:flex-row">
         <input value={q} onChange={e => setQ(e.target.value)} className={inputCls + " md:flex-1"} aria-label="Ask the world model"
           placeholder="Ask a what-if, e.g. What if a child eats 80 g and the parent types the dose 10x?" />
         <Button primary type="submit" disabled={!live || state.status?.busy}><FlaskConical size={14} /> Simulate</Button>
       </form>
       {err && <p className="-mt-6 mb-6 text-[12px] text-bad">{err}</p>}
-      <Section title={latest?.question ? `“${latest.question}”` : "Latest what-if"} aside={thinking ? "Simulation Agent is building scenarios…" : latestEv?.replay ? <Replayed r={latestEv.replay} /> : latest ? "current firmware" : undefined}>
+      {thinking && (
+        <p className="-mt-4 mb-6 flex items-center gap-2 rounded-md border border-run/30 bg-run/5 px-3 py-2 text-[12px] text-run">
+          <span className="pulse h-1.5 w-1.5 rounded-full bg-run" />{now?.msg || "Simulation Agent is planning scenarios"}
+        </p>
+      )}
+      <Section title={latest?.question ? `What-if: “${latest.question}”` : "Latest what-if"} aside={latestEv?.replay ? <Replayed r={latestEv.replay} /> : latest ? "current firmware" : undefined}>
+        {plan && <p className="mb-3 line-clamp-1 text-[12px] text-mute" title={plan.msg}><span className="text-dim">Simulation Agent plan:</span> {plan.msg}</p>}
         {latest ? <WorldChart world={latest} /> : <Empty>Ask a question: the Simulation Agent turns it into scenarios and the world model answers.</Empty>}
       </Section>
-      <Section title="Gate scenarios" aside="run on every work order">
-        <Table head={["Scenario", "What happens", "Blocks when"]} rows={[
-          ["Large meal", "120 g meal, user asks for the correct dose; extended bolus if the pump supports it", "any patient newly below 54 mg/dL"],
-          ["Decimal slip", "15 g snack, dose typed 10x; user re-enters if the pump rejects it", "any patient newly below 54 mg/dL"],
-        ]} />
-      </Section>
+      {woSim?.world && (
+        <Section title={`Latest work order: ${woSim.id} · ${woSim.title}`} aside={<a href={`#/p/${p.id}/work-orders/${woSim.id}`} className="hover:text-ink">Open work order</a>}>
+          <WorldChart world={woSim.world} />
+        </Section>
+      )}
+      {p.device === "insulin-pump" && (
+        <Section title="Gate scenarios" aside="run on every work order · 10 virtual adults each · 12 h">
+          <Table head={["Scenario", "What happens", "Blocks when"]} rows={[
+            ["Large meal", "120 g meal, user asks for the correct dose; extended bolus if the pump supports it", "any patient newly below 54 mg/dL"],
+            ["Decimal slip", "15 g snack, dose typed 10x; user re-enters if the pump rejects it", "any patient newly below 54 mg/dL"],
+          ]} />
+        </Section>
+      )}
     </>
   );
 }
