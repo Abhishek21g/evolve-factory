@@ -6,7 +6,7 @@ import {
 import { useFactoryState, type MemoryView, type Member, type State, type WorkOrder } from "@/lib/api";
 import type { Ev } from "@/lib/feed";
 import { WorldChart } from "@/components/WorldChart";
-import { TraceGraph } from "@/components/TraceGraph";
+import { Traceability } from "@/components/trace/Traceability";
 import { AGENT_ICON, AgentPage, AgentTeam } from "@/components/Agents";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { LoopSummary, SimVsWorld, WorldLoopPage } from "@/components/WorldLoop";
@@ -52,7 +52,7 @@ export default function App() {
           route.page === "work-orders" ? <WorkOrders {...ctx} /> :
           route.page === "world-model" ? <WorldModel {...ctx} /> :
           route.page === "world-loop" ? <WorldLoopPage {...ctx} id={route.item} /> :
-          route.page === "traceability" ? <Traceability {...ctx} /> :
+          route.page === "traceability" ? <Traceability {...ctx} item={route.item} /> :
           route.page === "audit" ? <AuditTrail {...ctx} /> :
           route.page === "team" ? <Team {...ctx} /> :
           route.page === "agents" && route.item ? <AgentPage {...ctx} id={route.item} /> :
@@ -403,18 +403,19 @@ function AddMemory({ post, project, onClose }: { post: Ctx["post"]; project: str
 
 /* ---------- requirements ---------- */
 function Requirements({ state }: Ctx) {
+  const open = (id: string) => <a href={`#/p/${state.project!.id}/traceability/${id}`} className="font-mono text-[12px] font-semibold hover:underline">{id}</a>;
   const reqsFor = (h: string) => (state.requirements || []).filter(r => r.hazards.includes(h)).map(r => r.id).join(", ");
   return (
     <>
       <PageHead title="Requirements" sub={`Hazard log and the safety requirements that mitigate each hazard (${state.project?.standard || "ISO 14971"}). Imported from the repository; agents cannot edit them.`} />
       <Section title="Hazards">
         <Table head={["ID", "Hazard", "Severity", "Mitigated by"]} rows={(state.hazards || []).map(h => [
-          <b key="i" className="font-mono text-[12px]">{h.id}</b>, h.title, <Badge key="s" tone={["S3", "Catastrophic", "Hazardous"].includes(h.severity || "") ? "FAIL" : "Stopped"}>{h.dal ? `${h.severity} · DAL ${h.dal}` : h.severity}</Badge>,
+          <span key="i">{open(h.id)}</span>, h.title, <Badge key="s" tone={["S3", "Catastrophic", "Hazardous"].includes(h.severity || "") ? "FAIL" : "Stopped"}>{h.dal ? `${h.severity} · DAL ${h.dal}` : h.severity}</Badge>,
           <span key="m" className="font-mono text-[12px] text-mute">{reqsFor(h.id)}</span>])} />
       </Section>
       <Section title="Safety requirements">
         <Table head={["ID", "Requirement", "Hazards", "Code", "Verified by"]} rows={(state.requirements || []).map(r => [
-          <b key="i" className="font-mono text-[12px]">{r.id}</b>, r.text, <span key="h" className="font-mono text-[12px] text-mute">{r.hazards.join(", ")}</span>,
+          <span key="i">{open(r.id)}</span>, r.text, <span key="h" className="font-mono text-[12px] text-mute">{r.hazards.join(", ")}</span>,
           <span key="c" className="font-mono text-[11px] text-mute">{(r.symbols || []).slice(0, 2).join(", ")}</span>,
           <span key="t" className="text-mute">unit test {r.id} · world model</span>])} />
       </Section>
@@ -623,16 +624,7 @@ function WorldModel({ state, events, post, live, getJSON }: Ctx) {
   );
 }
 
-/* ---------- traceability, audit, team ---------- */
-function Traceability({ state }: Ctx) {
-  return (
-    <>
-      <PageHead title="Traceability" sub="Every hazard traced through its safety requirement, the code that implements it and the test that verifies it, to the work orders that changed it and their simulation evidence. Click a node to follow its chain." />
-      {state.trace ? <TraceGraph nodes={state.trace.nodes} edges={state.trace.edges} /> : null}
-    </>
-  );
-}
-
+/* ---------- audit, team ---------- */
 function AuditTable({ rows, team, pid }: { rows: State["audit"]; team: Record<string, Member>; pid: string }) {
   return (
     <Table head={["When", "Who", "Action", "Object", "Detail"]} empty="No activity yet."
