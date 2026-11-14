@@ -151,7 +151,20 @@ def events(project_id=None):
     evs = [json.loads(l) for l in open(FEED) if l.strip()]
     tag_projects(evs, _load())
     whatif_title.apply(evs)
+    recall_source(evs)
     return [e for e in evs if e["project"] == project_id] if project_id else evs
+
+
+_OLD_RECALL = re.compile(r"^(Recalled \d+ items) from local \((.+)\)$")
+
+
+def recall_source(evs):
+    """Runs recorded before events carried `recall` call the fallback store just "local", which reads like a different
+    memory than the HydraDB the Memory page shows: word it the way current runs do (pipeline._where)."""
+    for e in evs:
+        m = e["agent"] == "memory" and not e.get("recall") and _OLD_RECALL.match(e["msg"])
+        if m:
+            e["msg"] = f"{m[1]} from local memory (HydraDB was not connected when this run was recorded): {m[2]}"
 
 
 def tag_projects(evs, d):
