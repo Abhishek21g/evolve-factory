@@ -9,6 +9,9 @@ GET  /api/worldmodel?wo=WO-x       world-model loop: every attempt's simulation,
 GET  /api/memory?q=...             org memory and recall (HydraDB, local fallback)
 GET  /api/trace/file?path=P        a git-tracked repo file, read-only (anything else is refused)
 GET  /api/trace/search?q=&project= repo files, doc sections and code lines for the trace-link picker
+GET  /api/record?project=ID        living source of record: each requirement's sync status against code, tests, links, simulation
+GET  /api/monitors?project=ID      monitoring agents (automations) and their run history
+GET  /api/monitors/evidence?run=R  one monitor run's evidence (report markdown + data)
 GET  /api/connect/composio         redirects to a Composio Connect Link to authorize GitHub (one time)
 POST /api/projects   {name, device}                 create a project (imports its hazard log)
 POST /api/workorders {project, title, description}  create a work order
@@ -17,6 +20,8 @@ POST /api/whatif     {text}                         ask the world model a plain-
 POST /api/trace/links {project, item, kind, path|url, start, end, anchor, label}   add a trace link
 POST /api/trace/links/delete {project, id}          remove a trace link
 POST /api/trace/tests {project}                     rerun the project's requirement tests
+POST /api/record/resync {project}                   resync the source of record now (simulation evidence first, cached)
+POST /api/monitors/run {id, project}                run a monitor now (in the background)
 POST actions carry the acting person in the X-Actor header (recorded in the audit trail).
 Everything else is served from web/out. Keys are read from .env and never sent to the browser.
 """
@@ -33,6 +38,8 @@ from urllib.parse import parse_qs, urlparse
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "factory"))
 import memory  # noqa: E402
+import monitors  # noqa: E402
+import record  # noqa: E402
 import store  # noqa: E402
 import worldmodel  # noqa: E402
 import tracelinks  # noqa: E402
@@ -176,6 +183,18 @@ class H(SimpleHTTPRequestHandler):
         if u.path == "/api/worldmodel":
             loop = worldmodel.loop(wo)
             return self.send(200, loop) if loop else self.send(404, {"error": "no simulation for this work order"})
+        if u.path in ("/api/record", "/api/monitors"):
+            pid = q.get("project", "")
+            if not any(p["id"] == pid for p in store._load()["projects"]):
+                return self.send(404, {"error": "unknown project"})
+            if u.path == "/api/monitors":
+                return self.send(200, monitors.view(pid))
+            rec = record.load(pid) or record.resync(pid, "first sync")
+            rec["resyncing"] = ("drift", pid) in monitors.running
+            return self.send(200, rec)
+        if u.path == "/api/monitors/evidence":
+            ev = monitors.evidence(q.get("run", ""))
+            return self.send(200, ev) if ev else self.send(404, {"error": "no evidence for this run"})
         if u.path.startswith("/api/"):
             return self.send(404, {"error": "not found"})
         return super().do_GET()
@@ -243,6 +262,12 @@ class H(SimpleHTTPRequestHandler):
                     return self.send(200, link)
                 if u.path == "/api/trace/tests":
                     return self.send(200, tracelinks.run_tests(dev["id"], spec))
+            if u.path in ("/api/record/resync", "/api/monitors/run"):
+                mid = "drift" if u.path == "/api/record/resync" else clip("id", 30)
+                rid = monitors.trigger(mid, clip("project", 60))
+                if rid:
+                    store.log(actor, "ran monitor", next(m["name"] for m in monitors.MONITORS if m["id"] == mid), clip("project", 60))
+                return self.send(202, {"run": rid, "already_running": rid is None})
             if u.path == "/api/whatif":
                 if not clip("text") or not start("whatif", clip("text"), project=clip("project", 60)):
                     return self.send(409, {"error": "factory busy or empty question"})
@@ -262,4 +287,6 @@ if __name__ == "__main__":
     threading.Thread(target=warm, daemon=True).start()
     for k, dev in store.DEVICES.items():  # requirement test results ready before anyone opens Traceability
         tracelinks.warm_tests(k, store.safety_spec(dev))
+    monitors.paused = busy
+    monitors.start()  # background monitoring agents on their schedules (MONITORS=off: only "Run now")
     ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
