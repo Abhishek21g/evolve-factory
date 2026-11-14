@@ -5,7 +5,7 @@ import { CockpitCallouts } from "@/components/Callouts";
 import { Composer } from "@/components/Composer";
 import { WorldChart } from "@/components/WorldChart";
 import { LoopSummary, SimVsWorld } from "@/components/WorldLoop";
-import { PageHead, Replayed, Section, Table } from "@/components/ui";
+import { Asked, PageHead, Replayed, Section, Table } from "@/components/ui";
 
 const GATE: Record<string, { aside: string; rows: string[][] }> = {
   "flight-controls": {
@@ -52,7 +52,7 @@ export function WorldModel({ state, events, post, live, checking, getJSON }: Ctx
           <span className="pulse size-1.5 rounded-full bg-run" />{now?.msg || "Simulation Agent is planning scenarios"}
         </p>
       )}
-      <Section title={latest?.question ? `What-if: “${latest.question}”` : "Latest what-if"} aside={latestEv?.replay ? <Replayed r={latestEv.replay} /> : latest ? "current code" : undefined}>
+      <Section title={latest?.question ? <>What-if: “{latest.question}”<Asked title={latest.question} asked={latest.asked} /></> : "Latest what-if"} aside={latestEv?.replay ? <Replayed r={latestEv.replay} /> : latest ? "current code" : undefined}>
         {plan && <p className="mb-3 text-sm text-mute"><span className="text-dim">Simulation Agent plan:</span> {plan.msg}</p>}
         {latest ? <WorldChart world={latest} /> : (
           <div className="grid place-items-center rounded-xl border border-dashed border-line px-6 py-14 text-center">
