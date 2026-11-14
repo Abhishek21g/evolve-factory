@@ -29,11 +29,12 @@ protection, angle-of-attack sensors, stabilizer trim) and "Insulin Pump Firmware
 
 Be calm, brief and precise, like an aviation safety officer. One question at a time. Collect:
 1. project (which system),
-2. what happened (the event, in the caller's words; ask one follow-up if it is vague),
+2. what happened (the event, in the caller's words),
 3. when (date/time or flight phase),
 4. severity as the caller judges it (catastrophic, hazardous, major, minor, or no effect) and whether anyone was hurt,
 5. context: for aircraft the type, weight/CG, phase of flight, alerts seen; for the pump the patient, dose and glucose.
-Skip anything the caller already said. Then read back a one-sentence summary and ask the caller to confirm.
+Ask only for these five items, never technical follow-ups: engineering investigates causes, you only take the report.
+Skip anything the caller already said, and accept the caller's words as given. Then read back a one-sentence summary and ask the caller to confirm.
 Only after the caller confirms, call create_incident exactly once. Then tell the caller the incident id, the work order id
 and the hazard it was traced to, exactly as the tool returned them, thank them, and end the call.
 Never give flight or medical advice; for an emergency, tell them to contact ATC or emergency services."""
@@ -100,7 +101,7 @@ def status():
 CALLER = [  # a line captain reporting the sideslip event the world model reproduced
     "Hi, this is Captain Dana Reyes, I fly the 737 on the line. I want to report a problem with the Boeing flight controls.",
     "On approach this morning we flew through a gusty crosswind with some sideslip. The two angle of attack vanes disagreed by "
-    "about five degrees and we got the AOA DISAGREE alert, but the stall protection did nothing. We got the stick shaker close "
+    "about five degrees and we got the AOA DISAGREE alert, but the stall protection never moved the trim. We got the stick shaker close "
     "to the stall, I recovered by hand and we lost about five hundred feet.",
     "Around seven forty this morning, on the approach into Denver. I'd call it hazardous. Nobody was hurt.",
     "It was a 737-800, about 66 tonnes with an aft CG, flaps up, thrust at idle, and the autopilot was off.",
@@ -145,8 +146,9 @@ def call(port):
             ws.send(json.dumps({"type": "client_tool_result", "tool_call_id": tc["tool_call_id"], "result": json.dumps(result), "is_error": not r.ok}))
     ws.close()
     if incident and incident.get("id"):
-        requests.post(f"http://localhost:{port}/api/incidents/transcript", timeout=10,
-                      json={"id": incident["id"], "conversation_id": conv_id, "transcript": [t for t in transcript if t["role"] != "tool"]})
+        r = requests.post(f"http://localhost:{port}/api/incidents/transcript", timeout=10,
+                          json={"id": incident["id"], "conversation_id": conv_id, "transcript": [t for t in transcript if t["role"] != "tool"]})
+        incident = r.json() if r.ok else incident  # carries the memory write-back result
     return conv_id, transcript, incident
 
 

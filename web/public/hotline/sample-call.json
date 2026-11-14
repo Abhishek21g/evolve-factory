@@ -1,0 +1,151 @@
+{
+ "conversation_id": "conv_1401m7d9wqr8e5xav4ya8qn4vwzz",
+ "agent_id": "agent_2201m7d9j59dezmvsqas9gba15x0",
+ "duration": 117.8,
+ "audio": "/hotline/sample-call.mp3",
+ "turns": [
+  {
+   "role": "agent",
+   "text": "Certus safety hotline. I'm recording a safety report. Which system is this about?",
+   "t": 0.0
+  },
+  {
+   "role": "caller",
+   "text": "Hi, this is Captain Dana Reyes, I fly the 737 on the line. I want to report a problem with the Boeing flight controls.",
+   "t": 5.61
+  },
+  {
+   "role": "agent",
+   "text": "Captain Reyes, thank you for calling. I'm recording your report on Boeing Flight Controls. What happened?",
+   "t": 12.86
+  },
+  {
+   "role": "caller",
+   "text": "On approach this morning we flew through a gusty crosswind with some sideslip. The two angle of attack vanes disagreed by about five degrees and we got the AOA DISAGREE alert, but the stall protection never moved the trim. We got the stick shaker close to the stall, I recovered by hand and we lost about five hundred feet.",
+   "t": 19.54
+  },
+  {
+   "role": "agent",
+   "text": "Understood, Captain. When did this happen\u2014what date and time, or what phase of flight?",
+   "t": 38.58
+  },
+  {
+   "role": "caller",
+   "text": "Around seven forty this morning, on the approach into Denver. I'd call it hazardous. Nobody was hurt.",
+   "t": 44.35
+  },
+  {
+   "role": "agent",
+   "text": "Thank you. What was your aircraft type, weight and center of gravity, and what other alerts did you see besides the AOA DISAGREE?",
+   "t": 50.79
+  },
+  {
+   "role": "caller",
+   "text": "It was a 737-800, about 66 tonnes with an aft CG, flaps up, thrust at idle, and the autopilot was off.",
+   "t": 59.43
+  },
+  {
+   "role": "agent",
+   "text": "I have your report, Captain Reyes. Let me read back what you've told me: On approach into Denver at 0740 this morning, a 737-800 at 66 tonnes with aft CG experienced an AOA DISAGREE alert in gusty crosswind conditions with sideslip, the stall protection trim did not move, stick shaker activated near stall, and you recovered by hand losing 500 feet. You rate this hazardous with no injuries. Is that correct?",
+   "t": 67.89
+  },
+  {
+   "role": "caller",
+   "text": "Yes, that's correct. Please file it.",
+   "t": 100.22
+  },
+  {
+   "role": "tool",
+   "text": "create_incident \u2192 {\"id\": \"INC-4\", \"wo\": \"WO-349\", \"hazard\": \"H-2 Stall / loss of control at high AoA\"}",
+   "t": 102.41
+  },
+  {
+   "role": "agent",
+   "text": "Your incident report is filed. Incident ID INC-4, work order WO-349, traced to hazard H-2 Stall / loss of control at high AoA. Thank you for the report, Captain Reyes. Stay safe.",
+   "t": 102.41
+  }
+ ],
+ "incident": {
+  "id": "INC-4",
+  "ts": 1794669180.98799,
+  "project": "boeing-flight-controls",
+  "device": "flight-controls",
+  "caller": "Captain Dana Reyes, pilot",
+  "what": "On approach into Denver at 0740, a 737-800 at 66 tonnes with aft CG flew through gusty crosswind with sideslip. Two angle of attack vanes disagreed by about five degrees, triggering AOA DISAGREE alert. Stall protection trim did not move in response. Stick shaker activated near stall. Captain recovered by hand and lost about 500 feet.",
+  "when": "0740 this morning, approach into Denver",
+  "severity": "hazardous",
+  "context": "737-800, 66 tonnes, aft CG, flaps up, thrust at idle, autopilot off, AOA DISAGREE alert",
+  "summary": "AOA DISAGREE alert with non-responsive stall protection trim during approach in crosswind conditions resulted in stick shaker and manual recovery.",
+  "hazard": {
+   "id": "H-2",
+   "title": "Stall / loss of control at high AoA",
+   "severity": "Catastrophic",
+   "score": 9,
+   "matched": [
+    "aoa",
+    "control",
+    "flight",
+    "near",
+    "protection",
+    "stall"
+   ]
+  },
+  "wo": "WO-349",
+  "link": "L4",
+  "url": "https://certus-factory.vercel.app/#/p/boeing-flight-controls/incidents/INC-4",
+  "conversation_id": "conv_1401m7d9wqr8e5xav4ya8qn4vwzz",
+  "source": "recorded",
+  "memory": {
+   "id": "mem-inc-4-1794669180",
+   "backend": "HydraDB",
+   "ms": 406,
+   "collection": "org_memory"
+  },
+  "transcript": [
+   {
+    "role": "agent",
+    "text": "Certus safety hotline. I'm recording a safety report. Which system is this about?"
+   },
+   {
+    "role": "caller",
+    "text": "Hi, this is Captain Dana Reyes, I fly the 737 on the line. I want to report a problem with the Boeing flight controls."
+   },
+   {
+    "role": "agent",
+    "text": "Captain Reyes, thank you for calling. I'm recording your report on Boeing Flight Controls. What happened?"
+   },
+   {
+    "role": "caller",
+    "text": "On approach this morning we flew through a gusty crosswind with some sideslip. The two angle of attack vanes disagreed by about five degrees and we got the AOA DISAGREE alert, but the stall protection never moved the trim. We got the stick shaker close to the stall, I recovered by hand and we lost about five hundred feet."
+   },
+   {
+    "role": "agent",
+    "text": "Understood, Captain. When did this happen\u2014what date and time, or what phase of flight?"
+   },
+   {
+    "role": "caller",
+    "text": "Around seven forty this morning, on the approach into Denver. I'd call it hazardous. Nobody was hurt."
+   },
+   {
+    "role": "agent",
+    "text": "Thank you. What was your aircraft type, weight and center of gravity, and what other alerts did you see besides the AOA DISAGREE?"
+   },
+   {
+    "role": "caller",
+    "text": "It was a 737-800, about 66 tonnes with an aft CG, flaps up, thrust at idle, and the autopilot was off."
+   },
+   {
+    "role": "agent",
+    "text": "I have your report, Captain Reyes. Let me read back what you've told me: On approach into Denver at 0740 this morning, a 737-800 at 66 tonnes with aft CG experienced an AOA DISAGREE alert in gusty crosswind conditions with sideslip, the stall protection trim did not move, stick shaker activated near stall, and you recovered by hand losing 500 feet. You rate this hazardous with no injuries. Is that correct?"
+   },
+   {
+    "role": "caller",
+    "text": "Yes, that's correct. Please file it."
+   },
+   {
+    "role": "agent",
+    "text": "Your incident report is filed. Incident ID INC-4, work order WO-349, traced to hazard H-2 Stall / loss of control at high AoA. Thank you for the report, Captain Reyes. Stay safe."
+   }
+  ]
+ }
+}

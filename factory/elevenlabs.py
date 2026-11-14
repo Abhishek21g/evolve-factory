@@ -13,7 +13,7 @@ API = "https://api.elevenlabs.io"
 TTS_MODEL = "eleven_multilingual_v2"
 VOICES = {  # premade voices
     "cockpit": "nPczCjzI2devNBz1zQrb",  # Brian: calm American male, the synthetic cockpit voice
-    "pump": "EXAVITQu4vr4xnAQ5Ugo",     # Sarah: the pump's alarm voice
+    "pump": "EXAVITQu4vr4xnSDxMaL",     # Sarah: the pump's alarm voice
     "agent": "Xb7hH8MSUJpSbSDYk0k2",    # Alice: the safety hotline agent
     "caller": "iP95p4xoKVk53GoZ742B",   # Chris: the caller in the recorded sample call
 }
