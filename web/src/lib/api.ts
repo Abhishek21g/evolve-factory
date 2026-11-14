@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Ev, GateRow, World } from "./feed";
+import snapshot from "../../public/snapshot.json";
 
 export type Member = { id: string; name: string; role: string; kind: "human" | "agent" };
 export type Project = { id: string; name: string; device: string; repo: string; standard: string; world_model: string; created: number; owner: string };
@@ -22,15 +23,17 @@ export type State = {
   hazards?: Hazard[]; requirements?: Requirement[]; work_orders?: WorkOrder[]; audit: Audit[];
   trace?: { nodes: TraceNode[]; edges: { source: string; target: string }[] };
   agents?: Record<string, AgentLive>; memory?: MemoryItem[];
-  status?: { online: boolean; busy: boolean; job: string | null; running: string | null; memory: string; composio: boolean; software_factory: boolean };
+  status?: { online: boolean; busy: boolean; job: string | null; running: string | null; memory: string; composio: boolean; software_factory: boolean; replay?: boolean };
 };
 
 const BASES = () => ["", ...(process.env.NEXT_PUBLIC_FACTORY_URL ? [process.env.NEXT_PUBLIC_FACTORY_URL] : []), "http://localhost:8787"];
+const SNAP = snapshot as unknown as { state: State; events: Ev[] };
 
-/** Live factory state from the local server; falls back to a read-only snapshot (Vercel). */
+/** Live factory state from the local server; falls back to a read-only snapshot (Vercel).
+ *  The snapshot is bundled, so the first paint always shows the last-known state, never a loading screen. */
 export function useFactoryState(projectId: string) {
-  const [state, setState] = useState<State | null>(null);
-  const [events, setEvents] = useState<Ev[]>([]);
+  const [state, setState] = useState<State | null>(SNAP.state);
+  const [events, setEvents] = useState<Ev[]>(SNAP.events);
   const [live, setLive] = useState<boolean | null>(null);
   const base = useRef<string | null>(null);
   const seen = useRef(0);
@@ -49,24 +52,22 @@ export function useFactoryState(projectId: string) {
       if (!new URLSearchParams(location.search).has("snapshot")) {
         for (const b of BASES()) {
           try {
-            const r = await fetch(`${b}/api/state`, { cache: "no-store" });
+            const r = await fetch(`${b}/api/state`, { cache: "no-store", signal: AbortSignal.timeout(1500) });
             if (r.ok && (r.headers.get("content-type") || "").includes("json")) { base.current = b; break; }
           } catch { /* next */ }
         }
       }
-      if (base.current === null) {
-        const snap = await (await fetch("/snapshot.json")).json();
-        setLive(false); setState(snap.state); setEvents(snap.events);
-        return;
-      }
+      if (base.current === null) { setLive(false); return; }
       setLive(true);
       while (!stop) {
         try {
           await refresh();
           const r = await (await fetch(`${base.current}/api/events?since=${seen.current}`, { cache: "no-store" })).json();
           if (r.total < seen.current) { seen.current = 0; setEvents([]); continue; }
+          const first = seen.current === 0;
           seen.current = r.total;
-          if (r.events.length) setEvents(prev => [...prev, ...r.events]);
+          if (first) setEvents(r.events);
+          else if (r.events.length) setEvents(prev => [...prev, ...r.events]);
         } catch { /* server restarting */ }
         await new Promise(res => setTimeout(res, 1200));
       }

@@ -12,6 +12,9 @@ cd web && npm install && npm run build && cd ..
 
 - **Build it**: request, then shared memory (HydraDB), Safety Analyst (hazards), coding agent (Claude Code) in a git worktree, deterministic gate, world model, evidence pack, Composio actions.
 - **Simulate**: ask a what-if question; the Simulation Agent turns it into scenarios and the world model answers on the current firmware.
+- Stage demo: `demo/go.sh replay` (or `live`) gets everything ready and prints READY; script in [docs/DEMO.md](docs/DEMO.md).
+  Replay mode (`FACTORY_REPLAY=1`) plays a recorded real run from `demo/replay/` so nothing on stage waits on an LLM.
+  Hosted read-only UI: https://certus-factory.vercel.app (`demo/deploy.sh`).
 - Approval is never an LLM decision: tests plus the world model decide.
 - Optional keys in `.env` (gitignored): `HYDRADB_API_KEY`, `COMPOSIO_API_KEY`, `SF_API_KEY`. Without them it runs with local fallbacks.
 - `web/` is a static Next.js app. Served locally by `factory/server.py`; on Vercel it plays a recorded run (replay mode).

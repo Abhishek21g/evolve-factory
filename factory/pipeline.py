@@ -88,6 +88,9 @@ def safety_analysis(intent, spec, hits):
 def build(intent, wo=None):
     global WO
     wo = WO = wo or next_wo()
+    for ext in ("commits.json", "diff.txt"):  # left by an earlier replay of this work order; git is the truth now
+        if os.path.exists(os.path.join(RUNS, f"{wo}.{ext}")):
+            os.remove(os.path.join(RUNS, f"{wo}.{ext}"))
     ev("planner", "working", f'New request from the operator: "{intent}"', wo=wo, title=intent)
     hits = memory.recall(intent, k=5)
     ev("memory", "done", f"Recalled {len(hits)} items from {memory.backend()} (tickets, meetings, chats, emails, code)",
@@ -100,7 +103,8 @@ def build(intent, wo=None):
             + "\n".join(f"- [{h['kind']}] {h['title']}: {h['text']}" for h in hits))
     tf = os.path.join(RUNS, f"{wo}.request.txt")
     open(tf, "w").write(text)
-    p = subprocess.run([PY, os.path.join(ROOT, "gate/runner.py"), "--wo", wo, "--text-file", tf],
+    pr = ["--pr"] if os.environ.get("FACTORY_PR") == "1" else []
+    p = subprocess.run([PY, os.path.join(ROOT, "gate/runner.py"), "--wo", wo, "--text-file", tf, *pr],
                        cwd=ROOT, capture_output=True, text=True)
     open(os.path.join(RUNS, f"{wo}.runner.log"), "w").write(p.stdout + p.stderr)
     passed = p.returncode == 0
@@ -194,6 +198,41 @@ def whatif(question):
     return 0
 
 
+REPLAY = os.path.join(ROOT, "demo", "replay")
+
+
+def replay(kind, text, wo=None):
+    """FACTORY_REPLAY=1: play the recorded real run demo/replay/<kind>.jsonl (made by demo/record.py) instead of
+    calling agents, so a stage demo can never wait on an LLM. Gaps are divided by REPLAY_SPEED and capped at
+    REPLAY_MAX_GAP seconds; messages, gate rows, simulations, evidence and PR link are the recorded ones."""
+    speed, cap = float(os.environ.get("REPLAY_SPEED", "4")), float(os.environ.get("REPLAY_MAX_GAP", "4"))
+    rec = [json.loads(line) for line in open(os.path.join(REPLAY, f"{kind}.jsonl")) if line.strip()]
+    old = rec[0].get("wo")
+    sub = (lambda s: s.replace(old, wo)) if old and wo else (lambda s: s)  # noqa: E731
+    os.makedirs(RUNS, exist_ok=True)
+    if wo:
+        for ext in ("evidence.md", "diff.txt", "commits.json"):
+            src = os.path.join(REPLAY, f"{kind}.{ext}")
+            if os.path.exists(src):
+                open(os.path.join(RUNS, f"{wo}.{ext}"), "w").write(sub(open(src).read()))
+    prev = 0.0
+    for e in rec:
+        time.sleep(min(max(e["t"] - prev, 0) / speed, cap))
+        prev = e["t"]
+        kw = {k: v for k, v in e.items() if k not in ("run", "t", "agent", "state", "msg", "wo")}
+        if wo:
+            kw["wo"] = wo
+            for key in ("gate", "world"):
+                if key in kw:
+                    json.dump(kw[key], open(os.path.join(RUNS, f"{wo}.{key}.json"), "w"))
+            if "evidence" in kw:
+                kw["evidence"] = {**kw["evidence"], "wo": wo}
+        emit.emit(e["agent"], e["state"], sub(e["msg"]), **kw)
+    return 0 if not wo or rec[-1]["state"] == "done" else 1
+
+
 if __name__ == "__main__":
     # pipeline.py build "<request>" [WO-101]   |   pipeline.py whatif "<question>"
+    if os.environ.get("FACTORY_REPLAY") == "1":
+        sys.exit(replay(*sys.argv[1:4]))
     sys.exit({"build": build, "whatif": whatif}[sys.argv[1]](*sys.argv[2:4]))
