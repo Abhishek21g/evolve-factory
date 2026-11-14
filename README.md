@@ -23,6 +23,8 @@ factory adds what a regulated team needs before merge:
 Built at EVOLVE, the 8090 AI Hackathon (Nov 13–14, 2026). Devpost write-up: [docs/DEVPOST.md](docs/DEVPOST.md).
 Hosted read-only backup: https://certus-factory-ten.vercel.app
 
+Demo video: (link coming)
+
 ## Architecture
 
 ```mermaid

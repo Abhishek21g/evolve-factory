@@ -1,7 +1,7 @@
 # Safety Gate: build brief, demo script, pitch
 
 ## One line
-8090 Software Factory lets agents ship code with traceable intent. Safety Gate lets them ship it into regulated systems: every change is mapped to the hazards it touches and **proven** safe by executed tests before it can merge.
+8090 Software Factory lets agents ship code with traceable intent. Safety Gate lets them ship it into regulated systems: every change is mapped to the hazards it touches and checked by executed tests before it can merge.
 
 ## Architecture
 
@@ -47,7 +47,7 @@ Already built: `gate/gate.py` (+ `gate/test_gate.py` self-check, passes).
 1:00 Agent's first patch raises `MAX_BOLUS_U`. **Safety Gate: BLOCKED** — SR-3 "single bolus ≤ max for profile, confirmed by user above threshold" → hazard H-1 overdose. Show matrix.
 1:30 Gate feeds failure back. Agent revises: profile-scoped limit + confirmation step + test.
 2:00 Gate PASS. PR opens: `WO-12`, traceability matrix, test evidence, `safety-gate ✓` beside `drift-bot ✓`. SF WO flips to In Review automatically.
-2:30 Close: "8090 traces intent. We prove safety. Together: agents that can ship into regulated systems, which is exactly 8090's customer base (CMS, healthcare, aerospace)."
+2:30 Close: "8090 traces intent. We check safety. Together: agents that can ship into regulated systems, which is exactly 8090's customer base (CMS, healthcare, aerospace)."
 
 Have a **recorded backup** of the full run.
 
@@ -64,6 +64,3 @@ Have a **recorded backup** of the full run.
 - *Why not just Drift Bot?* Drift Bot is an LLM reading the PR. We execute. A failing test is evidence an auditor accepts; an LLM comment isn't.
 - *Can agents game the tests?* Tests and safety.json are protected paths: agents can't edit them; changes to them need human review.
 - *Which standards?* IEC 62304 (medical software), ISO 14971 (risk), ISO 26262 (auto). Matrix mirrors what an auditor asks for.
-
-## Reuse question
-CertusAI's `@certus-ai/standards-library` (MIT, ours): ISO 26262 ASIL taxonomy, clause graph, HARA validators (~1.2k lines TS). Ask organizers on Discord whether using our own pre-existing open-source library is allowed. If not, safety.json is enough for the demo.
