@@ -52,7 +52,7 @@ function snapshotOverview(state: State): Overview {
       { id: "hydradb", name: "HydraDB", tone: hydra === "connected" ? "ok" : "off", detail: hydra === "connected" ? "shared memory, live recall" : "not connected in this snapshot", use: "Org memory, regulatory knowledge base, lessons from every verdict" },
       { id: "composio", name: "Composio · GitHub", tone: gh === "connected" ? "ok" : "off", detail: gh === "connected" ? "files evidence as GitHub issues" : "not connected in this snapshot", use: "Files the evidence pack on GitHub after every verdict" },
       { id: "elevenlabs", name: "ElevenLabs", tone: "ok", detail: "recorded callouts and a recorded hotline call", use: "Cockpit callouts from the simulation, the safety hotline voice agent" },
-      { id: "vercel", name: "Vercel", tone: "ok", detail: "you are on certus-factory.vercel.app", use: "Hosts the read-only snapshot of the factory", url: "https://certus-factory.vercel.app" },
+      { id: "vercel", name: "Vercel", tone: "ok", detail: "you are on certus-factory-ten.vercel.app", use: "Hosts the read-only snapshot of the factory", url: "https://certus-factory-ten.vercel.app" },
     ],
     catalog: CATALOG.map(([id, name, category, use]) => ({ id, name, category, use, via: "Composio", connected: false, logo: `https://logos.composio.dev/api/${id}` })),
     composio: { key: false, checked: null, error: null },
