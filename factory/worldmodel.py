@@ -370,7 +370,7 @@ def handoff(rep):
         md += ["", "Responsible code (certified limits changed vs main):"]
         md += [f"- {c['file']}:{c['line']} `{c['text']}` (main: {c['base']})" for c in rep["changed"]]
         md += [f"- {r['file']}:{r['line']} `{r['text']}` ({r['role']})" for r in rep["refs"]]
-    md += ["", "Fix it without changing any certified limit; keep every requirement above satisfied."]
+    md += ["", "Fix the cause above without weakening any safety requirement."]
     return "\n".join(md)
 
 
