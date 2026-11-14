@@ -28,7 +28,7 @@ PY = os.path.join(ROOT, ".venv/bin/python")
 KITS = os.path.join(ROOT, "factory", "composio_kits.py")
 CONFIG = os.path.join(ROOT, ".runs", "mcp.json")
 STATUS = os.path.join(ROOT, ".runs", "integrations.json")
-VERCEL_URL = "https://certus-factory.vercel.app"
+VERCEL_URL = "https://certus-factory-ten.vercel.app"
 # (Composio toolkit, name, category, what the factory would use it for)
 CATALOG = [
     ("slack", "Slack", "Communication", "Post verdicts and blocked merges to the safety channel"),
@@ -118,7 +118,7 @@ def overview(status):
                     "missing key": "add ELEVENLABS_API_KEY to connect"}[status["elevenlabs"]],
          "use": "Cockpit callouts from the simulation, the safety hotline voice agent"},
         {"id": "vercel", "name": "Vercel", "tone": "ok" if _cache["vercel"] else "warn" if _cache["vercel"] is None else "off",
-         "detail": "certus-factory.vercel.app is up" if _cache["vercel"] else "checking…" if _cache["vercel"] is None else "site unreachable",
+         "detail": "certus-factory-ten.vercel.app is up" if _cache["vercel"] else "checking…" if _cache["vercel"] is None else "site unreachable",
          "use": "Hosts the read-only snapshot of the factory", "url": VERCEL_URL},
     ]
     catalog = [{"id": s, "name": n, "category": c, "use": u, "via": "Composio",

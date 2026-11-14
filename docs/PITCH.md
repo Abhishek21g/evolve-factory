@@ -33,7 +33,7 @@ Only say what is in the "Built" column. Items marked *(if built by freeze)* get 
 | Org memory (tickets, meetings, Slack, email) | **Example data** written for the demo (`factory/seed_memory.jsonl`) | "Example org memory." |
 | Pump code | **Demo controller** (~45 lines of C, "not a medical device") | "A small pump controller in C." Never say "real pump firmware." |
 | ISO 26262 | **Not in code** (IEC 62304 / ISO 14971 only) | CertusAI / roadmap only. |
-| Hosted backup site | **Public** at https://certus-factory.vercel.app: read-only snapshot of the 25 U run (WO-345, end state, older UI until `demo/deploy.sh` is re-run), Run disabled, first paint ~0.3 s | Backup only. Demo from `localhost:8787` (`demo/go.sh replay`). |
+| Hosted backup site | **Public** at https://certus-factory-ten.vercel.app: read-only snapshot of the 25 U run (WO-345, end state, older UI until `demo/deploy.sh` is re-run), Run disabled, first paint ~0.3 s | Backup only. Demo from `localhost:8787` (`demo/go.sh replay`). |
 | Tree-sitter call graph | **Not built** | Q&A: "next step." |
 | Supply pages (Control Tower, Suppliers, Supply Chain, Finance) | **Built** on **sample data** (fictional suppliers, prices, budget; the UI says so). Supplier deliverables become real trace links | "Sample suppliers." Never name them as partners. |
 | Safety hotline (Incidents), "Hear the pump / cockpit" callouts | **Built**; alarms and callouts are derived from the simulation trace by code, voiced by ElevenLabs. Clips and a real recorded hotline call (Boeing project) are committed (#86), so **Play** works with no key. On the stage server the hotline is live: **Call safety hotline** starts a real ElevenLabs agent session | Play the recorded call (Boeing → Incidents → Recorded sample call). Never press **Call safety hotline** on stage or in the video. |
@@ -177,7 +177,7 @@ Rule: one voice at a time. The person not speaking looks at the screen, not the 
 - `demo/go.sh replay` ends with **READY** (~2 s warm, ~30 s in a fresh worktree). It starts the server in replay mode, seeds a draft work order and warms everything. `demo/go.sh check` re-checks any time.
 - The stage demo is replay only: no live runs, no LLM calls on stage.
 - `python3 gate/sf.py health` returns OK if we show the SF beat. If not, cut the SF sentence.
-- Tabs open in this order: (1) Home `localhost:8787/?demo#/p/insulin-pump-firmware/overview` (`?demo` skips the sign-in page), (2) hosted backup https://certus-factory.vercel.app, (3) backup video, (4) PR #30 page.
+- Tabs open in this order: (1) Home `localhost:8787/?demo#/p/insulin-pump-firmware/overview` (`?demo` skips the sign-in page), (2) hosted backup https://certus-factory-ten.vercel.app, (3) backup video, (4) PR #30 page.
 - Type exactly `Raise the single-bolus limit to 25 U` in the Home composer (any text plays the same recording).
 - Font size up, notifications off, phone on silent, laptop on power.
 
