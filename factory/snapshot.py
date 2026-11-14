@@ -9,6 +9,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "factory"))
 import store  # noqa: E402
+import worldmodel  # noqa: E402
 
 pub = os.path.join(ROOT, "web", "public")
 s = store.state(sys.argv[1] if len(sys.argv) > 1 else "", None)
@@ -25,4 +26,7 @@ for w in s.get("work_orders", []):
     d = store.diff(w["id"])
     if d:
         open(os.path.join(pub, f"diff-{w['id']}.txt"), "w").write(d)
+    loop = worldmodel.loop(w["id"]) if w.get("world") else None
+    if loop:
+        json.dump(loop, open(os.path.join(pub, f"worldmodel-{w['id']}.json"), "w"))
 print(f"snapshot: {len(s.get('work_orders', []))} work orders, {len(evs)} events, {len(s['audit'])} audit rows")
