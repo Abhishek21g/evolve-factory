@@ -19,12 +19,12 @@ function TNode({ data }: NodeProps<Node<D>>) {
     <div style={{ opacity: dim ? 0.28 : 1, borderColor: on ? "#e7e9ec" : n.target?.link ? "rgba(165,243,252,.35)" : "#262a31" }}
       className="w-[196px] cursor-pointer rounded-md border bg-[#111317] px-2.5 py-2 text-left transition-opacity">
       <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !border-0 !bg-[#3a3f47]" />
-      <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-[.12em] text-[#5b616a]">
+      <div className="flex items-center gap-1.5 text-2xs uppercase tracking-[.12em] text-[#5b616a]">
         {n.tone && <span className="h-1.5 w-1.5 rounded-full" style={{ background: TONE[n.tone] }} />}
         {COLS[n.kind]?.label}{n.target?.link ? " · added" : ""}
       </div>
-      <div className="mt-0.5 truncate text-[12px] font-semibold text-[#e7e9ec]">{n.label}</div>
-      {n.sub && <div className="line-clamp-2 text-[10.5px] leading-snug text-[#8a9099]">{n.sub}</div>}
+      <div className="mt-0.5 truncate text-sm font-semibold text-[#e7e9ec]">{n.label}</div>
+      {n.sub && <div className="line-clamp-2 text-2xs leading-snug text-[#8a9099]">{n.sub}</div>}
       <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !border-0 !bg-[#3a3f47]" />
     </div>
   );
@@ -70,7 +70,7 @@ export function TraceGraph({ nodes, edges, pid, onOpen }: { nodes: TraceNode[]; 
   return (
     <div className="relative h-[680px] overflow-hidden rounded-lg border border-line bg-[#0b0c0e]">
       {selNode && (selNode.kind === "requirement" || selNode.kind === "hazard") && (
-        <a href={`#/p/${pid}/traceability/${selNode.id}`} className="absolute left-3 top-3 z-10 rounded-md border border-line bg-panel2 px-3 py-1.5 text-[12px] hover:border-white/25">
+        <a href={`#/p/${pid}/traceability/${selNode.id}`} className="absolute left-3 top-3 z-10 rounded-md border border-line bg-panel2 px-3 py-1.5 text-sm hover:border-white/25">
           Open {selNode.id} details →
         </a>
       )}
