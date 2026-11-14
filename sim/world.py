@@ -37,7 +37,6 @@ import pandas as pd  # noqa: E402
 import simglucose  # noqa: E402
 from simglucose.patient.t1dpatient import Action, T1DPatient  # noqa: E402
 
-PATIENTS = [f"adult#{i:03d}" for i in range(1, 11)]
 MEAL_AT, MINUTES = 30, 360
 SEVERE_HYPO, HYPER = 54, 250
 OK, REJECT_LIMIT = 0, 1
@@ -59,25 +58,31 @@ def load_pump(src_dir, out_dir):
     return pump, ext
 
 
-def plan(pump, ext, scenario, cr, bg):
+# Fixed gate scenarios (protected). A what-if run may pass its own list in the same shape via --scenarios.
+#   carbs: meal grams; typo: factor the user mistypes the correct dose by (1 = no typo);
+#   fallback when the pump rejects: "extended" (user picks extended mode) or "reenter" (user types the intended dose);
+#   cohort: adult | adolescent | child (10 virtual patients each).
+SCENARIOS = [
+    {"id": "large-meal", "label": "120 g meal, correct dose", "carbs": 120, "typo": 1, "fallback": "extended", "cohort": "adult"},
+    {"id": "decimal-slip", "label": "15 g snack, dose typed 10x", "carbs": 15, "typo": 10, "fallback": "reenter", "cohort": "adult"},
+]
+
+
+def plan(pump, ext, sc, cr, bg):
     """Ask the pump under test for a dose. Returns (carbs_g, [(minute, units_per_min, minutes)], note)."""
     s = State(0, 0)
-    if scenario == "large-meal":
-        carbs, want = 120, 120 / cr
-        if pump.request_bolus(ctypes.byref(s), want, bg) == OK:
-            return carbs, [(MEAL_AT, want, 1)], f"bolus {want:.1f} U"
-        if ext:
-            mins = max(60, math.ceil(want * 6))  # user picks the shortest duration at 10 U/h
-            if ext(ctypes.byref(s), want, bg, mins) == OK:
-                return carbs, [(MEAL_AT, want / mins, mins)], f"extended {want:.1f} U over {mins} min"
-        return carbs, [], f"{want:.1f} U rejected, no insulin"
-    carbs, want = 15, 15 / cr
-    typed = want * 10
+    carbs = sc["carbs"]
+    want = carbs / cr
+    typed = want * sc.get("typo", 1)
     if pump.request_bolus(ctypes.byref(s), typed, bg) == OK:
-        return carbs, [(MEAL_AT, typed, 1)], f"typo {typed:.1f} U delivered"
-    if pump.request_bolus(ctypes.byref(s), want, bg) == OK:
+        return carbs, [(MEAL_AT, typed, 1)], (f"typo {typed:.1f} U delivered" if typed != want else f"bolus {want:.1f} U")
+    if sc.get("fallback") == "reenter" and typed != want and pump.request_bolus(ctypes.byref(s), want, bg) == OK:
         return carbs, [(MEAL_AT, want, 1)], f"typo {typed:.1f} U rejected, re-entered {want:.1f} U"
-    return carbs, [], "rejected"
+    if sc.get("fallback") == "extended" and ext:
+        mins = max(60, math.ceil(typed * 6))  # user picks the shortest duration at 10 U/h
+        if ext(ctypes.byref(s), typed, bg, mins) == OK:
+            return carbs, [(MEAL_AT, typed / mins, mins)], f"extended {typed:.1f} U over {mins} min"
+    return carbs, [], f"{typed:.1f} U rejected, no insulin"
 
 
 def simulate(name, carbs, doses):
@@ -91,14 +96,15 @@ def simulate(name, carbs, doses):
     return trace
 
 
-def cohort(src_dir):
+def cohort(src_dir, scenarios):
     with tempfile.TemporaryDirectory() as d:
         pump, ext = load_pump(src_dir, d)
         results = []
-        for scenario in ("large-meal", "decimal-slip"):
-            for name in PATIENTS:
+        for sc in scenarios:
+            scenario = sc["id"]
+            for name in [f"{sc.get('cohort', 'adult')}#{i:03d}" for i in range(1, 11)]:
                 bg0 = int(T1DPatient.withName(name).observation.Gsub)
-                carbs, doses, note = plan(pump, ext, scenario, float(CR[name]), bg0)
+                carbs, doses, note = plan(pump, ext, sc, float(CR[name]), bg0)
                 trace = simulate(name, carbs, doses)
                 results.append({"scenario": scenario, "patient": name, "note": note,
                                 "min": round(min(trace)), "max": round(max(trace)),
@@ -115,17 +121,17 @@ def base_src(repo, base, d):
     return d
 
 
-def run(repo, base):
-    cand = cohort(os.path.join(repo, "demo/pump"))
+def run(repo, base, scenarios=SCENARIOS):
+    cand = cohort(os.path.join(repo, "demo/pump"), scenarios)
     with tempfile.TemporaryDirectory() as d:
-        before = {(r["scenario"], r["patient"]): r for r in cohort(base_src(repo, base, d))}
+        before = {(r["scenario"], r["patient"]): r for r in cohort(base_src(repo, base, d), scenarios)}
     for r in cand:
         b = before[(r["scenario"], r["patient"])]
         r["base_min"], r["base_trace"] = b["min"], b["trace"]
         r["new_hypo"] = r["hypo"] and not b["hypo"]
         r["preexisting"] = r["hypo"] and b["hypo"]
     return {"verdict": "BLOCKED" if any(r["new_hypo"] for r in cand) else "PASS", "threshold": SEVERE_HYPO,
-            "step_min": 5, "meal_at": MEAL_AT, "base": base, "results": cand}
+            "step_min": 5, "meal_at": MEAL_AT, "base": base, "scenarios": scenarios, "results": cand}
 
 
 def report(res):
@@ -151,8 +157,12 @@ def main(argv=None):
     a.add_argument("--base", default="main")
     a.add_argument("--json")
     a.add_argument("--wo")
+    a.add_argument("--scenarios", help="what-if scenario list (JSON file); default = the fixed gate scenarios")
+    a.add_argument("--question", help="plain-English question the scenarios answer (shown on the dashboard)")
     args = a.parse_args(argv)
-    res = run(args.repo, args.base)
+    res = run(args.repo, args.base, json.load(open(args.scenarios)) if args.scenarios else SCENARIOS)
+    if args.question:
+        res["question"] = args.question
     if args.json:
         json.dump(res, open(args.json, "w"))
     try:  # report to the dashboard; never fail the check because of the feed
@@ -160,8 +170,10 @@ def main(argv=None):
         import emit
         new = sum(r["new_hypo"] for r in res["results"])
         old = sum(r["preexisting"] for r in res["results"])
-        emit.emit("world", res["verdict"].lower(),
-                  f"{res['verdict']}: {new} new severe-hypo runs caused by this change; {old} pre-existing",
+        hypo = sum(r["hypo"] for r in res["results"])
+        msg = (f"What-if answered: {hypo} of {len(res['results'])} simulated runs reach severe hypoglycemia" if args.question
+               else f"{res['verdict']}: {new} new severe-hypo runs caused by this change; {old} pre-existing")
+        emit.emit("world", "done" if args.question else res["verdict"].lower(), msg,
                   wo=args.wo, world=res)
     except Exception:
         pass
