@@ -12,3 +12,8 @@ dashboard/events.jsonl
 .cursor/
 .worktrees/
 .runs/
+.venv
+.runs/
+web/node_modules/
+web/.next/
+web/out/
