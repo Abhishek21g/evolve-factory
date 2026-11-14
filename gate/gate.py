@@ -1,6 +1,6 @@
 """Safety Gate core: git diff -> affected safety requirements -> run their tests -> traceability matrix.
 
-Usage: python3 gate/gate.py --repo PATH --safety safety.json --base main [--head HEAD] [--out report.md]
+Usage: python3 gate/gate.py --repo PATH --safety safety.json --base main [--head HEAD] [--out report.md] [--json result.json]
 Exit code 0 = gate passes, 1 = gate blocks merge.
 
 safety.json:
@@ -70,6 +70,14 @@ def report(spec, hits, results):
     return ok, "\n".join([head, "", *rows, "", *fails])
 
 
+def as_json(spec, hits, results, ok):
+    hz = {h["id"]: h for h in spec.get("hazards", [])}
+    return {"verdict": "PASS" if ok else "BLOCKED", "rows": [
+        {"id": r["id"], "text": r["text"], "why": why, "test": r.get("test", ""), "result": s, "log": log[-500:],
+         "hazards": [{"id": h, **hz.get(h, {})} for h in r.get("hazards", [])]}
+        for (r, why), (s, log) in zip(hits, results)]}
+
+
 def main(argv=None):
     a = argparse.ArgumentParser()
     a.add_argument("--repo", default=".")
@@ -77,6 +85,7 @@ def main(argv=None):
     a.add_argument("--base", default="main")
     a.add_argument("--head", default="HEAD")
     a.add_argument("--out")
+    a.add_argument("--json", help="also write machine-readable result (used by the dashboard)")
     args = a.parse_args(argv)
     spec = json.load(open(args.safety))
     hits = affected(spec["requirements"], changed(args.repo, args.base, args.head))
@@ -84,6 +93,8 @@ def main(argv=None):
     ok, md = report(spec, hits, results)
     if args.out:
         open(args.out, "w").write(md)
+    if args.json:
+        json.dump(as_json(spec, hits, results, ok), open(args.json, "w"), indent=1)
     print(md)
     return 0 if ok else 1
 
