@@ -185,10 +185,18 @@ function HomePage({ state, post, team, me, live }: Ctx) {
     setErr(""); setText("");
     go(r.id ? `/p/${p.id}/work-orders/${r.id}` : `/p/${p.id}/world-model`);
   };
-  const connected: [string, boolean, string][] = [
-    ["Claude Code", true, "coding agent"], ["8090 Software Factory", !!state.status?.software_factory, "work orders via MCP"],
-    ["HydraDB", state.status?.memory === "HydraDB", "shared memory"], ["Composio", !!state.status?.composio, "GitHub + Slack actions"],
-    ["Vercel", true, "hosting"],
+  const st = state.status;
+  const hydra = st?.hydradb || (st?.memory === "HydraDB" ? "connected" : "missing key");
+  const comp = st?.composio_status || (st?.composio ? "connected" : "missing key");
+  const connected: [string, "ok" | "warn" | "off", React.ReactNode][] = [
+    ["Claude Code", "ok", "coding agent"],
+    ["8090 Software Factory", st?.software_factory ? "ok" : "off", st?.software_factory ? "work orders via MCP" : "add key to connect"],
+    ["HydraDB", hydra === "connected" ? "ok" : hydra === "missing key" ? "off" : "warn",
+      { connected: "shared memory, live recall", connecting: "connecting…", "falling back": "unreachable: using local memory", "missing key": "add key to connect" }[hydra]],
+    ["Composio", comp === "connected" ? "ok" : comp === "missing key" ? "off" : "warn",
+      comp === "not connected" ? <a href="/api/connect/composio" target="_blank" rel="noopener" className="text-acc hover:underline">Connect GitHub</a>
+        : { connected: "files evidence on GitHub", checking: "checking…", error: "unreachable: runs continue", "missing key": "add key to connect" }[comp]],
+    ["Vercel", "ok", "hosting"],
   ];
   return (
     <>
@@ -257,11 +265,11 @@ function HomePage({ state, post, team, me, live }: Ctx) {
           </Section>
           <Section title="Connected">
             <ul className="space-y-2 text-[13px]">
-              {connected.map(([n, on, what]) => (
+              {connected.map(([n, tone, what]) => (
                 <li key={n} className="flex items-center gap-2.5">
-                  <span className={`h-1.5 w-1.5 rounded-full ${on ? "bg-ok" : "bg-[#2a2f36]"}`} />
-                  <span className={on ? "" : "text-mute"}>{n}</span>
-                  <span className="ml-auto text-[12px] text-dim">{on ? what : "add key to connect"}</span>
+                  <span className={`h-1.5 w-1.5 rounded-full ${tone === "ok" ? "bg-ok" : tone === "warn" ? "bg-run" : "bg-[#2a2f36]"}`} />
+                  <span className={tone === "off" ? "text-mute" : ""}>{n}</span>
+                  <span className="ml-auto text-[12px] text-dim">{what}</span>
                 </li>
               ))}
             </ul>
@@ -324,11 +332,11 @@ function Memory({ state, post, getJSON, live }: Ctx) {
   const [adding, setAdding] = useState(false);
   const load = async (query = "") => setData((await getJSON(`memory?q=${encodeURIComponent(query)}`)) ||
     { backend: state.status?.memory || "local", items: state.memory || [], hits: [] });
-  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [live]); // eslint-disable-line react-hooks/exhaustive-deps
   const items = data?.hits.length ? data.hits : data?.items || [];
   return (
     <>
-      <PageHead title="Memory" sub={<>The organization&apos;s context layer: tickets, meeting notes, chats, emails, code notes and past runs. Agents recall it before every change. Backend: <b className="text-ink">{data?.backend === "HydraDB" ? "HydraDB" : "local (add HYDRADB_API_KEY for HydraDB)"}</b></>}>
+      <PageHead title="Memory" sub={<>The organization&apos;s context layer: tickets, meeting notes, chats, emails, code notes and past runs. Agents recall it before every change. Backend: <b className="text-ink">{data?.backend === "HydraDB" ? "HydraDB" : state.status?.hydradb === "falling back" ? "local (HydraDB unreachable, retrying)" : "local (add HYDRADB_API_KEY for HydraDB)"}</b></>}>
         <Button primary onClick={() => setAdding(true)} disabled={!live}><Plus size={14} /> Add memory</Button>
       </PageHead>
       <form onSubmit={e => { e.preventDefault(); load(q); }} className="mb-6 flex gap-2">
@@ -339,7 +347,7 @@ function Memory({ state, post, getJSON, live }: Ctx) {
         </div>
         <Button type="submit" disabled={!live}>Recall</Button>
       </form>
-      {data?.hits.length ? <p className="-mt-3 mb-3 text-[12px] text-dim">Top {data.hits.length} items the agents would read for this request.</p> : null}
+      {data?.hits.length ? <p className="-mt-3 mb-3 text-[12px] text-dim">Top {data.hits.length} items the agents would read for this request · recalled by <b className="text-ink">{data.backend}</b></p> : null}
       <div className="divide-y divide-line rounded-lg border border-line">
         {items.map(m => (
           <div key={m.id} className="px-4 py-3">
