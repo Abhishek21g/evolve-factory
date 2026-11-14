@@ -5,10 +5,16 @@ export type GateRow = { id: string; text: string; why: string[]; result: string;
 export type WorldRun = {
   scenario: string; patient: string; note: string; min: number; max: number; hypo: boolean;
   trace: number[]; base_trace: number[]; base_min: number; new_hypo: boolean; preexisting: boolean;
+  tir?: number; hyper_min?: number; nadir_at?: number; bolus_u?: number; base_bolus_u?: number; base_note?: string; insulin?: number[];
+};
+export type Scenario = {
+  id: string; label: string; cohort?: string; carbs?: number; eaten?: number; typo?: number; dose_u?: number;
+  fallback?: string; meal_at?: number; minutes?: number;
 };
 export type World = {
-  verdict: string; threshold: number; step_min: number; meal_at: number; base: string; question?: string;
-  scenarios?: { id: string; label: string; cohort?: string }[]; results: WorldRun[];
+  verdict: string; threshold: number; hyper?: number; step_min: number; meal_at: number; base: string; question?: string;
+  scenarios?: Scenario[]; results: WorldRun[]; kind?: string;
+  axis?: { unit: string; min: number; max: number; band: [number, number]; threshold_label: string; event_label: string; above?: boolean; time_unit: string; subject: string };
 };
 export type Hit = { kind: string; title: string; text: string; score?: number };
 export type Ev = {
