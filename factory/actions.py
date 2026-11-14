@@ -1,22 +1,30 @@
-"""External actions through Composio: the factory files GitHub issues and posts Slack updates as an agent.
+"""External actions through Composio: after every verdict the factory files the evidence pack as a GitHub issue.
 
-Needs COMPOSIO_API_KEY. One-time human step: in the Composio dashboard create a GitHub auth config (and Slack if
-wanted), put the ids in COMPOSIO_GITHUB_AUTH_CONFIG / COMPOSIO_SLACK_AUTH_CONFIG, then run
-  .venv/bin/python factory/actions.py connect      # prints links; open them and click Authorize
-Optional: SLACK_CHANNEL (e.g. #factory). Only a fixed allow-list of tools is ever executed.
+Needs COMPOSIO_API_KEY and, once, a GitHub account connected for COMPOSIO_USER_ID (default certus-factory):
+click "Connect GitHub" on Home (or open the link printed by `actions.py connect`) and authorize.
+Always runs as its own process, so the slow SDK import and the GitHub call never delay a run:
+  actions.py post '<json>'   pipeline, after the verdict (fire-and-forget); reports back as an "actions" event
+  actions.py status          server, every 30 s; writes .runs/composio.json for the Home card
+  actions.py connect         prints a fresh Composio Connect Link for GitHub
 """
+import json
 import os
 import re
 import subprocess
+import sys
+
+from composio import Composio
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "dashboard"))
+import emit  # noqa: E402
+
 USER = os.environ.get("COMPOSIO_USER_ID", "certus-factory")
-FLAG = os.path.join(ROOT, ".runs", "hazard_issue_filed")
+STATUS = os.path.join(ROOT, ".runs", "composio.json")
 
 
-def _client():
-    from composio import Composio
-    return Composio(api_key=os.environ["COMPOSIO_API_KEY"], toolkit_versions={"github": "latest", "slack": "latest"})
+def _session():
+    return Composio().create(user_id=USER, toolkits=["github"])
 
 
 def _repo():
@@ -25,40 +33,62 @@ def _repo():
     return m.group(1), m.group(2)
 
 
-def _exec(c, slug, args):
-    return c.tools.execute(slug, user_id=USER, arguments=args, dangerously_skip_version_check=True)
+def _find(d, key):
+    """First value for key anywhere in a nested tool result (providers nest it differently)."""
+    if isinstance(d, dict):
+        if key in d:
+            return d[key]
+        d = list(d.values())
+    if isinstance(d, list):
+        for v in d:
+            if (r := _find(v, key)) is not None:
+                return r
+    return None
 
 
-def after_run(wo, intent, passed, summary):
-    """Returns a one-line description of what was done, or '' when Composio is not configured."""
-    if not os.environ.get("COMPOSIO_API_KEY"):
-        return ""
-    done = []
+def post(job):
+    wo, verdict = job["wo"], job["verdict"]
+    emit.emit("actions", "working", "Composio: filing the evidence pack as a GitHub issue", wo=wo)
+    owner, repo = _repo()
+    ev = os.path.join(ROOT, ".runs", f"{wo}.evidence.md")
+    body = (f"**{verdict}**\n\n" + (open(ev).read() if os.path.exists(ev) else job.get("headline", ""))
+            + "\n\n_Filed by the Certus Factory agent through Composio._")[:60000]
+    decision = "APPROVED" if job["passed"] else "BLOCKED"
     try:
-        c = _client()
-        owner, repo = _repo()
-        if summary.get("preexisting") and not os.path.exists(FLAG):
-            _exec(c, "GITHUB_CREATE_AN_ISSUE", {
-                "owner": owner, "repo": repo,
-                "title": "World model: severe hypoglycemia risk on main (decimal slip, insulin-sensitive patients)",
-                "body": f"Found by the Certus Factory world model during {wo} ({intent}).\n\n{summary['headline']}\n\n"
-                        "Proposed SR-6: cap a single bolus relative to the patient's configured carb ratio."})
-            open(FLAG, "w").write(wo)
-            done.append("filed GitHub issue for pre-existing hazard")
-        if os.environ.get("SLACK_CHANNEL"):
-            _exec(c, "SLACK_SEND_MESSAGE", {"channel": os.environ["SLACK_CHANNEL"],
-                                            "markdown_text": f"*{wo}* {'APPROVED' if passed else 'BLOCKED'}: {intent}\n{summary['headline']}"})
-            done.append(f"posted to Slack {os.environ['SLACK_CHANNEL']}")
+        r = _session().execute("GITHUB_CREATE_AN_ISSUE", arguments={
+            "owner": owner, "repo": repo, "title": f"{wo} {decision}: {job['intent'][:90]}", "body": body})
+        if r.result_type != "completed":
+            raise RuntimeError(r.error or r.result_type)
+        data = r.model_dump(mode="json").get("data")
+        n, url = _find(data, "number"), _find(data, "html_url")
+        emit.emit("actions", "done", f"Composio filed GitHub issue #{n} with the {wo} evidence pack ({decision})", wo=wo, link=url)
     except Exception as e:
-        return f"Composio action failed: {str(e)[:120]}"
-    return "Composio: " + "; ".join(done) if done else ""
+        why = str(e).splitlines()[0][:140]
+        if re.search(r"no active connection|not connected|auth", why, re.I):
+            why = "GitHub is not connected yet (Home, Connected, Connect GitHub)"
+        emit.emit("actions", "blocked", f"Composio could not file the {wo} evidence on GitHub: {why}. The verdict stands.", wo=wo)
+
+
+def status():
+    if not os.environ.get("COMPOSIO_API_KEY"):
+        st = {"state": "missing key"}
+    else:
+        try:
+            conn = _session().toolkits(toolkits=["github"]).items[0].connection
+            st = {"state": "connected" if conn.is_active else "not connected"}
+        except Exception as e:
+            st = {"state": "error", "detail": str(e).splitlines()[0][:120]}
+    json.dump(st, open(STATUS, "w"))
+    return st
 
 
 if __name__ == "__main__":
-    import sys
-    if sys.argv[1:2] == ["connect"]:
-        c = _client()
-        for var in ("COMPOSIO_GITHUB_AUTH_CONFIG", "COMPOSIO_SLACK_AUTH_CONFIG"):
-            if os.environ.get(var):
-                req = c.connected_accounts.link(user_id=USER, auth_config_id=os.environ[var])
-                print(f"{var}: open {req.redirect_url}")
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    if cmd == "post":
+        post(json.loads(sys.argv[2]))
+    elif cmd == "status":
+        print(status())
+    elif cmd == "connect":
+        print(_session().authorize("github").redirect_url)
+    else:
+        sys.exit("usage: actions.py post '<json>' | status | connect")

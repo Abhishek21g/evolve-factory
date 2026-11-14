@@ -5,6 +5,8 @@
 GET  /api/state?project=ID         team, projects, hazards, requirements, work orders, audit trail, trace graph
 GET  /api/events?since=N           live agent events from line N
 GET  /api/evidence?wo=WO-x         evidence pack (markdown)      GET /api/diff?wo=WO-x   code change
+GET  /api/memory?q=...             org memory and recall (HydraDB, local fallback)
+GET  /api/connect/composio         redirects to a Composio Connect Link to authorize GitHub (one time)
 POST /api/projects   {name, device}                 create a project (imports its hazard log)
 POST /api/workorders {project, title, description}  create a work order
 POST /api/run        {wo}                           run a work order through the factory
@@ -18,6 +20,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -45,6 +48,31 @@ def load_env():
 
 def busy():
     return job["proc"] is not None and job["proc"].poll() is None
+
+
+def composio_status():
+    if not os.environ.get("COMPOSIO_API_KEY"):
+        return "missing key"
+    p = os.path.join(ROOT, ".runs", "composio.json")
+    return json.load(open(p))["state"] if os.path.exists(p) else "checking"
+
+
+def warm():
+    """Background, so the server answers at once: copy local memory into HydraDB and open the connection with a
+    first recall; keep the Composio connection status fresh (it flips to connected soon after GitHub is authorized)."""
+    try:
+        memory.seed()
+    except Exception as e:
+        print(f"[memory] HydraDB seed failed (local store still works): {e}", flush=True)
+    memory.recall("bolus limit")
+    if os.path.exists(os.path.join(ROOT, ".runs", "composio.json")):
+        os.remove(os.path.join(ROOT, ".runs", "composio.json"))
+    while os.environ.get("COMPOSIO_API_KEY"):
+        try:
+            subprocess.run([PY, os.path.join(ROOT, "factory/actions.py"), "status"], capture_output=True, timeout=60)
+        except subprocess.TimeoutExpired:
+            pass
+        time.sleep(30)
 
 
 def start(kind, *args, wo=None):
@@ -90,10 +118,19 @@ class H(SimpleHTTPRequestHandler):
         if u.path == "/api/state":
             s = store.state(q.get("project", ""), job["wo"] if busy() else None)
             s["status"] = {"online": True, "busy": busy(), "job": job["kind"] if busy() else None, "running": job["wo"] if busy() else None,
-                           "memory": "HydraDB" if os.environ.get("HYDRADB_API_KEY") else "local",
-                           "composio": bool(os.environ.get("COMPOSIO_API_KEY")), "software_factory": bool(os.environ.get("SF_API_KEY")),
-                           "replay": os.environ.get("FACTORY_REPLAY") == "1"}
+                           "memory": memory.backend(), "hydradb": memory.status(),
+                           "composio": bool(os.environ.get("COMPOSIO_API_KEY")), "composio_status": composio_status(),
+                           "software_factory": bool(os.environ.get("SF_API_KEY")), "replay": os.environ.get("FACTORY_REPLAY") == "1"}
             return self.send(200, s)
+        if u.path == "/api/connect/composio":  # one-time: authorize GitHub for the factory's Composio user
+            link = subprocess.run([PY, os.path.join(ROOT, "factory/actions.py"), "connect"], capture_output=True, text=True,
+                                  timeout=30).stdout.strip()
+            if not link.startswith("https://"):
+                return self.send(502, {"error": "could not get a Composio connect link"})
+            self.send_response(302)
+            self.send_header("Location", link)
+            self.end_headers()
+            return
         if u.path == "/api/events":
             since = int(q.get("since", "0"))
             lines = open(FEED).read().splitlines() if os.path.exists(FEED) else []
@@ -138,7 +175,7 @@ class H(SimpleHTTPRequestHandler):
                 if not clip("text", 2000):
                     return self.send(400, {"error": "text required"})
                 kind = clip("kind", 20) if clip("kind", 20) in ("meeting", "chat", "email", "work_order", "code", "safety_finding") else "meeting"
-                item = {"id": f"mem-{int(__import__('time').time() * 1000)}", "kind": kind, "title": clip("title", 120) or "Untitled note",
+                item = {"id": f"mem-{int(time.time() * 1000)}", "kind": kind, "title": clip("title", 120) or "Untitled note",
                         "text": clip("text", 2000)}
                 memory.remember([item])
                 store.log(actor, "added to memory", item["title"], f"{kind} · {memory.backend()}")
@@ -172,6 +209,6 @@ if __name__ == "__main__":
     load_env()
     os.makedirs(os.path.join(ROOT, ".runs"), exist_ok=True)
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8787
-    print(f"Certus Factory server on http://localhost:{port}  (UI from web/out, memory: "
-          f"{'HydraDB' if os.environ.get('HYDRADB_API_KEY') else 'local'})", flush=True)
+    print(f"Certus Factory server on http://localhost:{port}  (UI from web/out, memory: {memory.backend()})", flush=True)
+    threading.Thread(target=warm, daemon=True).start()
     ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
