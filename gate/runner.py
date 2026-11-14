@@ -18,12 +18,14 @@ import os
 import shlex
 import subprocess
 import sys
+import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "dashboard"))
 import emit as feed  # noqa: E402  dashboard event feed
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sf  # noqa: E402  Software Factory client
+import verdict  # noqa: E402  deterministic verdict layer (Rust when built, Python reference otherwise)
 DEFAULT_AGENT = 'claude -p --permission-mode acceptEdits --allowedTools "Bash(make:*)"'
 AGENT_DOWN = 4
 # Checks come from gate/checks.json in the main checkout (trusted, agents can't edit it).
@@ -82,16 +84,27 @@ def say(agent, state, msg, **kw):
 
 
 def run_checks(checks, wt, base, wo, gate_json):
-    """Run every check (no short-circuit). Returns (all_passed, markdown report)."""
-    parts, ok = [], True
+    """Run every check (no short-circuit), then let the deterministic verdict layer (gate/verdict.py: Rust when built)
+    decide from the rule table, the check outcomes, the requirement test results and the world-model results.
+    Returns (passed, markdown report, verdict)."""
+    parts, outcomes = [], []
+    started = time.time()
     for c in checks:
         cmd = c["cmd"].format(root=ROOT, repo=wt, base=base, wo=wo, json=gate_json)
         p = subprocess.run(cmd, shell=True, cwd=ROOT, capture_output=True, text=True)
         passed = p.returncode == 0
-        ok &= passed
+        outcomes.append((c["name"], passed))
         parts.append(f"### {c['name']}: {'PASS' if passed else 'BLOCKED'}\n\n{(p.stdout + p.stderr).strip()}")
+    rules = next((c["rules"].format(root=ROOT) for c in checks if c.get("rules")), None)
+    rules = json.load(open(rules)) if rules else {"hazards": [], "requirements": []}
+    gate = json.load(open(gate_json)) if os.path.exists(gate_json) else {"rows": []}
+    world_json = os.path.join(ROOT, ".runs", f"{wo}.world.json")  # path set in gate/checks*.json
+    world = json.load(open(world_json)) if os.path.exists(world_json) and os.path.getmtime(world_json) >= started else None
+    v = verdict.decide(verdict.evidence(rules, outcomes, gate["rows"], world))
+    ok = v["verdict"] == "PASS"
+    parts += [f"{verdict.label(v)}\n\n" + "\n".join(f"- {r}" for r in v["reasons"])]
     head = "## Checks: PASS" if ok else "## Checks: BLOCKED"
-    return ok, head + "\n\n" + "\n\n".join(parts) + "\n"
+    return ok, head + "\n\n" + "\n\n".join(parts) + "\n", v
 
 
 def run_agent(wt, prompt):
@@ -201,12 +214,12 @@ def main(argv=None):
         say("gate", "working", "Running checks", wo=args.wo)
         if os.path.exists(gate_json):
             os.remove(gate_json)
-        ok, report = run_checks(checks, wt, base_ref, args.wo, gate_json)
-        extra = {}
-        if os.path.exists(gate_json):
-            extra["gate"] = json.load(open(gate_json))
-        elif not ok:
-            extra["gate"] = {"verdict": "BLOCKED", "rows": []}
+        ok, report, v = run_checks(checks, wt, base_ref, args.wo, gate_json)
+        gate = json.load(open(gate_json)) if os.path.exists(gate_json) else {"verdict": "PASS" if ok else "BLOCKED", "rows": []}
+        gate["checker"] = verdict.checker(v)
+        json.dump(gate, open(gate_json, "w"), indent=1)
+        json.dump(v, open(os.path.join(ROOT, ".runs", f"{args.wo}.verdict.json"), "w"), indent=1)
+        extra = {"gate": gate}
         say("gate", "pass" if ok else "blocked", f"Attempt {n}: {'all checks passed' if ok else 'BLOCKED'}", wo=args.wo, **extra)
         print(f"[{args.wo}] attempt {attempt + 1}: {'PASS' if ok else 'BLOCKED'}", flush=True)
         if ok:
