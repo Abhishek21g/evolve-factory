@@ -86,7 +86,7 @@ def risks(sups, parts):
                 out.append({"kind": d["expiry"] + "_cert", "tone": "bad" if d["expiry"] == "expired" else "warn", "supplier": s["id"],
                             "deliverable": d["id"], "affects": [d["item"]] if d.get("item") else s["affects"],
                             "text": f"{d['title']} from {s['name']} {'expired' if d['expiry'] == 'expired' else 'expires'} "
-                                    f"{d['expires']} ({abs(d['days_left'])} days {'ago' if d['days_left'] < 0 else 'left'})"})
+                                    f"{d['expires']} ({abs(d['days_left'])} day{'' if abs(d['days_left']) == 1 else 's'} {'ago' if d['days_left'] < 0 else 'left'})"})
             if d["status"] == "missing":
                 out.append({"kind": "missing_deliverable", "tone": "bad", "supplier": s["id"], "deliverable": d["id"],
                             "affects": [d["item"]] if d.get("item") else s["affects"], "text": f"{s['name']} has not delivered: {d['title']}"})

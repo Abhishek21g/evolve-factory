@@ -1,5 +1,6 @@
 "use client";
 import { Badge, PageHead, Section, Table } from "@/components/ui";
+import { plural as n } from "@/lib/utils";
 import { money, useLive, type PageCtx, type SupplyView } from "@/lib/supply";
 import { Bar, Note, Pending, Pill, SampleBox, StatCard } from "./common";
 
@@ -19,9 +20,9 @@ export function Finance({ state, getJSON, live }: PageCtx) {
       <div className="mb-8 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard label="Factory spend (agents + compute)" value={money(f.factory_usd, true)} sub={`of ${money(facBudget)} budget · estimated`} />
         <StatCard label="Cost per work order" value={money(f.cost_per_wo, true)} sub={`${f.completed} completed · estimated`} href={`#/p/${p.id}/work-orders`} />
-        <StatCard label="Cost per requirement verified" value={money(f.cost_per_req, true)} sub={`${f.verified} requirement tests passed`} href={`#/p/${p.id}/traceability`} />
+        <StatCard label="Cost per requirement verified" value={money(f.cost_per_req, true)} sub={`${n(f.verified, "requirement test")} passed`} href={`#/p/${p.id}/traceability`} />
         <StatCard label="Certification effort saved" value={`${f.saved.hours} h`} tone="ok" sub={`≈ ${money(f.saved.usd)} · ${f.rates.hours_per_wo} h per work order (assumption)`} />
-        <StatCard label="BOM cost per unit" value={money(f.bom_unit)} sub={`${f.bom.length} parts · sample prices`} href={`#/p/${p.id}/supply-chain`} />
+        <StatCard label="BOM cost per unit" value={money(f.bom_unit)} sub={`${n(f.bom.length, "part")} · sample prices`} href={`#/p/${p.id}/supply-chain`} />
       </div>
 
       <Section title="Budget vs actual">
@@ -48,7 +49,7 @@ export function Finance({ state, getJSON, live }: PageCtx) {
               <b key="t" className="tabular-nums">{money(w.total_usd, true)}</b>,
             ])} />
         ) : <Note>No work order has run in {p.name} yet. Costs appear here after the first run.</Note>}
-        {f.whatifs.runs > 0 && <p className="mt-2 text-[12px] text-dim">Plus {f.whatifs.runs} what-if question{f.whatifs.runs === 1 ? "" : "s"} to the world model ({f.whatifs.sims} simulations, {money(f.whatifs.usd, true)} estimated).</p>}
+        {f.whatifs.runs > 0 && <p className="mt-2 text-[12px] text-dim">Plus {n(f.whatifs.runs, "what-if question")} to the world model ({n(f.whatifs.sims, "simulation")}, {money(f.whatifs.usd, true)} estimated).</p>}
       </Section>
 
       <div className="grid gap-8 xl:grid-cols-2">

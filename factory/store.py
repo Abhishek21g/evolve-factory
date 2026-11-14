@@ -207,7 +207,7 @@ def audit_project(a, d, evs):
     w = next((w for w in d["work_orders"] if w["id"] == a["object"]), None)
     if w:
         return w["project"]
-    p = next((p for p in d["projects"] if p["name"] == a["object"]), None)
+    p = next((p for p in d["projects"] if a["object"] == p["name"] or a["detail"] == p["id"]), None)  # older "ran monitor": project id in detail
     if p:
         return p["id"]
     if a["object"] == "world model":  # a what-if: the project of the run that asked the same question
