@@ -25,6 +25,7 @@ POST /api/projects   {name, device}                 create a project (imports it
 POST /api/workorders {project, title, description}  create a work order
 POST /api/run        {wo}                           run a work order through the factory
 POST /api/whatif     {text}                         ask the world model a plain-English question
+POST /api/runs/retire {run, why}                    hide a what-if run (e.g. a typo) everywhere; logged in the audit trail
 POST /api/trace/links {project, item, kind, path|url, start, end, anchor, label}   add a trace link
 POST /api/trace/links/delete {project, id}          remove a trace link
 POST /api/trace/tests {project}                     rerun the project's requirement tests
@@ -298,6 +299,10 @@ class H(SimpleHTTPRequestHandler):
                 w = next((w for w in store._load()["work_orders"] if w["id"] == clip("wo", 20)), None)
                 if not w:
                     return self.send(404, {"error": "unknown work order"})
+                if os.environ.get("FACTORY_REPLAY") == "1" and not store.replayable(w):
+                    t = w["title"] if len(w["title"]) <= 80 else w["title"][:79].rsplit(" ", 1)[0] + "…"
+                    return self.send(409, {"error": f"Replay mode only plays recorded runs, and none is recorded for “{t}”. "
+                                                    "Run the factory live (demo/go.sh live) to build it."})
                 text = w["title"] + ("\n\n" + w["description"] if w["description"] else "")
                 if not start("build", text, w["id"], wo=w["id"], project=w["project"]):
                     return self.send(409, {"error": "factory busy"})
@@ -368,6 +373,8 @@ class H(SimpleHTTPRequestHandler):
                     subprocess.Popen([PY, os.path.join(ROOT, "factory/actions.py"), "supplier", json.dumps(d)],
                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 return self.send(201, d)
+            if u.path == "/api/runs/retire":
+                return self.send(200, {"retired": clip("run", 20), "events": store.retire_run(actor, clip("run", 20), clip("why", 200))})
             if u.path == "/api/whatif":
                 pid = store.project_id(clip("project", 60))
                 if not clip("text") or not start("whatif", clip("text"), project=pid):
@@ -383,6 +390,7 @@ if __name__ == "__main__":
     load_env()
     os.makedirs(os.path.join(ROOT, ".runs"), exist_ok=True)
     store.ensure_projects()
+    store.split_misplayed_runs()
     store.attribute_audit()
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8787
     print(f"Certus Factory server on http://localhost:{port}  (UI from web/out, memory: {memory.backend()})", flush=True)

@@ -104,16 +104,16 @@ def recordings(states, events):
     for pid, s in states.items():
         by_device.setdefault(s["project"]["device"], pid)
     for device, rel in (("insulin-pump", "demo/replay"), ("flight-controls", "demo/replay/aircraft")):
-        path = os.path.join(ROOT, rel, "whatif.jsonl")
-        if device not in by_device or not os.path.exists(path):
+        if device not in by_device:
             continue
-        evs = [e for e in (json.loads(l) for l in open(path) if l.strip()) if e["agent"] != "actions"]
-        pid, title, t, prev = by_device[device], evs[0].get("title", ""), 0.0, 0.0
-        for e in evs:
-            t, prev = t + min(max(e["t"] - prev, 0) / 4, 4), e["t"]
-            e["t"] = round(t, 2)
-        recs.setdefault((pid, "whatif", title.lower()), {"project": pid, "kind": "whatif", "prompt": title, "wo": None,
-                                                         "at": int(float(evs[0]["run"])), "run": evs[0]["run"], "events": evs, "callouts": None})
+        for path in sorted(glob.glob(os.path.join(ROOT, rel, "whatif*.jsonl"))):
+            evs = [e for e in (json.loads(l) for l in open(path) if l.strip()) if e["agent"] != "actions"]
+            pid, title, t, prev = by_device[device], evs[0].get("title", ""), 0.0, 0.0
+            for e in evs:
+                t, prev = t + min(max(e["t"] - prev, 0) / 4, 4), e["t"]
+                e["t"] = round(t, 2)
+            recs.setdefault((pid, "whatif", title.lower()), {"project": pid, "kind": "whatif", "prompt": title, "wo": None,
+                                                             "at": int(float(evs[0]["run"])), "run": evs[0]["run"], "events": evs, "callouts": None})
     out = []
     for n, r in enumerate(sorted(recs.values(), key=lambda r: (r["project"], r["kind"] != "build", -r["at"]))):
         r["id"] = f"{r['kind']}-{n + 1}"
@@ -128,7 +128,7 @@ events = json.loads(get("events?since=0"))["events"]
 replays = recordings(states, events)
 json.dump({"state": state(""), "states": states, "events": events, "replays": replays}, open(os.path.join(PUB, "snapshot.json"), "w"))
 
-wos = [w for s in states.values() for w in s.get("work_orders") or []]
+wos = [w for s in states.values() for w in (s.get("work_orders") or []) + (s.get("archived_work_orders") or [])]
 for w in wos:
     q = quote(w["id"], safe="")
     save(f"evidence?wo={w['id']}", get(f"evidence?wo={q}"), "txt")
