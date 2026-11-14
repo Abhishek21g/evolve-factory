@@ -48,11 +48,31 @@ order gets the next free number).
 If you run long, cut in this order: the Evidence scroll (−6 s), the Control Tower (−9 s), the After clip (−3 s).
 Never cut BLOCKED, Approved, or the World model loop.
 
+## SF beat (live, +20 s, stage and video)
+
+Shows the real Software Factory link. The replay itself never calls SF (the 25 U request is a recording), so this
+beat uses a run that already happened for real: `python3 gate/runner.py --wo WO-2 --pr` took SF Work Order WO-2
+"Add a quick-bolus preset" from Ready to a PR with no human step. Claude Code's first attempt passed the gate
+(5/5 requirement tests, world model 0 new severe lows). Say exactly that: "this one passed first try".
+
+Insert it right after **Approved** (the D4 row), or skip it if you are running long.
+
+| Do exactly this | On screen | Say |
+|---|---|---|
+| Switch to the pre-opened Software Factory tab (project board, logged in) and open WO-2 | WO-2 "Add a quick-bolus preset", status **In Review**, the PR linked on the Work Order | "Same pipeline, against a real Software Factory Work Order. The runner pulled it, wrote the change, the gate passed it, and the PR is linked back with no one touching it." |
+| Click the linked PR (#53) | The PR with `WO-2` in the title, one commit in `pump.c` and `pump.h` | "Blocked changes never get a PR. This one passed, so it did." |
+
+Before going on (T-10 min):
+
+- WO-2 must say **In Review** with its PR linked: `python3 gate/sf.py get WO-2` prints `[in_review]`. Do not reset it.
+- Pre-open the SF tab and the PR tab. Never run `runner.py` on stage: a real run takes minutes and opens a real PR.
+- If SF is slow or down, skip the beat; nothing else depends on it.
+
 ## Stage version (3:00, two speakers)
 
 Same path, with the pitch from [PITCH.md](PITCH.md) section 1: Abhishek talks over Home (hook and problem, 0:00-0:35),
 Murali presses Enter at 0:40 and narrates D1-D4 (BLOCKED at 0:50, BLOCKED again at 1:28, Approved at 1:52),
-then **World model loop** and **Traceability** for the close. Skip the hotline, Control Tower and Integrations
+then the **SF beat**, **World model loop** and **Traceability** for the close. Skip the hotline, Control Tower and Integrations
 on stage; they are good Q&A answers ("show me the supply chain", "can my agent ask the factory?").
 
 ## Q&A click paths
@@ -73,6 +93,7 @@ on stage; they are good Q&A answers ("show me the supply chain", "can my agent a
 | 4 | 0:38 | BLOCKED: "15 g snack, dose typed 10x" card (4 / 10) and SR-1 FAIL |
 | 5 | 0:24 | BLOCKED again: "120 g meal" card (2 / 10), all 5 tests PASS |
 | 6 | 0:18 | Approved; Code change (`MAX_EXTENDED_U 15.0`), Evidence |
+| 6b | 0:20 | SF beat: WO-2 In Review with PR linked, click the PR (optional) |
 | 7 | 0:20 | World model loop: Play Before (URGENT LOW), Play After (BOLUS EXCEEDS LIMIT), loop strip |
 | 8 | 0:12 | Traceability Graph, click H-1 |
 | 9 | 0:12 | Boeing → Incidents → Recorded sample call → Play, Stop |

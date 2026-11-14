@@ -1,13 +1,15 @@
 # Safety Gate: build brief, demo script, pitch
 
+> Original build brief, kept for the reasoning. What shipped is described in the README; the click path is [DEMO.md](DEMO.md).
+
 ## One line
 8090 Software Factory lets agents ship code with traceable intent. Safety Gate lets them ship it into regulated systems: every change is mapped to the hazards it touches and checked by executed tests before it can merge.
 
 ## Architecture
 
 ```
-SF Work Order (WO-12, status -> Ready)
-   │  SF MCP / REST API
+SF Work Order (WO-12)
+   │  `python3 gate/runner.py --wo WO-12 --pr` (SF REST API; an SF Automation on WO -> Ready is the next step)
    ▼
 runner  ── pulls WO + linked Requirements/Blueprints
    │
@@ -42,7 +44,7 @@ Already built: `gate/gate.py` (+ `gate/test_gate.py` self-check, passes).
 
 ## Demo script (3 min)
 0:00 Problem (20s): "Agents write code fast. In an insulin pump, a ventilator, a car, nobody can merge without safety evidence. Today that's weeks of manual traceability in DOORS/Jama. Speed isn't the bottleneck, proof is."
-0:20 Show SF board: WO-12 "Allow larger meal bolus for adult profile". Drag to **Ready**.
+0:20 Show SF board: WO-12 "Allow larger meal bolus for adult profile" (original plan; the built demo shows WO-2 In Review with its PR, see DEMO.md).
 0:35 Runner picks it up. Two agents start (show terminal/dashboard lanes).
 1:00 Agent's first patch raises `MAX_BOLUS_U`. **Safety Gate: BLOCKED** — SR-3 "single bolus ≤ max for profile, confirmed by user above threshold" → hazard H-1 overdose. Show matrix.
 1:30 Gate feeds failure back. Agent revises: profile-scoped limit + confirmation step + test.

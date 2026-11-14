@@ -83,7 +83,7 @@ About 440 spoken words, about 2:55 at 150 wpm.
 
 5. **What did the real agent do with the unsafe ticket?** (M) When we gave Claude Code the bare "larger bolus" ticket, it refused to raise the cap and asked for a human decision on SR-1. With the Safety Analyst's guidance, it built the extended bolus and passed on the first attempt. The blocked patch in the demo is the obvious patch, scripted, with real verdicts.
 
-6. **How does it connect to Software Factory?** (M) Through SF's External REST API: the runner fetches the Work Order by number, sets In Progress, opens the PR with `WO-xx` in the title, links it, and sets In Review, or Blocked if it never passes. Next step: trigger it from an SF Automation on WO → Ready.
+6. **How does it connect to Software Factory?** (M) Through SF's External REST API: the runner fetches the Work Order by number, sets In Progress, opens the PR with `WO-xx` in the title, links it, and sets In Review, or Blocked if it never passes. We ran it for real on WO-2 (Ready to a linked PR, In Review, no human step) and show it in the demo. Next step: trigger it from an SF Automation on WO → Ready.
 
 7. **Is the simulator credible?** (A) simglucose is an open-source version of the UVA/Padova type 1 diabetes model. The FDA accepted the original simulator in 2008 as a substitute for animal trials in preclinical closed-loop testing. Ours is the open reimplementation, so it's a credible model, not a qualified tool.
 
