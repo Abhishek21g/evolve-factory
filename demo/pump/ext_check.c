@@ -18,23 +18,30 @@ int main(void) {
     pump_state s = {0};
     pump_set_adult(&s, 1);
     /* SR-1 unchanged */
-    assert(request_bolus(&s, 24.0, 120) == REJECT_LIMIT);
-    /* confirmed large entry over 144 min = 10 U/h */
-    assert(request_extended_bolus(&s, 24.0, 144, 120) == OK);
-    assert(run(&s, 200, 120) > 23.999);
+    assert(request_bolus(&s, 20.0, 120) == REJECT_LIMIT);
+    /* confirmed large entry over 120 min = 10 U/h */
+    assert(request_extended_bolus(&s, 20.0, 120, 120) == OK);
+    assert(run(&s, 200, 120) > 19.999);
 
     /* unconfirmed large entry (no prior rejected request_bolus of that amount) */
     pump_state u = {0}; pump_set_adult(&u, 1);
-    assert(request_extended_bolus(&u, 24.0, 144, 120) == REJECT_LIMIT);
+    assert(request_extended_bolus(&u, 20.0, 120, 120) == REJECT_LIMIT);
     /* confirmation must match the amount */
+    request_bolus(&u, 20.0, 120);
+    assert(request_extended_bolus(&u, 18.0, 120, 120) == REJECT_LIMIT);
+    /* rate limit: 20 U over 60 min is 20 U/h */
+    request_bolus(&u, 20.0, 120);
+    assert(request_extended_bolus(&u, 20.0, 60, 120) == REJECT_LIMIT);
+    /* adult cap 20 U (WO-200's 24 U over 144 min caused late severe lows); non-adult cap 10 U */
     request_bolus(&u, 24.0, 120);
-    assert(request_extended_bolus(&u, 20.0, 144, 120) == REJECT_LIMIT);
-    /* rate limit: 24 U over 60 min is 24 U/h */
-    request_bolus(&u, 24.0, 120);
-    assert(request_extended_bolus(&u, 24.0, 60, 120) == REJECT_LIMIT);
-    /* adult cap 25 U; non-adult cap 10 U */
-    request_bolus(&u, 30.0, 120);
-    assert(request_extended_bolus(&u, 30.0, 180, 120) == REJECT_LIMIT);
+    assert(request_extended_bolus(&u, 24.0, 144, 120) == REJECT_LIMIT);
+    /* delivery must end within 2 h, even at a low rate */
+    assert(request_extended_bolus(&u, 10.0, 121, 120) == REJECT_LIMIT);
+    assert(request_extended_bolus(&u, 10.0, 120, 120) == OK);
+    /* exactly 10 U/h must pass despite float rounding: 120 g / CR 9 = 13.33 U over 80 min */
+    pump_state f = {0}; pump_set_adult(&f, 1);
+    request_bolus(&f, 120.0 / 9, 120);
+    assert(request_extended_bolus(&f, 120.0 / 9, 80, 120) == OK);
     pump_state c = {0};
     request_bolus(&c, 12.0, 120);
     assert(request_extended_bolus(&c, 12.0, 72, 120) == REJECT_LIMIT);
