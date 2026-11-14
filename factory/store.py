@@ -115,13 +115,19 @@ def wo_status(wo_id, evs, running):
 
 
 def git_changes(wo_id):
-    """Commits on the work order's branch (who changed what in code)."""
+    """Commits on the work order's branch (who changed what in code). A replayed run has the recording instead."""
+    rec = _load_run(f"{wo_id}.commits.json")
+    if rec is not None:
+        return rec
     out = subprocess.run(["git", "-C", ROOT, "log", "--format=%H%x09%an%x09%at%x09%s", f"origin/main..wo/{wo_id}"],
                          capture_output=True, text=True).stdout
     return [dict(zip(("sha", "author", "ts", "subject"), l.split("\t"))) for l in out.splitlines() if l.count("\t") == 3]
 
 
 def diff(wo_id):
+    p = os.path.join(ROOT, ".runs", f"{wo_id}.diff.txt")
+    if os.path.exists(p):
+        return open(p).read()
     return subprocess.run(["git", "-C", ROOT, "diff", "--stat", "-p", f"origin/main...wo/{wo_id}", "--", "demo/"],
                           capture_output=True, text=True).stdout[:60000]
 

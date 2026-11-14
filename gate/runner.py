@@ -94,7 +94,12 @@ def run_checks(checks, wt, base, wo, gate_json):
 def run_agent(wt, prompt):
     # Prompt goes on stdin: --allowedTools is variadic and would swallow a trailing prompt argument.
     cmd = shlex.split(os.environ.get("AGENT_CMD", DEFAULT_AGENT))
-    p = subprocess.run(cmd, cwd=wt, input=prompt, capture_output=True, text=True)
+    try:  # a hung agent must not hang the factory: whatever it wrote so far still goes through the gate
+        p = subprocess.run(cmd, cwd=wt, input=prompt, capture_output=True, text=True,
+                           timeout=int(os.environ.get("AGENT_TIMEOUT", "600")))
+    except subprocess.TimeoutExpired as e:
+        out = e.stdout or b""
+        return f"(agent timed out after {e.timeout}s)\n" + (out.decode(errors="replace") if isinstance(out, bytes) else out)[-1500:]
     return p.stdout[-1500:] + p.stderr[-500:]
 
 
@@ -169,6 +174,9 @@ def main(argv=None):
         if "Failed to authenticate" in log:
             say(coder, "blocked", "Agent CLI not logged in", wo=args.wo)
             sys.exit(f"Agent CLI is not logged in. Run `claude` then /login, and retry.\n{log}")
+        if "hit your" in log and "limit" in log:
+            say(coder, "blocked", "Agent CLI usage limit reached: " + log.strip()[-120:], wo=args.wo)
+            sys.exit(f"Agent CLI usage limit reached; use replay mode (demo/go.sh replay) or another AGENT_CMD.\n{log}")
         commit(wt, f"{args.wo}: {text.splitlines()[0][:60]} (attempt {attempt + 1})")
         if sh(["git", "diff", "--quiet", f"{base_ref}..HEAD"], wt, check=False).returncode == 0:
             # An empty change must never pass the gate just because nothing was affected.
