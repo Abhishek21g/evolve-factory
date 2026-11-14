@@ -13,6 +13,7 @@ import { Traceability } from "@/components/trace/Traceability";
 import { AgentPage, AgentTeam } from "@/components/Agents";
 import { CertusMark } from "@/components/CertusMark";
 import { UserMenu } from "@/components/auth/UserMenu";
+import { Integrations } from "@/components/integrations/Integrations";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { WorldLoopPage } from "@/components/WorldLoop";
 import { Automations, SourceOfRecord } from "@/components/Automations";
@@ -31,6 +32,7 @@ function useRoute() {
     f(); addEventListener("hashchange", f);
     return () => removeEventListener("hashchange", f);
   }, []);
+  if (hash.startsWith("/settings/")) return { project: "", page: hash.split("/")[2], item: "" };
   const [, , project = "", page = "overview", item = ""] = (hash || "/").split("/");
   return { project: hash.startsWith("/p/") ? project : "", page: hash === "/control-tower" ? "control-tower" : page, item };
 }
@@ -60,6 +62,7 @@ export default function App() {
           </div>
         )}
         {route.project && !p && !unknown ? null :
+          route.page === "integrations" ? <Integrations {...ctx} /> :
           !p ? (route.page === "control-tower" ? <AllTowers {...ctx} /> : <Projects {...ctx} />) :
           route.page === "control-tower" ? <ControlTower {...ctx} /> :
           route.page === "suppliers" ? <Suppliers {...ctx} item={route.item} /> :
@@ -126,7 +129,8 @@ function Sidebar({ state, project, page, me, setMe, live }: { state: State; proj
           <span className={`size-2 rounded-full ${live ? "bg-ok shadow-[0_0_8px] shadow-ok/60" : "bg-dim"}`} />
           {live ? "Factory online" : "Read-only snapshot"} <span className="text-dim">· memory {state.status?.memory || "local"}</span>
         </div>
-        <UserMenu humans={humans} me={me} setMe={setMe} />
+        <UserMenu humans={humans} me={me} setMe={setMe} active={page === "integrations"}
+          integrations={project ? `#/p/${project}/integrations` : "#/settings/integrations"} />
       </div>
     </aside>
   );
