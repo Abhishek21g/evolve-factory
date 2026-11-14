@@ -81,6 +81,19 @@ Demo beat: agent makes a "harmless" change → Safety Gate catches it violates h
 Why it wins: uses SF MCP (judges' product), shows verification + control (their thesis), hits 8090's real customers (healthcare/CMS), deep tech (parsing + graph), a story Chamath remembers.
 Rule check: ask on Discord whether reusing our own MIT `standards-library` is allowed; else rebuild minimal taxonomy fresh tonight.
 
+## 2c. Ideas v2 (after 8090 deep dive, see docs/RESEARCH.md)
+
+Key finding: SF already has **Drift Bot** (LLM compares PR vs Blueprints, posts comments, sets `drift-bot` status). Don't rebuild it. Win by doing what it can't: **execute and prove**.
+
+1. **Safety Gate (top pick).** WO moved to Ready (SF automation trigger) -> our runner pulls WO over MCP -> Claude Code + Codex build in parallel worktrees -> safety agent maps diff to hazards/requirements -> tests per safety requirement actually run -> PR with `WO-xxx`, traceability matrix, and a `safety-gate` commit status next to `drift-bot`. Proof, not opinion.
+2. **Executable Rules (strong #2, compilers-heavy).** Continue the CMS story: extract COBOL rules as Given/When/Then with line traces (like 8090), then compile each rule into a test that runs on the original (GnuCOBOL) and on the agent-written modern port. Every rule shows green on both = behavior-locked modernization. Pitch: "8090 documents the rules; we make them the test suite for the replacement."
+3. **Blueprint-change propagator.** SF docs admit WOs don't update when Blueprints change. Automation on Blueprint Edited -> agent diffs versions -> proposes WO updates + re-runs affected tests. Smaller, very aligned, less flashy.
+4. **Autonomous WO fleet ("lights-out factory").** Drag N WOs to Ready, fleet ships N verified PRs while you watch the SF board update live. Great visual; many teams may try a version.
+
+Combo play if time allows: 1 + 4 (fleet with safety gate) or 2 + 4.
+
+Hard deadline: event ends Sat 7:00 PM; code freeze not public, plan for **~2-3 PM** until Discord confirms.
+
 ## 3. Project ideas (earlier options)
 
 ### A. RECOMMENDED — "Legacy Lens": traced legacy modernization on top of Software Factory
