@@ -15,6 +15,7 @@ python3 dashboard/demo_run.py              # in another terminal: plays WO-12 li
 
 - One lane per agent (Planner, Safety Analyst, Claude, Codex, Safety Gate, Reviewer), traceability matrix, event log.
 - Agents report via `dashboard/emit.py` (Python import or shell: `python3 dashboard/emit.py gate working "msg"`). The runner should call it.
+- `gate/runner.py` already reports to the feed (planner, coder, gate, reviewer events, plus the gate matrix). Set `AGENT_NAME=coder-codex` to label a Codex run; set `EVENTS=path` to write the feed elsewhere.
 - `gate/gate.py --json out.json` gives the matrix data; pass it as `gate=` on the gate event.
 - No live feed (or `?replay`) plays the recorded run `dashboard/demo-run.jsonl`. That is the stage fallback and what a static Vercel deploy shows. `&speed=2` speeds it up.
 - `demo_run.py`: agent patches are scripted for now; gate verdicts are real (each candidate is checked in a throwaway worktree).
