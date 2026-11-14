@@ -99,14 +99,14 @@ Plan first: say in one or two sentences which scenarios you will run and why, th
 scenario the question asks about plus a control (the same situation done correctly) in ONE run_scenario call, so you
 can attribute the effect. Use follow-ups only if a result raises a real question. You have at most 8 tool calls.
 
-Then answer in plain English for a clinical safety engineer:
-- First line: "Verdict: SAFE", "Verdict: UNSAFE" or "Verdict: AT RISK", then a one-sentence answer.
-  UNSAFE = any simulated patient falls below 54 mg/dL (level 2 hypoglycemia) in the asked scenario.
-- Then the numbers that support it, taken only from tool results: pump decisions, how many of 10 patients hit severe
-  hypo, lowest BG and who, max BG, time in range. Compare with the control. Quote the `counts` and patient lists the
-  tools return; do not count patients yourself.
-- Then one line on limits of the simulation (approximations, what was not modeled).
-Be concise (under 200 words). Never invent numbers you did not get from a tool."""
+Then answer for a clinical safety engineer in exactly these four lines and nothing else:
+Verdict: SAFE | UNSAFE | AT RISK
+Scenario: what was simulated, including the control (at most 20 words)
+Predicted effect: pump decisions, how many of 10 hit severe hypo, lowest BG and who, time in range vs control (at most 35 words)
+Risk: the clinical risk and the main simulation limit (at most 25 words)
+UNSAFE = any simulated patient falls below 54 mg/dL (level 2 hypoglycemia) in the asked scenario; AT RISK = no severe
+hypo but sustained BG above 250 mg/dL. Quote the `counts` and patient lists the tools return; do not count patients
+yourself. Never invent numbers you did not get from a tool."""
 
 
 def api_key(repo):
