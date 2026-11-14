@@ -2,7 +2,7 @@
 #ifndef PUMP_H
 #define PUMP_H
 
-#define MAX_BOLUS_U       25.0  /* SR-1 mitigates H-1 overdose */
+#define MAX_BOLUS_U       10.0  /* SR-1 mitigates H-1 overdose */
 #define MAX_DAILY_U       60.0  /* SR-2 mitigates H-2 cumulative overdose */
 #define MIN_BG_FOR_BOLUS  70    /* SR-3 mitigates H-3 hypoglycemia (mg/dL) */
 #define OCCLUSION_KPA     80.0  /* SR-4 mitigates H-4 missed delivery from blocked line */
@@ -13,13 +13,16 @@ typedef enum { OK = 0, REJECT_LIMIT, REJECT_DAILY, REJECT_LOW_BG, ALARM_OCCLUSIO
 typedef struct {
     double delivered_today_u;
     long last_heartbeat_ms;
+    int adult;               /* extended bolus is adult-only */
+    double ext_remaining_u;  /* extended bolus still to deliver */
+    double ext_rate_u_min;   /* extended bolus units per minute */
 } pump_state;
 
 pump_status request_bolus(pump_state *s, double units, int bg_mg_dl);
 pump_status check_occlusion(double line_pressure_kpa);
 pump_status check_watchdog(const pump_state *s, long now_ms);
 
-/* Optional extended bolus interface. Not implemented on main. A Work Order that adds extended delivery
+/* Optional extended bolus interface. A Work Order that adds extended delivery
  * must implement exactly these signatures: the world model (sim/world.py) drives them once per minute
  * and doses each simulated patient with whatever the code adds to delivered_today_u. */
 void pump_set_adult(pump_state *s, int adult);
