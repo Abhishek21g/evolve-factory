@@ -4,8 +4,9 @@ Usage: python3 sim/world.py --repo PATH [--base main] [--json out.json] [--wo WO
 Exit 0 = change adds no new severe hypoglycemia, 1 = BLOCKED.
 
 Patients: simglucose (MIT), the open-source UVA/Padova T1D simulator, 10 virtual adults.
-The candidate's demo/pump/pump.c is compiled and called through ctypes, so the code under review
-decides every dose. Deterministic: fixed cohort, fixed scenarios, no sensor noise, no randomness.
+The candidate's demo/pump/pump.c is compiled with sim/shim.c against the candidate's own pump.h and
+stepped once per minute, so the code under review decides every dose, and insulin given is what the
+code records as delivered. Deterministic: fixed cohort, fixed scenarios, no sensor noise, no randomness.
 
 Scenarios (fixed by the safety engineer, agents cannot edit this file):
   large-meal    120 g meal; user asks for the correct dose (carbs / carb ratio). If the pump rejects it
@@ -44,62 +45,79 @@ OK, REJECT_LIMIT = 0, 1
 CR = pd.read_csv(os.path.join(os.path.dirname(simglucose.__file__), "params", "Quest.csv")).set_index("Name")["CR"]
 
 
-class State(ctypes.Structure):
-    _fields_ = [("delivered_today_u", ctypes.c_double), ("last_heartbeat_ms", ctypes.c_long)]
+SHIM = os.path.join(os.path.dirname(os.path.abspath(__file__)), "shim.c")
 
 
 def load_pump(src_dir, out_dir):
+    """Compile candidate pump.c + sim/shim.c against the candidate's own pump.h (no struct mirroring)."""
     lib = os.path.join(out_dir, "libpump.so")
-    subprocess.run(["cc", "-shared", "-fPIC", "-o", lib, os.path.join(src_dir, "pump.c")], check=True)
+    flags = ["-undefined", "dynamic_lookup"] if sys.platform == "darwin" else []  # weak optional symbols
+    p = subprocess.run(["cc", "-shared", "-fPIC", *flags, "-I", src_dir, "-o", lib,
+                        os.path.join(src_dir, "pump.c"), SHIM], capture_output=True, text=True)
+    if p.returncode:
+        raise RuntimeError("pump does not match the world-model interface in pump.h:\n" + p.stderr[-1500:])
     pump = ctypes.CDLL(lib)
-    pump.request_bolus.argtypes = [ctypes.POINTER(State), ctypes.c_double, ctypes.c_int]
-    ext = getattr(pump, "request_extended_bolus", None)
-    if ext:
-        ext.argtypes = [ctypes.POINTER(State), ctypes.c_double, ctypes.c_int, ctypes.c_int]
-    return pump, ext
+    pump.sim_new.restype = ctypes.c_void_p
+    pump.sim_new.argtypes = [ctypes.c_int]
+    pump.sim_free.argtypes = [ctypes.c_void_p]
+    pump.sim_delivered.restype = ctypes.c_double
+    pump.sim_delivered.argtypes = [ctypes.c_void_p]
+    pump.sim_bolus.argtypes = [ctypes.c_void_p, ctypes.c_double, ctypes.c_int]
+    pump.sim_ext.argtypes = [ctypes.c_void_p, ctypes.c_double, ctypes.c_int, ctypes.c_int]
+    pump.sim_tick.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    return pump
 
 
-def plan(pump, ext, scenario, cr, bg):
-    """Ask the pump under test for a dose. Returns (carbs_g, [(minute, units_per_min, minutes)], note)."""
-    s = State(0, 0)
+def decide(pump, s, scenario, cr, bg):
+    """User asks the pump under test for a meal dose. Returns (carbs_g, extended_active, note)."""
     if scenario == "large-meal":
-        carbs, want = 120, 120 / cr
-        if pump.request_bolus(ctypes.byref(s), want, bg) == OK:
-            return carbs, [(MEAL_AT, want, 1)], f"bolus {want:.1f} U"
-        if ext:
+        want = 120 / cr
+        if pump.sim_bolus(s, want, bg) == OK:
+            return 120, False, f"bolus {want:.1f} U"
+        if pump.sim_has_ext():
             mins = max(60, math.ceil(want * 6))  # user picks the shortest duration at 10 U/h
-            if ext(ctypes.byref(s), want, bg, mins) == OK:
-                return carbs, [(MEAL_AT, want / mins, mins)], f"extended {want:.1f} U over {mins} min"
-        return carbs, [], f"{want:.1f} U rejected, no insulin"
-    carbs, want = 15, 15 / cr
+            if pump.sim_ext(s, want, mins, bg) == OK:
+                return 120, True, f"extended {want:.1f} U over {mins} min"
+        return 120, False, f"{want:.1f} U rejected, no insulin"
+    want = 15 / cr
     typed = want * 10
-    if pump.request_bolus(ctypes.byref(s), typed, bg) == OK:
-        return carbs, [(MEAL_AT, typed, 1)], f"typo {typed:.1f} U delivered"
-    if pump.request_bolus(ctypes.byref(s), want, bg) == OK:
-        return carbs, [(MEAL_AT, want, 1)], f"typo {typed:.1f} U rejected, re-entered {want:.1f} U"
-    return carbs, [], "rejected"
+    if pump.sim_bolus(s, typed, bg) == OK:
+        return 15, False, f"typo {typed:.1f} U delivered"
+    if pump.sim_bolus(s, want, bg) == OK:
+        return 15, False, f"typo {typed:.1f} U rejected, re-entered {want:.1f} U"
+    return 15, False, "rejected"
 
 
-def simulate(name, carbs, doses):
+def simulate(pump, name, scenario, cr):
+    """Pump in the loop, one step per minute. Insulin given = what the pump code itself recorded as
+    delivered (delivered_today_u delta), never what we assume it would deliver."""
     p = T1DPatient.withName(name)
     basal = p._params["u2ss"] * p._params["BW"] / 6000  # U/min, simglucose convention
-    trace = []
-    for t in range(MINUTES):
-        extra = sum(u for start, u, dur in doses if start <= t < start + dur)
-        p.step(Action(CHO=carbs if t == MEAL_AT else 0, insulin=basal + extra))
-        trace.append(float(p.observation.Gsub))
-    return trace
+    s = pump.sim_new(1)  # adult profile
+    trace, carbs, ext, note = [], 0, False, ""
+    try:
+        for t in range(MINUTES):
+            bg = int(p.observation.Gsub)
+            before = pump.sim_delivered(s)
+            if t == MEAL_AT:
+                carbs, ext, note = decide(pump, s, scenario, cr, bg)
+            elif ext:
+                pump.sim_tick(s, bg)
+            dose = max(0.0, pump.sim_delivered(s) - before)
+            p.step(Action(CHO=carbs if t == MEAL_AT else 0, insulin=basal + dose))
+            trace.append(float(p.observation.Gsub))
+    finally:
+        pump.sim_free(s)
+    return note, trace
 
 
 def cohort(src_dir):
     with tempfile.TemporaryDirectory() as d:
-        pump, ext = load_pump(src_dir, d)
+        pump = load_pump(src_dir, d)
         results = []
         for scenario in ("large-meal", "decimal-slip"):
             for name in PATIENTS:
-                bg0 = int(T1DPatient.withName(name).observation.Gsub)
-                carbs, doses, note = plan(pump, ext, scenario, float(CR[name]), bg0)
-                trace = simulate(name, carbs, doses)
+                note, trace = simulate(pump, name, scenario, float(CR[name]))
                 results.append({"scenario": scenario, "patient": name, "note": note,
                                 "min": round(min(trace)), "max": round(max(trace)),
                                 "hypo": min(trace) < SEVERE_HYPO, "hyper_min": sum(g > HYPER for g in trace),
@@ -152,7 +170,11 @@ def main(argv=None):
     a.add_argument("--json")
     a.add_argument("--wo")
     args = a.parse_args(argv)
-    res = run(args.repo, args.base)
+    try:
+        res = run(args.repo, args.base)
+    except RuntimeError as e:  # candidate broke the interface contract: deterministic BLOCK with the reason
+        print(f"## World model: BLOCKED\n\n{e}")
+        return 1
     if args.json:
         json.dump(res, open(args.json, "w"))
     try:  # report to the dashboard; never fail the check because of the feed
