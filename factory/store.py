@@ -10,6 +10,8 @@ import subprocess
 import threading
 import time
 
+import tracelinks
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PATH = os.path.join(ROOT, ".runs", "factory.json")
 FEED = os.path.join(ROOT, "dashboard", "events.jsonl")
@@ -197,7 +199,7 @@ def state(project_id, running):
                           "action": "committed code", "object": w["id"], "detail": f"{c['sha'][:7]} {c['subject']}"})
     out["agents"] = agent_roster(evs)
     out.update({"hazards": spec["hazards"], "requirements": spec["requirements"], "work_orders": wos,
-                "audit": sorted(audit, key=lambda a: -a["ts"])[:300], "trace": trace(spec, wos, proj["repo"])})
+                "audit": sorted(audit, key=lambda a: -a["ts"])[:300], "trace": tracelinks.build(spec, wos, proj, proj["device"])})
     return out
 
 
@@ -213,44 +215,3 @@ def agent_roster(evs):
         a["state"] = e["state"] if e["run"] == last_run else "idle"
     return out
 
-
-def trace(spec, wos, repo="demo/pump"):
-    """Graph: hazard -> requirement -> code symbol / test -> work order -> verification."""
-    nodes, edges = [], []
-    add = lambda i, kind, label, sub="", tone="": nodes.append({"id": i, "kind": kind, "label": label, "sub": sub, "tone": tone})  # noqa: E731
-    for h in spec["hazards"]:
-        add(h["id"], "hazard", h["id"], h["title"], "fail" if h.get("severity") in ("S3", "Catastrophic", "Hazardous") else "warn")
-    syms = {}
-    for r in spec["requirements"]:
-        add(r["id"], "requirement", r["id"], r["text"])
-        for h in r["hazards"]:
-            edges.append((h, r["id"]))
-        tid = f"test:{r['id']}"
-        add(tid, "test", f"test {r['id']}", "requirement test", "ok")
-        edges.append((r["id"], tid))
-        for s in r.get("symbols", [])[:2]:
-            syms.setdefault(s, []).append(r["id"])
-    for s, rs in syms.items():
-        add(f"code:{s}", "code", s, repo)
-        for r in rs:
-            edges.append((r, f"code:{s}"))
-    for w in wos:
-        if w["status"] == "Draft":
-            continue
-        add(w["id"], "work_order", w["id"], w["title"], {"Approved": "ok", "Blocked": "fail"}.get(w["status"], ""))
-        for row in (w.get("gate") or {}).get("rows", []):
-            edges.append((f"test:{row['id']}", w["id"]))
-            for why in row.get("why", []):  # code this work order changed
-                if why.startswith("symbol ") and f"code:{why[7:]}" in {n["id"] for n in nodes}:
-                    edges.append((f"code:{why[7:]}", w["id"]))
-        if w.get("world"):
-            sid = f"sim:{w['id']}"
-            res = w["world"]["results"]
-            add(sid, "simulation", f"{len(res)} simulations", f"world model {w['world']['verdict']}",
-                "ok" if w["world"]["verdict"] == "PASS" else "fail")
-            edges.append((w["id"], sid))
-        if w.get("evidence"):
-            eid = f"ev:{w['id']}"
-            add(eid, "evidence", "Evidence pack", w["evidence"]["decision"], "ok" if w["evidence"]["decision"] == "APPROVED" else "fail")
-            edges.append((w["id"], eid))
-    return {"nodes": nodes, "edges": [{"source": a, "target": b} for a, b in dict.fromkeys(edges)]}

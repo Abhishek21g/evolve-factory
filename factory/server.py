@@ -7,11 +7,16 @@ GET  /api/events?since=N           live agent events from line N
 GET  /api/evidence?wo=WO-x         evidence pack (markdown)      GET /api/diff?wo=WO-x   code change
 GET  /api/worldmodel?wo=WO-x       world-model loop: every attempt's simulation, diagnosis, fix and re-simulation
 GET  /api/memory?q=...             org memory and recall (HydraDB, local fallback)
+GET  /api/trace/file?path=P        a git-tracked repo file, read-only (anything else is refused)
+GET  /api/trace/search?q=&project= repo files, doc sections and code lines for the trace-link picker
 GET  /api/connect/composio         redirects to a Composio Connect Link to authorize GitHub (one time)
 POST /api/projects   {name, device}                 create a project (imports its hazard log)
 POST /api/workorders {project, title, description}  create a work order
 POST /api/run        {wo}                           run a work order through the factory
 POST /api/whatif     {text}                         ask the world model a plain-English question
+POST /api/trace/links {project, item, kind, path|url, start, end, anchor, label}   add a trace link
+POST /api/trace/links/delete {project, id}          remove a trace link
+POST /api/trace/tests {project}                     rerun the project's requirement tests
 POST actions carry the acting person in the X-Actor header (recorded in the audit trail).
 Everything else is served from web/out. Keys are read from .env and never sent to the browser.
 """
@@ -30,6 +35,7 @@ sys.path.insert(0, os.path.join(ROOT, "factory"))
 import memory  # noqa: E402
 import store  # noqa: E402
 import worldmodel  # noqa: E402
+import tracelinks  # noqa: E402
 
 FEED = store.FEED
 STATIC = os.path.join(ROOT, "web", "out")
@@ -149,7 +155,18 @@ class H(SimpleHTTPRequestHandler):
             return self.send(200, {"total": len(lines), "events": [json.loads(l) for l in lines[since:] if l.strip()]})
         if u.path == "/api/evidence":
             p = os.path.join(ROOT, ".runs", f"{wo}.evidence.md")
-            return self.send(200, open(p).read(), "text/markdown") if os.path.exists(p) else self.send(404, {"error": "none"})
+            if not os.path.exists(p):
+                return self.send(404, {"error": "none"})
+            w = next((w for w in store._load()["work_orders"] if w["id"] == wo), None)
+            dev = store.device(w["project"] if w else "")
+            gate = os.path.join(ROOT, ".runs", f"{wo}.gate.json")
+            reqs = {r["id"] for r in json.load(open(gate))["rows"]} if os.path.exists(gate) else set()
+            return self.send(200, open(p).read() + tracelinks.evidence_section(dev["id"], store.safety_spec(dev), reqs), "text/markdown")
+        if u.path == "/api/trace/file":
+            f = tracelinks.read_file(q.get("path", ""))
+            return self.send(200, f) if f else self.send(404, {"error": "not a file in the repository"})
+        if u.path == "/api/trace/search":
+            return self.send(200, tracelinks.search(q.get("q", ""), store.device(q.get("project", ""))["repo"]))
         if u.path == "/api/memory":  # ?q=recall query &project=ID (scope to its device; omit for all)
             dev = store.device(q["project"])["id"] if q.get("project") else None
             hits, info = memory.search(q["q"], k=8, project=dev, collections=memory.COLLECTIONS) if q.get("q") else ([], None)
@@ -212,6 +229,21 @@ class H(SimpleHTTPRequestHandler):
                 start("build", t, w["id"], wo=w["id"], project=w["project"])
                 store.log(actor, "started run", w["id"], t[:120])
                 return self.send(202, {"started": w["id"], "id": w["id"]})
+            if u.path.startswith("/api/trace/"):
+                if not any(p["id"] == clip("project", 60) for p in store._load()["projects"]):
+                    return self.send(404, {"error": "unknown project"})
+                dev = store.device(clip("project", 60))
+                spec = store.safety_spec(dev)
+                if u.path == "/api/trace/links":
+                    link = tracelinks.add_link(dev["id"], spec, actor, body)
+                    store.log(actor, "added trace link", link["item"], f"{link['kind']} {link.get('url') or link['path']}")
+                    return self.send(201, link)
+                if u.path == "/api/trace/links/delete":
+                    link = tracelinks.remove_link(dev["id"], clip("id", 10))
+                    store.log(actor, "removed trace link", link["item"], f"{link['kind']} {link.get('url') or link['path']}")
+                    return self.send(200, link)
+                if u.path == "/api/trace/tests":
+                    return self.send(200, tracelinks.run_tests(dev["id"], spec))
             if u.path == "/api/whatif":
                 if not clip("text") or not start("whatif", clip("text"), project=clip("project", 60)):
                     return self.send(409, {"error": "factory busy or empty question"})
@@ -229,4 +261,6 @@ if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8787
     print(f"Certus Factory server on http://localhost:{port}  (UI from web/out, memory: {memory.backend()})", flush=True)
     threading.Thread(target=warm, daemon=True).start()
+    for k, dev in store.DEVICES.items():  # requirement test results ready before anyone opens Traceability
+        tracelinks.warm_tests(k, store.safety_spec(dev))
     ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
