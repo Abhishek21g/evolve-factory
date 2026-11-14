@@ -14,8 +14,10 @@ async function setup(page: Page) {
   const st = await (await page.request.get("/api/state")).json();
   expect(st.status?.replay, "e2e must run against a replay-mode server: it never calls an LLM").toBe(true);
   const problems: string[] = [];
-  page.on("pageerror", e => problems.push(`uncaught: ${e.message}`));
-  page.on("console", m => { if (m.type() === "error") problems.push(`console error: ${m.text()}`); });
+  const ignore = process.env.QA_IGNORE ? new RegExp(process.env.QA_IGNORE) : null; // known, reported issues only
+  const add = (x: string) => { if (!ignore?.test(x)) problems.push(x); };
+  page.on("pageerror", e => add(`uncaught: ${e.message}`));
+  page.on("console", m => { if (m.type() === "error") add(`console error: ${m.text()}`); });
   return { projects: st.projects as Project[], problems };
 }
 
