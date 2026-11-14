@@ -7,6 +7,8 @@
                              the disagree threshold, failed vanes, gusts, dose typos, skipped meals), flown on main;
                              every failure is diagnosed by factory/worldmodel.py
 
+No LLM: every monitor is deterministic (simulation, requirement tests, git, safety.json); the processes it starts get
+no model keys or agent commands (record.offline_env), so a scheduled run can never spend on an LLM.
 Scheduler: one in-process timer thread (start()), one monitor run at a time, simulations niced and never written to the
 dashboard feed. MONITORS=off disables the timer; "Run now" still works. History: .runs/monitors.json; evidence per run:
 .runs/monitors/<run>.json and .md.
@@ -70,7 +72,7 @@ def simulate(dev, scenarios, tag):
         if scenarios:
             json.dump(scenarios, open(os.path.join(d, "s.json"), "w"))
             args += ["--scenarios", os.path.join(d, "s.json")]
-        env = {**os.environ, "EVENTS": os.devnull}  # monitors never write to the dashboard feed
+        env = {**record.offline_env(), "EVENTS": os.devnull}  # monitors never write to the dashboard feed
         subprocess.run(args, cwd=ROOT, env=env, capture_output=True, timeout=900)
         world = json.load(open(os.path.join(d, "w.json")))
     json.dump(world, open(cache, "w"))
