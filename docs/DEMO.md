@@ -19,7 +19,8 @@ demo/go.sh check         # health check only, any time
    no server needed). It holds the 25 U run as WO-345 (badge **Approved**; Activity lists both BLOCKED attempts;
    **Code change** / **Evidence** / **Pull request** work) plus the recorded what-if. End state only: the blocks do
    not animate. As of Nov 14 05:30 it was deployed at 04:37, before the new design system, **World model loop**,
-   **Source of Record** and **Automations** landed; run `demo/deploy.sh` (needs `vercel login`) to put the current UI there.
+   **Source of Record** and **Automations** landed; run `demo/deploy.sh` (needs `vercel login`) to put the current UI there. From a clean checkout (no
+   `.runs/factory.json`) it ships the committed `web/public/snapshot.json` (still has WO-345); it no longer deploys 0 projects.
 4. Rehearsing? Just re-run `demo/go.sh replay`: it adds a fresh draft work order each time. Every run is real on
    the side: with GitHub connected, **Composio files a real GitHub issue** with the evidence pack ~4 s after the
    verdict, and a lesson is written to HydraDB. Close rehearsal issues afterwards (`gh issue list`).
