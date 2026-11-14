@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity, ArrowUp, BookCheck, Bot, Check, ChevronsUpDown, Info, Orbit, Boxes, Brain, FileCheck2, FlaskConical, GitBranch, GitPullRequest, Home, ListChecks, Network, Plus, Play, Search, ShieldAlert, Timer, Users,
+  Activity, ArrowUp, BookCheck, Bot, Check, ChevronsUpDown, Info, Orbit, Boxes, Brain, FileCheck2, FlaskConical, GitBranch, GitPullRequest, Home, ListChecks, Network, Phone, Plus, Play, Search, ShieldAlert, Timer, Users,
 } from "lucide-react";
 import { useFactoryState, type MemoryView, type Member, type State, type WorkOrder } from "@/lib/api";
 import type { Ev } from "@/lib/feed";
@@ -14,6 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { LoopSummary, SimVsWorld, WorldLoopPage } from "@/components/WorldLoop";
 import { Automations, SourceOfRecord } from "@/components/Automations";
 import { CockpitCallouts } from "@/components/Callouts";
+import { Incidents } from "@/components/Hotline";
 import { Ago, Avatar, Badge, Button, Field, Modal, PageHead, Replayed, Section, Table, Who, ago, inputCls } from "@/components/ui";
 
 /* ---------- routing: #/p/<project>/<page>[/<wo>] ---------- */
@@ -63,6 +64,7 @@ export default function App() {
           route.page === "traceability" ? <Traceability {...ctx} item={route.item} /> :
           route.page === "source-of-record" ? <SourceOfRecord {...ctx} /> :
           route.page === "automations" ? <Automations {...ctx} /> :
+          route.page === "incidents" ? <Incidents {...ctx} id={route.item} /> :
           route.page === "audit" ? <AuditTrail {...ctx} /> :
           route.page === "team" ? <Team {...ctx} /> :
           route.page === "agents" && route.item ? <AgentPage {...ctx} id={route.item} /> :
@@ -81,7 +83,7 @@ function Sidebar({ state, project, page, me, setMe, live }: { state: State; proj
   const nav = [
     ["overview", "Home", Home], ["agents", "Agents", Bot], ["memory", "Memory", Brain], null,
     ["requirements", "Requirements", ShieldAlert], ["work-orders", "Work Orders", ListChecks], ["world-loop", "World Model", Orbit], ["world-model", "Simulations", FlaskConical],
-    ["traceability", "Traceability", Network], ["source-of-record", "Source of Record", BookCheck], ["automations", "Automations", Timer], null, ["audit", "Audit Trail", Activity], ["team", "Team", Users],
+    ["traceability", "Traceability", Network], ["source-of-record", "Source of Record", BookCheck], ["automations", "Automations", Timer], ["incidents", "Incidents", Phone], null, ["audit", "Audit Trail", Activity], ["team", "Team", Users],
   ] as const;
   const humans = state.team.filter(m => m.kind === "human");
   const item = (active: boolean) => `group flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm font-medium transition-colors ${active ? "bg-white/[.07] text-ink" : "text-mute hover:bg-white/[.04] hover:text-ink"}`;
