@@ -131,10 +131,9 @@ export function Modal({ title, children, onClose, wide }: { title: string; child
 }
 
 /** Honest note on a run served from a recorded real run instead of fresh agents. */
-export const Replayed = ({ r }: { r?: Replay | null }) => r ? (
+export const Replayed = ({ r }: { r?: Replay | null }) => r && !r.hosted ? (
   <span className="text-xs text-dim">
-    {r.hosted ? <span className="rounded border border-line px-1.5 py-0.5 text-mute">Recorded run (replay)</span> : "replayed from real run"}
-    {r.wo ? ` ${r.hosted ? "of " : ""}${r.wo}` : ""} · {new Date(r.at * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+    replayed from real run{r.wo ? ` ${r.wo}` : ""} · {new Date(r.at * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
     {r.note && ` · ${r.note}`}
   </span>
 ) : null;

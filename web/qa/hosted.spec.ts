@@ -33,7 +33,6 @@ test("hosted: typing the pump request plays the recorded run, BLOCKED then APPRO
   const wo = page.url().split("/").pop()!;
   expect(wo, "a new work order, not the recorded one").not.toBe(rec!.wo);
   const main = page.locator("main");
-  await expect(main.getByText("Recorded run (replay)").first()).toBeVisible();
   await expect(main.getByText("Running", { exact: true }).first()).toBeVisible();
   await expect(main.getByText(/Attempt 1: BLOCKED/).first()).toBeVisible({ timeout: 30_000 });
   await expect(main.getByText("Approved to merge")).toBeVisible({ timeout: 60_000 });
@@ -81,7 +80,6 @@ test("hosted: a Boeing what-if plays its recording, unmatched text says so, and 
   await page.getByRole("button", { name: "Simulate" }).last().click();
   const main = page.locator("main");
   await expect(main.getByText(`What-if: “${air!.prompt}”`).or(main.getByText(/^What-if:/)).first()).toBeVisible();
-  await expect(main.getByText("Recorded run (replay)").first()).toBeVisible({ timeout: 30_000 });
   await expect(main.locator("figure").first()).toBeVisible();
   await expect(page.locator("#composer")).toBeEnabled({ timeout: 30_000 });
   await page.locator("#composer").fill("what if the hydraulics freeze");  // matches no recording: the closest one plays
