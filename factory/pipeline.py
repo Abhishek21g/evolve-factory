@@ -8,6 +8,7 @@ LLM steps call $AGENT_JSON_CMD (default: claude -p). If it fails, a deterministi
 and the dashboard says so. Approval itself is never an LLM decision: gate tests + world model decide.
 """
 import fcntl
+import glob
 import hashlib
 import json
 import os
@@ -546,6 +547,9 @@ if __name__ == "__main__":
     kind, text, wo = sys.argv[1], sys.argv[2], (sys.argv[3:4] or [None])[0]
     src = os.path.join(ROOT, project_device(wo)["replay"], kind) if os.environ.get("FACTORY_REPLAY") == "1" else \
         None if os.environ.get("FACTORY_CACHE") == "0" else recorded(kind, text, wo)
+    if os.environ.get("FACTORY_REPLAY") == "1":  # a recording of exactly this request (e.g. whatif-adult-150g) beats the default one
+        src = next((p[:-6] for p in sorted(glob.glob(src + "*.jsonl"))
+                    if _title(json.loads(open(p).readline()).get("title", "")) == _title(text)), src)
     if src:
         sys.exit(replay(src, wo))
     key = _cached(kind, text, wo)  # before the run: the runner's fetch may move origin/main

@@ -88,7 +88,8 @@ def get_verdict(work_order_id):
     w = next((w for w in store._load()["work_orders"] if w["id"].upper() == wid), None)
     if not w:
         raise ValueError(f"no work order {wid}")
-    w = next(x for x in store.state(w["project"], None)["work_orders"] if x["id"] == w["id"])
+    st = store.state(w["project"], None)
+    w = next(x for x in st["work_orders"] + st["archived_work_orders"] if x["id"] == w["id"])
     gate, world, ev = w.get("gate") or {}, w.get("world") or {}, w.get("evidence") or {}
     return {"work_order": w["id"], "project": w["project"], "title": w["title"], "status": w["status"],
             "decision": ev.get("decision"), "headline": ev.get("headline"),

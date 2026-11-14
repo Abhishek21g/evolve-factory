@@ -138,16 +138,26 @@ def create_requirement(actor, project, text, hazards):
         return r
 
 
+def _next_wo_id(d):
+    # Branches are shared by every checkout of the repo: never reuse a number whose wo/ branch another checkout owns.
+    branches = subprocess.run(["git", "-C", ROOT, "branch", "--list", "wo/WO-*", "--format=%(refname:short)"],
+                              capture_output=True, text=True).stdout.split()
+    n = [int(w["id"][3:]) for w in d["work_orders"] if w["id"][3:].isdigit()] + [int(b[6:]) for b in branches if b[6:].isdigit()]
+    return f"WO-{max(n + [100]) + 1}"
+
+
+def title_key(text):
+    """A request's first line, lowercased with single spaces: how two requests are compared."""
+    text = str(text or "")
+    return " ".join(text.splitlines()[0].lower().split()) if text.strip() else ""
+
+
 def create_wo(actor, project, title, description):
     with lock:
         d = _load()
         if not any(p["id"] == project for p in d["projects"]):
             raise ValueError("unknown project")
-        # Branches are shared by every checkout of the repo: never reuse a number whose wo/ branch another checkout owns.
-        branches = subprocess.run(["git", "-C", ROOT, "branch", "--list", "wo/WO-*", "--format=%(refname:short)"],
-                                  capture_output=True, text=True).stdout.split()
-        n = [int(w["id"][3:]) for w in d["work_orders"]] + [int(b[6:]) for b in branches if b[6:].isdigit()]
-        wo = {"id": f"WO-{max(n + [100]) + 1}", "project": project, "title": title, "description": description,
+        wo = {"id": _next_wo_id(d), "project": project, "title": title, "description": description,
               "created": time.time(), "requested_by": actor}
         d["work_orders"].append(wo)
         _audit(d, actor, "created work order", wo["id"], title, project)
@@ -162,12 +172,18 @@ def log(actor, action, obj, detail="", project=None):
         _save(d)
 
 
+def _feed():
+    return [json.loads(l) for l in open(FEED) if l.strip()] if os.path.exists(FEED) else []
+
+
 def events(project_id=None):
-    """The event feed, every event stamped with the project its run belongs to (only that project's if given)."""
-    if not os.path.exists(FEED):
-        return []
-    evs = [json.loads(l) for l in open(FEED) if l.strip()]
-    tag_projects(evs, _load())
+    """The event feed, every event stamped with the project its run belongs to (only that project's if given).
+    Retired what-if runs (retire_run) are left out."""
+    evs = _feed()
+    d = _load()
+    retired = {r["run"] for r in d.get("retired_runs", [])}
+    evs = [e for e in evs if e["run"] not in retired]
+    tag_projects(evs, d)
     whatif_title.apply(evs)
     recall_source(evs)
     return [e for e in evs if e["project"] == project_id] if project_id else evs
@@ -183,6 +199,85 @@ def recall_source(evs):
         m = e["agent"] == "memory" and not e.get("recall") and _OLD_RECALL.match(e["msg"])
         if m:
             e["msg"] = f"{m[1]} from local memory (HydraDB was not connected when this run was recorded): {m[2]}"
+
+
+def retire_run(actor, run, why=""):
+    """Hide a what-if run (e.g. a typo) from every page, the hosted replays and the audit trail; the feed itself is never
+    rewritten, and the retirement is logged. Work order runs cannot be retired: their record stays."""
+    with lock:
+        d = _load()
+        evs = [e for e in events() if e["run"] == run]
+        if not evs:
+            raise ValueError(f"no run {run} in the event feed")
+        if any(e.get("wo") for e in evs):
+            raise ValueError("only what-if runs can be retired")
+        asked = next((e.get("asked", e.get("title")) for e in evs if e.get("title")), "")
+        for a in d["audit"]:  # the question that started it, matched like audit_project does
+            if a["object"] == "world model" and (abs(a["ts"] - float(run)) < 5 or (asked and a["detail"] == asked)):
+                a["retired"] = True
+        d.setdefault("retired_runs", []).append({"run": run, "by": actor, "ts": time.time(), "why": why})
+        _audit(d, actor, "retired what-if", f"run {run}", why or "removed from the demo record", evs[0]["project"])
+        _save(d)
+        return len(evs)
+
+
+def replayable(w):
+    """Replay mode (FACTORY_REPLAY=1) plays the device's recorded build into the work order that is run. That is only
+    right for the recorded request itself, or a work order that already ran (the composer's: the recording stands in
+    for what was typed). Anything else would show the recording's run under another request's title."""
+    rec = os.path.join(ROOT, device(w["project"])["replay"], "build.jsonl")
+    first = json.loads(open(rec).readline()) if os.path.exists(rec) else {}
+    return title_key(first.get("title")) == title_key(w["title"]) or any(e.get("wo") == w["id"] for e in _feed())
+
+
+def split_misplayed_runs():
+    """Repair work orders a replay was played into although they asked for something else (Run on a supplier
+    compliance draft in replay mode played the AoA alert build into it). The run keeps the work order id its files,
+    events, links and lessons carry, and takes the run's request as title; the original request moves to a new draft
+    work order. A composer run (created and started in the same second) is not touched. Returns the new ids."""
+    with lock:
+        d = _load()
+        evs = _feed()
+        moved = []
+        for w in list(d["work_orders"]):
+            mine = [e for e in evs if e.get("wo") == w["id"]]
+            if not mine:
+                continue
+            last = [e for e in mine if e["run"] == mine[-1]["run"]]
+            asked = next((e["title"] for e in last if e.get("title")), "")
+            if not asked or title_key(asked) == title_key(w["title"]):
+                continue
+            created = next((a["ts"] for a in d["audit"] if a["action"] == "created work order" and a["object"] == w["id"]), w["created"])
+            started = next((a for a in d["audit"] if a["action"] == "started run" and a["object"] == w["id"]), None)
+            if not started or started["ts"] - created < 5:
+                continue
+            new = {**w, "id": _next_wo_id(d)}
+            first, _, rest = asked.partition("\n")
+            w.update(title=first.strip()[:120], description=rest.strip()[:1000], created=started["ts"])
+            d["work_orders"].insert(d["work_orders"].index(w), new)
+            for a in d["audit"]:
+                if a["object"] == w["id"] and a["action"] == "created work order":
+                    a["object"] = new["id"]
+                elif a["object"] == w["id"] and a["action"] == "started run":
+                    a["detail"] = w["title"]
+            moved.append(new["id"])
+        if moved:
+            _save(d)
+        return moved
+
+
+def superseded(wos):
+    """Work orders a later one of the same request replaces: {id: id of the one kept}. Per title the newest one that ran
+    is kept (else the newest draft); older runs and drafts of it leave the lists but still open by id."""
+    by_title = {}
+    for w in wos:
+        by_title.setdefault(title_key(w["title"]), []).append(w)
+    out = {}
+    for ws in by_title.values():
+        ran = [w for w in ws if w["status"] != "Draft"]
+        keep = (ran or ws)[-1]
+        out.update({w["id"]: keep["id"] for w in ws if w is not keep and w["created"] <= keep["created"]})
+    return out
 
 
 def tag_projects(evs, d):
@@ -321,7 +416,7 @@ def state(project_id, running):
                     "commits": git_changes(w["id"]) if st != "Draft" else []})
     # audit: humans (store) + agents (event feed, one line per finished step) + code commits (git)
     t0 = {}
-    audit = [a for a in d["audit"] if audit_project(a, d, all_evs) in (proj["id"], None)]
+    audit = [a for a in d["audit"] if not a.get("retired") and audit_project(a, d, all_evs) in (proj["id"], None)]
     titles = {e["asked"]: e["title"] for e in evs if e.get("asked")}
     for i, a in enumerate(audit):
         if a["object"] == "world model":  # a what-if: show it under its run's title, typed text kept as `asked`
@@ -336,7 +431,10 @@ def state(project_id, running):
             audit.append({"ts": float(c["ts"]), "actor": "coder-claude",  # wo/ branches are written by the coding agent
                           "action": "committed code", "object": w["id"], "detail": f"{c['sha'][:7]} {c['subject']}"})
     out["agents"] = agent_roster(evs)
-    out.update({"hazards": spec["hazards"], "requirements": spec["requirements"] + d.get("requirements", {}).get(proj["id"], []), "work_orders": wos,
+    gone = superseded(wos)
+    out.update({"hazards": spec["hazards"], "requirements": spec["requirements"] + d.get("requirements", {}).get(proj["id"], []),
+                "work_orders": [w for w in wos if w["id"] not in gone],
+                "archived_work_orders": [{**w, "superseded_by": gone[w["id"]]} for w in wos if w["id"] in gone],
                 "audit": sorted(audit, key=lambda a: -a["ts"])[:300], "trace": tracelinks.build(spec, wos, proj, proj["device"])})
     return out
 

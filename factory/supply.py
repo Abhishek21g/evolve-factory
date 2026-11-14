@@ -203,6 +203,24 @@ def view(pid):
             "items": [{"id": r["id"], "text": r["text"]} for r in spec["requirements"]] + [{"id": h["id"], "text": h["title"]} for h in spec["hazards"]]}
 
 
+def harmed(w):
+    """Runs that count against a simulation: any harm in a what-if, only new harm in a work order's gate run."""
+    what_if = bool(w.get("question")) or w.get("base") == "none"
+    return [r for r in w.get("results") or [] if r.get("hypo" if what_if else "new_hypo")]
+
+
+def sim_verdict(w):
+    """The verdict Simulations shows (simVerdict in web/src/components/WorldChart.tsx; keep the two in sync): a gate
+    run is BLOCKED by any new harm, a what-if is UNSAFE on any harm, AT RISK on 2 h+ above the hyper line (glucose)."""
+    if not (w.get("question") or w.get("base") == "none"):
+        return "BLOCKED" if harmed(w) else "PASS"
+    if harmed(w):
+        return "UNSAFE"
+    hyper, step = w.get("hyper") or 250, w.get("step_min") or 1
+    long_hyper = lambda r: (r["hyper_min"] if r.get("hyper_min") is not None else sum(g > hyper for g in r.get("trace") or []) * step) >= 120  # noqa: E731
+    return "AT RISK" if not w.get("axis") and any(long_hyper(r) for r in w.get("results") or []) else "SAFE"
+
+
 def tower(pid, running=None):
     """Everything a VP of engineering looks at first: software building, physical-AI safety, supply chain, finance."""
     v = view(pid)
@@ -213,7 +231,9 @@ def tower(pid, running=None):
     evs = store.events(pid)
     count = lambda s: sum(w["status"] == s for w in wos)  # noqa: E731
     prs = sorted({e["pr"] for e in evs if e.get("pr")})
-    sim = next((e for e in reversed(evs) if e.get("world") and e["world"].get("results")), None)
+    sims = [e for e in evs if e.get("world") and e["world"].get("results")]
+    # The simulation Simulations leads with: the latest what-if, else the latest work order's.
+    sim = next((e for e in reversed(sims) if e["world"].get("question")), sims[-1] if sims else None)
     tr = st.get("trace") or {}
     gaps = [{"id": r["id"], "gaps": r["gaps"]} for r in (tr.get("requirements") or []) + (tr.get("hazards") or []) if r["gaps"]]
     out = {
@@ -222,8 +242,9 @@ def tower(pid, running=None):
                      "draft": count("Draft"), "prs": prs,
                      "latest": [{"id": w["id"], "title": w["title"], "status": w["status"],
                                  "verdict": (w.get("evidence") or {}).get("decision")} for w in reversed(wos)][:4]},
-        "safety": {"sim": {"wo": sim.get("wo"), "question": sim["world"].get("question"), "verdict": sim["world"].get("verdict"),
+        "safety": {"sim": {"wo": sim.get("wo"), "question": sim["world"].get("question"), "verdict": sim_verdict(sim["world"]),
                            "runs": len(sim["world"]["results"]), "new": sum(bool(r.get("new_hypo")) for r in sim["world"]["results"]),
+                           "harmed": len(harmed(sim["world"])),
                            "kind": sim["world"].get("kind") or "patients"} if sim else None,
                    "gaps": gaps, "untraced": len(tr.get("untraced") or [])},
     }

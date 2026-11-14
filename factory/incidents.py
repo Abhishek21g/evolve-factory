@@ -19,6 +19,7 @@ import tracelinks
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PATH = os.path.join(ROOT, ".runs", "incidents.json")
+SAMPLE = os.path.join(ROOT, "web", "public", "hotline", "sample-call.json")  # factory/hotline.py record
 HOSTED = "https://certus-factory-ten.vercel.app"
 lock = threading.Lock()
 DEVICE_WORDS = {
@@ -85,7 +86,7 @@ def create(body, actor):
     haz = match_hazard(spec, text)
     with lock:
         xs = _load()
-        inc_id = f"INC-{len(xs) + 1}"
+        inc_id = next_id(xs)
         summary = clip("summary", 300) or what[:200]
         severity = clip("severity", 40) or "unknown"
         wo = store.create_wo(actor, p["id"], f"{inc_id}: {summary}"[:120],
@@ -135,5 +136,27 @@ def attach_transcript(inc_id, transcript, conversation_id=""):
     return update(inc_id, {"transcript": turns, **({"conversation_id": conversation_id[:80]} if conversation_id else {})})
 
 
+def sample():
+    """The incident the recorded sample call filed (a real call on the recording machine). Its work order and trace
+    link live there, so it is marked `sample` and listed after this factory's own incidents."""
+    if not os.path.exists(SAMPLE):
+        return None
+    inc = json.load(open(SAMPLE)).get("incident")
+    return {**inc, "source": "recorded", "sample": True} if inc else None
+
+
+def next_id(xs):
+    """INC-<n> for the next incident, never the sample's id."""
+    taken = {x["id"] for x in xs + [sample() or {}] if x}
+    n = len(xs) + 1
+    while f"INC-{n}" in taken:
+        n += 1
+    return f"INC-{n}"
+
+
 def listing(project=None):
-    return [x for x in reversed(_load()) if not project or x["project"] == project]
+    xs = list(reversed(_load()))
+    s = sample()
+    if s and not any(x.get("conversation_id") == s["conversation_id"] for x in xs):
+        xs.append(s)
+    return [x for x in xs if not project or x["project"] == project]
