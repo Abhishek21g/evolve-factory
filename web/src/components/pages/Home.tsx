@@ -4,7 +4,7 @@ import { recordedChips } from "@/lib/api";
 import { blocked, go, type Ctx } from "@/lib/ctx";
 import { AgentIcon } from "@/components/Agents";
 import { Composer } from "@/components/Composer";
-import { Badge, Section } from "@/components/ui";
+import { Ago, Badge, Section } from "@/components/ui";
 
 /** Agent-first home: one composer for the selected project, then the team and recent work. */
 export function HomePage({ state, post, team, me, live, checking, base }: Ctx) {
@@ -68,7 +68,7 @@ export function HomePage({ state, post, team, me, live, checking, base }: Ctx) {
                     <span className={cn("ml-auto size-1.5 shrink-0 rounded-full", t === "run" ? "pulse bg-run" : t === "bad" ? "bg-bad" : t === "ok" ? "bg-ok" : "bg-line-strong")} />
                   </div>
                   <p className="mt-2.5 line-clamp-2 min-h-[2.6em] text-sm leading-snug text-mute">{l?.msg || a.role}</p>
-                  <div className="mt-2 text-xs text-dim">{l ? `${s === "working" ? "working" : "idle"} · ${l.done} step${l.done === 1 ? "" : "s"} done${l.wo ? ` · ${l.wo}` : ""}` : "idle · not run yet"}</div>
+                  <div className="mt-2 truncate text-xs text-dim" title={l ? `${l.done} step${l.done === 1 ? "" : "s"} done` : undefined}>{l ? <>{s === "working" ? "Working now" : <>Last active <Ago ts={l.ts} /></>}{l.wo ? ` · ${l.wo}` : ""}</> : "Not run yet in this project"}</div>
                 </a>
               );
             })}
