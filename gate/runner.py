@@ -30,7 +30,8 @@ PROMPT = """You are implementing Software Factory Work Order {wo}.
 Rules:
 - Code lives in demo/pump/. Run `make -C demo/pump test` before you finish.
 - This is a safety-critical insulin pump. Limits in pump.h mitigate hazards listed in demo/pump/safety.json.
-- Do NOT edit demo/pump/safety.json, demo/pump/test_*.c or anything in gate/. Those are protected evidence.
+- Do NOT edit demo/pump/safety.json, demo/pump/test_*.c or anything in gate/ or sim/. Those are protected evidence.
+- Every change is also run in a world model: 10 simulated patients (sim/world.py). It must not cause severe hypoglycemia.
 - Keep the change small."""
 
 RETRY = """The Safety Gate BLOCKED your change to {wo}. Fix it without weakening any safety requirement.
