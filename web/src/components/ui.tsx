@@ -95,6 +95,11 @@ export const Field = ({ label, children }: { label: string; children: ReactNode 
 export const inputCls = "w-full rounded-md border border-line bg-bg px-3 py-2 text-[13px] text-ink outline-none placeholder:text-dim focus:border-white/25";
 
 export function Modal({ title, children, onClose, wide }: { title: string; children: ReactNode; onClose: () => void; wide?: boolean }) {
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [onClose]);
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={title} onClick={e => e.stopPropagation()}

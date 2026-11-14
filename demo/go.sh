@@ -39,7 +39,7 @@ fi
 # 2. Web UI: build only when web/ changed since the last build (a cold build is ~30 s)
 if [ ! -f web/out/index.html ] || [ -n "$(find web/src web/public web/package.json -newer web/out/index.html -print -quit)" ]; then
   echo "building web UI..."
-  (cd web && { [ -d node_modules ] || npm ci --no-audit --no-fund --loglevel=error; } && npm run build >/dev/null)
+  (cd web && { [ -x node_modules/.bin/next ] || npm ci --no-audit --no-fund --loglevel=error; } && npm run build >/dev/null)
 fi
 
 # 3. Demo project + a draft work order with the recorded request, so the stage starts one click from "Run"
@@ -74,11 +74,13 @@ FACTORY_REPLAY=$([ "$MODE" = replay ] && echo 1 || echo 0) nohup "$PY" factory/s
 for _ in $(seq 50); do curl -s -o /dev/null "http://localhost:$PORT/api/state" && break; sleep 0.1; done
 
 # 6. Live mode: pre-warm every Home suggestion in the background (real runs on the current pump code, own feed);
-#    afterwards each click replays its real run in seconds. Cold: ~1 min per what-if, ~4 min per build.
+#    afterwards each click replays its real run in seconds. Cold: ~40 s per what-if, ~5 min per build.
+#    Append: a pre-warm still running from an earlier go.sh keeps writing to this log.
 if [ "$MODE" = live ]; then
-  nohup "$PY" factory/pipeline.py prewarm > .runs/prewarm.log 2>&1 &
+  echo "--- go.sh $(date +%H:%M:%S)" >> .runs/prewarm.log
+  nohup "$PY" factory/pipeline.py prewarm >> .runs/prewarm.log 2>&1 &
   sleep 1
-  echo "pre-warm (tail -f .runs/prewarm.log):"; sed 's/^/  /' .runs/prewarm.log
+  echo "pre-warm (tail -f .runs/prewarm.log):"; tail -n 4 .runs/prewarm.log | sed 's/^/  /'
 fi
 
 # 7. Health check (live mode also checks that the coding agent is logged in, which warms it up)
