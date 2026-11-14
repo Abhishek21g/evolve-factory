@@ -1,0 +1,114 @@
+"""Manual runner: take a Work Order, let an agent implement it in a git worktree, gate it, retry on BLOCKED.
+
+Usage:
+  python3 gate/runner.py --wo WO-12 --text "Allow larger meal bolus for adult profile" [--pr]
+  python3 gate/runner.py --wo WO-12 --text-file wo.txt
+
+Agent command comes from $AGENT_CMD (default: claude -p ...). The prompt is appended as the last argument.
+Safety spec is read from the main checkout (trusted), never from the agent's worktree.
+Exit code 0 = gate passed, 1 = still blocked after retries.
+"""
+import argparse
+import json
+import os
+import shlex
+import subprocess
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_AGENT = 'claude -p --permission-mode acceptEdits --allowedTools "Bash(make:*)"'
+# Checks come from gate/checks.json in the main checkout (trusted, agents can't edit it).
+# Each check is {"name", "cmd"}; cmd may use {root} {repo} {base} {wo}. Exit 0 = pass, else BLOCKED;
+# whatever it prints (markdown) goes in the report and is fed back to the agent.
+
+PROMPT = """You are implementing Software Factory Work Order {wo}.
+
+{text}
+
+Rules:
+- Code lives in demo/pump/. Run `make -C demo/pump test` before you finish.
+- This is a safety-critical insulin pump. Limits in pump.h mitigate hazards listed in demo/pump/safety.json.
+- Do NOT edit demo/pump/safety.json, demo/pump/test_*.c or anything in gate/. Those are protected evidence.
+- Keep the change small."""
+
+RETRY = """The Safety Gate BLOCKED your change to {wo}. Fix it without weakening any safety requirement.
+
+{report}
+
+Make the smallest change that satisfies the Work Order AND every requirement above."""
+
+
+def sh(cmd, cwd, check=True):
+    return subprocess.run(cmd, cwd=cwd, check=check, capture_output=True, text=True)
+
+
+def run_checks(checks, wt, base, wo):
+    """Run every check (no short-circuit). Returns (all_passed, markdown report)."""
+    parts, ok = [], True
+    for c in checks:
+        cmd = c["cmd"].format(root=ROOT, repo=wt, base=base, wo=wo)
+        p = subprocess.run(cmd, shell=True, cwd=ROOT, capture_output=True, text=True)
+        passed = p.returncode == 0
+        ok &= passed
+        parts.append(f"### {c['name']}: {'PASS' if passed else 'BLOCKED'}\n\n{(p.stdout + p.stderr).strip()}")
+    head = "## Checks: PASS" if ok else "## Checks: BLOCKED"
+    return ok, head + "\n\n" + "\n\n".join(parts) + "\n"
+
+
+def run_agent(wt, prompt):
+    cmd = shlex.split(os.environ.get("AGENT_CMD", DEFAULT_AGENT)) + [prompt]
+    p = subprocess.run(cmd, cwd=wt, capture_output=True, text=True)
+    return p.stdout[-1500:] + p.stderr[-500:]
+
+
+def commit(wt, msg):
+    sh(["git", "add", "-A"], wt)
+    sh(["git", "commit", "-q", "--allow-empty", "-m", msg], wt)
+
+
+def main(argv=None):
+    a = argparse.ArgumentParser()
+    a.add_argument("--wo", required=True)
+    a.add_argument("--text")
+    a.add_argument("--text-file")
+    a.add_argument("--base", default="main")
+    a.add_argument("--checks", default=os.path.join(ROOT, "gate/checks.json"))
+    a.add_argument("--retries", type=int, default=2)
+    a.add_argument("--pr", action="store_true", help="push the branch and open a PR with gh")
+    args = a.parse_args(argv)
+    text = args.text or open(args.text_file).read()
+    checks = json.load(open(args.checks))
+
+    wt = os.path.join(ROOT, ".worktrees", args.wo)
+    branch = f"wo/{args.wo}"
+    if os.path.exists(wt):
+        sh(["git", "worktree", "remove", "--force", wt], ROOT)
+    sh(["git", "branch", "-D", branch], ROOT, check=False)
+    sh(["git", "worktree", "add", "-q", "-b", branch, wt, args.base], ROOT)
+
+    os.makedirs(os.path.join(ROOT, ".runs"), exist_ok=True)
+    out = os.path.join(ROOT, ".runs", f"{args.wo}.md")
+    prompt = PROMPT.format(wo=args.wo, text=text)
+    ok, report = False, ""
+    for attempt in range(args.retries + 1):
+        print(f"[{args.wo}] attempt {attempt + 1}: running agent", flush=True)
+        run_agent(wt, prompt)
+        commit(wt, f"{args.wo}: {text.splitlines()[0][:60]} (attempt {attempt + 1})")
+        ok, report = run_checks(checks, wt, args.base, args.wo)
+        print(f"[{args.wo}] attempt {attempt + 1}: {'PASS' if ok else 'BLOCKED'}", flush=True)
+        if ok:
+            break
+        prompt = RETRY.format(wo=args.wo, report=report)
+
+    open(out, "w").write(report)
+    print(f"\nreport: {out}\nworktree: {wt} (branch {branch})")
+    if ok and args.pr:
+        sh(["git", "push", "-u", "origin", branch], wt)
+        title = f"{args.wo}: {text.splitlines()[0][:70]}"
+        sh(["gh", "pr", "create", "--base", args.base, "--head", branch, "--title", title, "--body", report], wt)
+        print("PR opened")
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
