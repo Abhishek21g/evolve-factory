@@ -1,0 +1,92 @@
+{
+  "standard": "DO-178C (software), ARP4754A (system), ARP4761 (safety assessment), 14 CFR 25.1309",
+  "hazards": [
+    {
+      "id": "H-1",
+      "title": "Uncommanded nose-down pitch from erroneous AoA",
+      "severity": "Catastrophic",
+      "dal": "A",
+      "fha": "Automatic trim acts on a failed AoA vane and pushes the nose down repeatedly (737 MAX MCAS accidents). Extremely improbable, < 1e-9 per flight hour."
+    },
+    {
+      "id": "H-2",
+      "title": "Stall / loss of control at high AoA",
+      "severity": "Catastrophic",
+      "dal": "A",
+      "fha": "Stall protection unavailable when needed: the aircraft passes the stall AoA (nacelle pitch-up near stall). Extremely improbable, < 1e-9 per flight hour."
+    },
+    {
+      "id": "H-3",
+      "title": "Crew not alerted to unreliable AoA",
+      "severity": "Major",
+      "dal": "C",
+      "fha": "AoA sources disagree but the crew gets no AOA DISAGREE indication and cannot act on unreliable airspeed / stall warnings. Remote, < 1e-5 per flight hour."
+    },
+    {
+      "id": "H-4",
+      "title": "Pitch authority the pilot cannot overpower",
+      "severity": "Hazardous",
+      "dal": "B",
+      "fha": "Protection moves the stabilizer too far or too fast for the pilot to counter with the column. Extremely remote, < 1e-7 per flight hour."
+    },
+    {
+      "id": "H-5",
+      "title": "Nuisance protection in turbulence",
+      "severity": "Major",
+      "dal": "C",
+      "fha": "Gusts or sensor noise trigger nose-down trim at normal AoA. Remote, < 1e-5 per flight hour."
+    }
+  ],
+  "requirements": [
+    {
+      "id": "SR-1",
+      "text": "Stall protection nose-down authority never exceeds 2.5 deg of stabilizer",
+      "hazards": ["H-1", "H-4"],
+      "dal": "A",
+      "objectives": ["DO-178C A-6 #1-2 (EOC complies with and is robust to HLR)", "A-7 #3 (HLR test coverage)"],
+      "files": ["demo/aircraft/fcc.c", "demo/aircraft/fcc.h"],
+      "symbols": ["MAX_NOSE_DOWN_DEG", "fcc_step"],
+      "test": "make -s -C demo/aircraft test_fcc && demo/aircraft/test_fcc SR-1"
+    },
+    {
+      "id": "SR-2",
+      "text": "No nose-down trim from AoA data out of range or disagreeing by more than 5.5 deg",
+      "hazards": ["H-1"],
+      "dal": "A",
+      "objectives": ["DO-178C A-6 #2 (robustness to failed sensors)", "A-7 #3 (HLR test coverage)"],
+      "files": ["demo/aircraft/fcc.c", "demo/aircraft/fcc.h"],
+      "symbols": ["AOA_DISAGREE_DEG", "AOA_MIN_VALID_DEG", "AOA_MAX_VALID_DEG", "fcc_step"],
+      "test": "make -s -C demo/aircraft test_fcc && demo/aircraft/test_fcc SR-2"
+    },
+    {
+      "id": "SR-3",
+      "text": "Stall protection engages above 12 deg AoA whenever the sources agree within 5.5 deg",
+      "hazards": ["H-2"],
+      "dal": "A",
+      "objectives": ["DO-178C A-6 #1 (normal-range tests)", "A-7 #3 (HLR test coverage)"],
+      "files": ["demo/aircraft/fcc.c", "demo/aircraft/fcc.h"],
+      "symbols": ["AOA_PROTECT_DEG", "AOA_DISAGREE_DEG", "fcc_step"],
+      "test": "make -s -C demo/aircraft test_fcc && demo/aircraft/test_fcc SR-3"
+    },
+    {
+      "id": "SR-4",
+      "text": "Protection never latches: trim returns to zero below 10 deg AoA",
+      "hazards": ["H-1"],
+      "dal": "A",
+      "objectives": ["DO-178C A-6 #1-2", "A-7 #3 (HLR test coverage)"],
+      "files": ["demo/aircraft/fcc.c", "demo/aircraft/fcc.h"],
+      "symbols": ["AOA_RELEASE_DEG", "fcc_step"],
+      "test": "make -s -C demo/aircraft test_fcc && demo/aircraft/test_fcc SR-4"
+    },
+    {
+      "id": "SR-5",
+      "text": "Protection never moves the stabilizer faster than 0.5 deg/s",
+      "hazards": ["H-4", "H-5"],
+      "dal": "B",
+      "objectives": ["DO-178C A-6 #1-2", "A-7 #3 (HLR test coverage)"],
+      "files": ["demo/aircraft/fcc.c", "demo/aircraft/fcc.h"],
+      "symbols": ["TRIM_RATE_DEG_S", "fcc_step"],
+      "test": "make -s -C demo/aircraft test_fcc && demo/aircraft/test_fcc SR-5"
+    }
+  ]
+}

@@ -6,7 +6,8 @@ import fnmatch
 import subprocess
 import sys
 
-PROTECTED = ["demo/pump/safety.json", "demo/pump/test_*.c", "gate/*", "sim/*", "AGENTS.md", "CLAUDE.md"]
+PROTECTED = ["demo/pump/safety.json", "demo/pump/test_*.c", "demo/aircraft/safety.json", "demo/aircraft/test_*.c",
+             "demo/aircraft/RULES.md", "gate/*", "sim/*", "AGENTS.md", "CLAUDE.md"]
 
 a = argparse.ArgumentParser()
 a.add_argument("--repo", default=".")
