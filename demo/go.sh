@@ -17,9 +17,12 @@ if [ "$MODE" = check ]; then exec "$PY" demo/health.py "$PORT"; fi
 [ "$MODE" = live ] || [ "$MODE" = replay ] || { echo "usage: demo/go.sh [live|replay|check]"; exit 2; }
 mkdir -p .runs
 
-# 1. Python env (reuse the main checkout's .venv when this is a worktree)
+# 1. Keys and Python env (a worktree reuses the main checkout's .env and .venv)
+main=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
+[ -e .env ] || [ ! -f "$main/.env" ] || ln -s "$main/.env" .env
+# With ANTHROPIC_API_KEY set, the Claude CLI bills the API instead of the subscription, so its 5-hour limit can't stop a run.
+if [ -f .env ]; then set -a; . ./.env; set +a; fi
 if [ ! -x "$PY" ]; then
-  main=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
   if [ "$main" != "$PWD" ] && [ -x "$main/.venv/bin/python" ]; then
     ln -s "$main/.venv" .venv
   else

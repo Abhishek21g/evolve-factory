@@ -110,6 +110,8 @@ def wo_status(wo_id, evs, running):
         return "Draft", None
     rev = [e for e in mine if e["agent"] == "reviewer"]
     if rev:
+        if rev[-1].get("not_run"):
+            return "Not run", rev[-1]["t"]
         return ("Approved" if rev[-1]["state"] == "done" else "Blocked"), rev[-1]["t"]
     return ("Running" if running == wo_id else "Stopped"), None
 
