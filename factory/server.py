@@ -16,6 +16,11 @@ GET  /api/supply?project=ID        suppliers, parts/BOM with risk flags, finance
 GET  /api/supply/tower[?project=ID] control tower: one project, or every project
 GET  /api/connect/composio         redirects to a Composio Connect Link to authorize GitHub (one time)
 GET  /api/callouts?wo=WO-x         cockpit callouts / pump alarms of the work order's before/after runs (?project=ID: latest what-if)
+GET  /api/hotline                  safety hotline agent id and whether live calls are possible
+GET  /api/hotline/token            WebRTC token for one browser call with the hotline agent (the key stays here)
+GET  /api/incidents?project=ID     incidents reported on the hotline
+POST /api/incidents {project, what_happened, when, severity, context, caller, summary}   the agent's create_incident tool
+POST /api/incidents/transcript {id, transcript, conversation_id}                       the call's transcript, after it ends
 POST /api/projects   {name, device}                 create a project (imports its hazard log)
 POST /api/workorders {project, title, description}  create a work order
 POST /api/run        {wo}                           run a work order through the factory
@@ -43,6 +48,9 @@ from urllib.parse import parse_qs, urlparse
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "factory"))
 import callouts  # noqa: E402
+import elevenlabs  # noqa: E402
+import hotline  # noqa: E402
+import incidents  # noqa: E402
 import memory  # noqa: E402
 import monitors  # noqa: E402
 import record  # noqa: E402
@@ -191,6 +199,17 @@ class H(SimpleHTTPRequestHandler):
             evs = store.events()
             b = callouts.for_wo(evs, wo) if wo else callouts.latest_whatif([e for e in evs if e["project"] == q.get("project", "")])
             return self.send(200, b) if b else self.send(404, {"error": "no simulation to voice"})
+        if u.path == "/api/hotline":
+            return self.send(200, {"agent_id": hotline.agent_id(), "live": bool(elevenlabs.key() and hotline.agent_id())})
+        if u.path == "/api/hotline/token":
+            if not (elevenlabs.key() and hotline.agent_id()):
+                return self.send(503, {"error": "hotline not configured (ELEVENLABS_API_KEY, factory/hotline.py setup)"})
+            try:
+                return self.send(200, {"token": elevenlabs.conversation_token(hotline.agent_id()), "agent_id": hotline.agent_id()})
+            except Exception as e:
+                return self.send(502, {"error": str(e)[:200]})
+        if u.path == "/api/incidents":
+            return self.send(200, {"incidents": incidents.listing(q.get("project"))})
         if u.path == "/api/worldmodel":
             loop = worldmodel.loop(wo)
             return self.send(200, loop) if loop else self.send(404, {"error": "no simulation for this work order"})
@@ -263,6 +282,11 @@ class H(SimpleHTTPRequestHandler):
                 start("build", t, w["id"], wo=w["id"], project=w["project"])
                 store.log(actor, "started run", w["id"], t[:120], w["project"])
                 return self.send(202, {"started": w["id"], "id": w["id"]})
+            if u.path == "/api/incidents":
+                return self.send(201, incidents.create(body, actor))
+            if u.path == "/api/incidents/transcript":
+                inc = incidents.attach_transcript(clip("id", 20), body.get("transcript"), clip("conversation_id", 80))
+                return self.send(200, inc) if inc else self.send(404, {"error": "unknown incident"})
             if u.path.startswith("/api/trace/"):
                 if not any(p["id"] == clip("project", 60) for p in store._load()["projects"]):
                     return self.send(404, {"error": "unknown project"})

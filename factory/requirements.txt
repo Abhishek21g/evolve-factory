@@ -1,3 +1,4 @@
 hydradb-sdk>=2,<3   # proprietary license, used as a hosted service client
 composio==0.32.0    # Apache-2.0
 requests>=2.31        # Apache-2.0, ElevenLabs REST (factory/elevenlabs.py)
+websocket-client>=1.7 # Apache-2.0, text-mode hotline test caller (factory/hotline.py)
