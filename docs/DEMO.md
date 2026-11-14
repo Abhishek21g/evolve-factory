@@ -87,7 +87,7 @@ Optional cutaway for credibility: terminal running `demo/go.sh live` with the re
 After a real live run you like:
 
 ```bash
-FACTORY_PR=1 .venv/bin/python factory/pipeline.py build "<request>" WO-3xx   # or click Run in live mode
+FACTORY_PR=1 FACTORY_CACHE=0 .venv/bin/python factory/pipeline.py build "<request>" WO-3xx   # or Run in live mode
 .venv/bin/python demo/record.py WO-3xx      # -> demo/replay/build.*  (commit it)
 .venv/bin/python demo/record.py whatif      # latest what-if -> demo/replay/whatif.jsonl
 demo/deploy.sh                              # refresh the hosted snapshot (https://certus-factory.vercel.app)
@@ -98,7 +98,7 @@ How the current block-then-fix recording was made (`main` already has the extend
 
 ```bash
 set -a; . ./.env; set +a
-FACTORY_PR=1 FACTORY_BASE=demo-base AGENT_CMD="$PWD/demo/obvious_patch.sh" \
+FACTORY_PR=1 FACTORY_CACHE=0 FACTORY_BASE=demo-base AGENT_CMD="$PWD/demo/obvious_patch.sh" \
   .venv/bin/python factory/pipeline.py build "$(head -1 demo/replay/build.jsonl | python3 -c 'import json,sys; print(json.load(sys.stdin)["title"])')" WO-3xx
 FACTORY_BASE=demo-base .venv/bin/python demo/record.py WO-3xx
 ```

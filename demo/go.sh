@@ -67,5 +67,13 @@ fi
 FACTORY_REPLAY=$([ "$MODE" = replay ] && echo 1 || echo 0) nohup "$PY" factory/server.py "$PORT" > .runs/server.log 2>&1 &
 for _ in $(seq 50); do curl -s -o /dev/null "http://localhost:$PORT/api/state" && break; sleep 0.1; done
 
-# 6. Health check (live mode also checks that the coding agent is logged in, which warms it up)
+# 6. Live mode: pre-warm the Home what-if chips in the background, on their own feed so the stage feed stays clean.
+#    Afterwards each answers in seconds from its cached real run (factory/pipeline.py recorded()).
+if [ "$MODE" = live ]; then
+  for q in "What if a child eats 80 g and the parent types the dose 10x?" "What if an adult eats 150 g of carbs?"; do
+    env -u RUN_ID -u RUN_T0 EVENTS=.runs/prewarm-events.jsonl "$PY" factory/pipeline.py whatif "$q"
+  done > .runs/prewarm.log 2>&1 &
+fi
+
+# 7. Health check (live mode also checks that the coding agent is logged in, which warms it up)
 "$PY" demo/health.py "$PORT" $([ "$MODE" = live ] && echo --deep)
