@@ -235,11 +235,11 @@ class H(SimpleHTTPRequestHandler):
                 spec = store.safety_spec(dev)
                 if u.path == "/api/trace/links":
                     link = tracelinks.add_link(dev["id"], spec, actor, body)
-                    store.log(actor, "added trace link", link["item"], f"{link['kind']} {link.get('url') or link['path']}")
+                    store.log(actor, "added trace link", link["item"], f"{link['kind']} {link.get('url') or link['path']}", clip("project", 60))
                     return self.send(201, link)
                 if u.path == "/api/trace/links/delete":
                     link = tracelinks.remove_link(dev["id"], clip("id", 10))
-                    store.log(actor, "removed trace link", link["item"], f"{link['kind']} {link.get('url') or link['path']}")
+                    store.log(actor, "removed trace link", link["item"], f"{link['kind']} {link.get('url') or link['path']}", clip("project", 60))
                     return self.send(200, link)
                 if u.path == "/api/trace/tests":
                     return self.send(200, tracelinks.run_tests(dev["id"], spec))
