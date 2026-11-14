@@ -11,6 +11,7 @@ import threading
 import time
 
 import tracelinks
+import whatif_title
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PATH = os.path.join(ROOT, ".runs", "factory.json")
@@ -137,6 +138,7 @@ def events(project_id=None):
         return []
     evs = [json.loads(l) for l in open(FEED) if l.strip()]
     tag_projects(evs, _load())
+    whatif_title.apply(evs)
     return [e for e in evs if e["project"] == project_id] if project_id else evs
 
 
@@ -209,7 +211,7 @@ def audit_project(a, d, evs):
     if p:
         return p["id"]
     if a["object"] == "world model":  # a what-if: the project of the run that asked the same question
-        return next((e["project"] for e in evs if e.get("title") == a["detail"]), None)
+        return next((e["project"] for e in evs if e.get("asked", e.get("title")) == a["detail"]), None)
     return None
 
 
@@ -237,6 +239,11 @@ def state(project_id, running):
     # audit: humans (store) + agents (event feed, one line per finished step) + code commits (git)
     t0 = {}
     audit = [a for a in d["audit"] if audit_project(a, d, all_evs) in (proj["id"], None)]
+    titles = {e["asked"]: e["title"] for e in evs if e.get("asked")}
+    for i, a in enumerate(audit):
+        if a["object"] == "world model":  # a what-if: show it under its run's title, typed text kept as `asked`
+            t = titles.get(a["detail"]) or whatif_title.clean(a["detail"])
+            audit[i] = {**a, "detail": t, **({"asked": a["detail"]} if t != a["detail"] else {})}
     for e in evs:
         if e["state"] in ("done", "pass", "blocked"):
             base = t0.setdefault(e["run"], float(e["run"]))

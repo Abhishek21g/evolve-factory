@@ -58,7 +58,11 @@ export const PageHead = ({ title, sub, children }: { title: string; sub?: ReactN
   </div>
 );
 
-export const Section = ({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) => (
+/** A what-if's typed text, muted next to its display title when the two differ (e.g. a typo the agent read through). */
+export const Asked = ({ title, asked }: { title?: string; asked?: string }) =>
+  asked && asked !== title ? <span className="ml-1.5 text-sm font-normal text-dim">asked as “{asked}”</span> : null;
+
+export const Section = ({ title, aside, children }: { title: ReactNode; aside?: ReactNode; children: ReactNode }) => (
   <section className="mb-10">
     <div className="mb-3 flex items-baseline justify-between gap-3">
       <h2 className="text-md font-semibold text-ink">{title}</h2>
