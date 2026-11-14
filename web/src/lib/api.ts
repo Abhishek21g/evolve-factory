@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Ev, Gate, World } from "./feed";
+import type { Trace } from "./trace";
 import snapshot from "../../public/snapshot.json";
 
 export type Member = { id: string; name: string; role: string; kind: "human" | "agent" };
@@ -25,11 +26,10 @@ export type MemoryView = {
   recall?: { backend: string; ms: number; collections?: string[] } | null;
   inventory?: { backend: string; ms: number; at: number; collections: Record<string, Counts> };
 };
-export type TraceNode = { id: string; kind: string; label: string; sub: string; tone: string };
 export type State = {
   team: Member[]; devices: Record<string, string>; projects: Project[]; project: Project | null;
   hazards?: Hazard[]; requirements?: Requirement[]; work_orders?: WorkOrder[]; audit: Audit[];
-  trace?: { nodes: TraceNode[]; edges: { source: string; target: string }[] };
+  trace?: Trace;
   agents?: Record<string, AgentLive>; memory?: MemoryItem[];
   status?: {
     online: boolean; busy: boolean; job: string | null; running: string | null; memory: string; composio: boolean; software_factory: boolean; replay?: boolean;
