@@ -63,5 +63,15 @@ try:
 finally:
     if os.path.exists(tracelinks.links_path(dev)):
         os.remove(tracelinks.links_path(dev))
+
+air = json.load(open(os.path.join(tracelinks.ROOT, "demo/aircraft/safety.json")))
+wo = lambda st: {"id": "WO-9", "title": "AoA disagree alert", "status": st, "hazards_in_scope": ["H-3", "H-1"],  # noqa: E731
+                 "evidence": {"decision": "APPROVED"}, "gate": None, "world": None}
+h3 = lambda wos: next(h for h in tracelinks.build(air, wos, {}, "flight-controls")["hazards"] if h["id"] == "H-3")  # noqa: E731
+assert h3([])["gaps"] == ["no mitigating requirement"], "H-3 has no requirement in safety.json"
+assert h3([wo("Blocked")])["gaps"], "a blocked work order does not close a gap"
+fixed = h3([wo("Approved")])
+assert fixed["gaps"] == [] and fixed["fixes"] == ["WO-9"] and any(t["kind"] == "evidence" for t in fixed["targets"]), "approved fix closes it"
+print("trace gaps: an approved work order that targeted a hazard with no requirement closes its gap")
 httpd.shutdown()
 print("OK")

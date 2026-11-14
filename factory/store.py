@@ -266,7 +266,8 @@ def state(project_id, running):
         evd = [e for e in evs if e.get("wo") == w["id"] and e.get("evidence")]
         if evd:
             ev = evd[-1]["evidence"]
-        wos.append({**w, "status": st, "gate": gate, "world": world, "evidence": ev,
+        scope = next((e["analysis"].get("hazards", []) for e in reversed(evs) if e.get("wo") == w["id"] and e.get("analysis")), [])
+        wos.append({**w, "status": st, "gate": gate, "world": world, "evidence": ev, "hazards_in_scope": scope,
                     "commits": git_changes(w["id"]) if st != "Draft" else []})
     # audit: humans (store) + agents (event feed, one line per finished step) + code commits (git)
     t0 = {}

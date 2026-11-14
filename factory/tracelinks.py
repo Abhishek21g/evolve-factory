@@ -354,10 +354,17 @@ def build(spec, wos, project, dev):
         ts = [clause(lbl, hd) for lbl, hd in cl["hazard"]]
         ts += [{"kind": "scenario", "label": lbl, "path": p, "start": ln, "end": ln, "note": f"gate scenario {sid}"}
                for sid, lbl, hz, p, ln in scen if h["id"] in hz]
+        # No requirement names the hazard, but an approved work order targeted it: that verified change mitigates it.
+        fixes = [] if mit else [w for w in wos if w["status"] == "Approved" and h["id"] in (w.get("hazards_in_scope") or [])]
+        for w in fixes:
+            ts.append({"kind": "work_order", "label": w["id"], "wo": w["id"], "note": f"approved fix: {w['title']}", "tone": "ok"})
+            if w.get("evidence"):
+                d = w["evidence"]["decision"]
+                ts.append({"kind": "evidence", "label": f"Evidence {w['id']}", "wo": w["id"], "note": d, "tone": "ok" if d == "APPROVED" else "fail"})
         ts += user_targets(h["id"])
         hazards.append({"id": h["id"], "title": h["title"], "severity": h.get("severity", ""), "dal": h.get("dal", ""),
-                        "fha": h.get("fha", ""), "requirements": mit, "targets": ts,
-                        "gaps": [] if mit else ["no mitigating requirement"]})
+                        "fha": h.get("fha", ""), "requirements": mit, "fixes": [w["id"] for w in fixes], "targets": ts,
+                        "gaps": [] if mit or fixes else ["no mitigating requirement"]})
 
     code_files = sorted({f for r in spec["requirements"] for f in r.get("files", []) if f.endswith(".c")})
     untraced = [{"kind": "code", "label": name, "path": f, "start": s, "end": e}
@@ -394,7 +401,8 @@ def graph(reqs, hazards, wos):
         add(h["id"], "hazard", h["id"], h["title"], "fail" if h["gaps"] or h["severity"] in ("S3", "Catastrophic", "Hazardous") else "warn")
         for t in h["targets"]:
             add(target_id(t), t["kind"], t["label"], t.get("note") or t.get("path", ""), t.get("tone", ""), t)
-            edges.append((target_id(t), h["id"]) if t["kind"] == "clause" else (h["id"], target_id(t)))
+            edges.append((target_id(t), h["id"]) if t["kind"] == "clause" else (t["wo"], target_id(t)) if t["kind"] == "evidence"
+                         else (h["id"], target_id(t)))
     for r in reqs:
         add(r["id"], "requirement", r["id"], r["text"], "fail" if r["gaps"] else "")
         for h in r["hazards"]:

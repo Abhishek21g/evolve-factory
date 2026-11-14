@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Background, Controls, Handle, Position, ReactFlow, type Edge, type Node, type NodeProps } from "@xyflow/react";
+import { Background, Controls, Handle, Position, ReactFlow, type Edge, type Node, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { Target, TraceNode } from "@/lib/trace";
 
@@ -11,6 +11,9 @@ const COLS: Record<string, { col: number; label: string }> = {
   simulation: { col: 7, label: "World model" }, evidence: { col: 7, label: "Evidence" },
 };
 const TONE: Record<string, string> = { ok: "#34d399", fail: "#f87171", warn: "#fbbf24" };
+const COL_W = 250, ROW_H = 84, NODE_H = 64, HEIGHT = 680;
+/** Opening zoom: the whole graph fitted would be too small to read, so it opens at this zoom on the focused hazard. */
+const READABLE = 0.85;
 type D = { n: TraceNode; on: boolean; dim: boolean };
 
 function TNode({ data }: NodeProps<Node<D>>) {
@@ -32,9 +35,11 @@ function TNode({ data }: NodeProps<Node<D>>) {
 const TYPES = { t: TNode };
 
 /** Regulation -> hazard -> requirement -> code / test -> scenario -> work order -> verification.
+ *  Opens on `focus` (a hazard): its chain lit and centered at a readable zoom; the fit button shows the whole graph.
  *  Click a node to light up its chain and open it (code lines, doc section, test); requirements and hazards open their page. */
-export function TraceGraph({ nodes, edges, pid, onOpen }: { nodes: TraceNode[]; edges: { source: string; target: string }[]; pid: string; onOpen: (t: Target) => void }) {
-  const [sel, setSel] = useState<string | null>(null);
+export function TraceGraph({ nodes, edges, pid, onOpen, focus }:
+  { nodes: TraceNode[]; edges: { source: string; target: string }[]; pid: string; onOpen: (t: Target) => void; focus?: string }) {
+  const [sel, setSel] = useState<string | null>(focus ?? null);
   const chain = useMemo(() => {
     if (!sel) return null;
     const keep = new Set([sel]);
@@ -56,7 +61,7 @@ export function TraceGraph({ nodes, edges, pid, onOpen }: { nodes: TraceNode[]; 
     const ns: Node<D>[] = nodes.map(n => {
       const c = COLS[n.kind]?.col ?? 0;
       const r = (rows[c] = (rows[c] ?? -1) + 1);
-      return { id: n.id, type: "t", position: { x: c * 250, y: r * 84 }, data: { n, on: sel === n.id, dim: !!chain && !chain.has(n.id) } };
+      return { id: n.id, type: "t", position: { x: c * COL_W, y: r * ROW_H }, data: { n, on: sel === n.id, dim: !!chain && !chain.has(n.id) } };
     });
     const es: Edge[] = edges.map(e => {
       const active = !!chain && chain.has(e.source) && chain.has(e.target);
@@ -66,15 +71,22 @@ export function TraceGraph({ nodes, edges, pid, onOpen }: { nodes: TraceNode[]; 
     return { ns, es };
   }, [nodes, edges, sel, chain]);
   const selNode = nodes.find(n => n.id === sel);
+  /** Focused hazard: its regulation column at the left edge, the hazard vertically centered (never past the top row). */
+  const center = (rfi: ReactFlowInstance<Node<D>>) => {
+    const n = rf.ns.find(x => x.id === focus);
+    if (!n) return rfi.fitView();
+    const pad = 24, z = READABLE;
+    rfi.setViewport({ x: pad - (n.position.x - COL_W) * z, y: Math.min(pad, HEIGHT / 2 - (n.position.y + NODE_H / 2) * z), zoom: z });
+  };
 
   return (
-    <div className="relative h-[680px] overflow-hidden rounded-lg border border-line bg-[#0b0c0e]">
+    <div style={{ height: HEIGHT }} className="relative overflow-hidden rounded-lg border border-line bg-[#0b0c0e]">
       {selNode && (selNode.kind === "requirement" || selNode.kind === "hazard") && (
         <a href={`#/p/${pid}/traceability/${selNode.id}`} className="absolute left-3 top-3 z-10 rounded-md border border-line bg-panel2 px-3 py-1.5 text-sm hover:border-white/25">
           Open {selNode.id} details →
         </a>
       )}
-      <ReactFlow nodes={rf.ns} edges={rf.es} nodeTypes={TYPES} fitView minZoom={0.2} proOptions={{ hideAttribution: true }}
+      <ReactFlow nodes={rf.ns} edges={rf.es} nodeTypes={TYPES} onInit={center} minZoom={0.2} proOptions={{ hideAttribution: true }}
         nodesConnectable={false} colorMode="dark" onPaneClick={() => setSel(null)}
         onNodeClick={(_, n) => {
           const tn = nodes.find(x => x.id === n.id);
