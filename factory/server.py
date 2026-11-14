@@ -15,6 +15,7 @@ GET  /api/monitors/evidence?run=R  one monitor run's evidence (report markdown +
 GET  /api/supply?project=ID        suppliers, parts/BOM with risk flags, finance (factory/supply.py, sample data labelled)
 GET  /api/supply/tower[?project=ID] control tower: one project, or every project
 GET  /api/connect/composio         redirects to a Composio Connect Link to authorize GitHub (one time)
+GET  /api/callouts?wo=WO-x         cockpit callouts / pump alarms of the work order's before/after runs (?project=ID: latest what-if)
 POST /api/projects   {name, device}                 create a project (imports its hazard log)
 POST /api/workorders {project, title, description}  create a work order
 POST /api/run        {wo}                           run a work order through the factory
@@ -41,6 +42,7 @@ from urllib.parse import parse_qs, urlparse
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "factory"))
+import callouts  # noqa: E402
 import memory  # noqa: E402
 import monitors  # noqa: E402
 import record  # noqa: E402
@@ -185,6 +187,10 @@ class H(SimpleHTTPRequestHandler):
                                    "inventory": memory.inventory(), "project": dev})
         if u.path == "/api/diff":
             return self.send(200, store.diff(wo) or "No code changes yet.", "text/plain")
+        if u.path == "/api/callouts":
+            evs = store.events()
+            b = callouts.for_wo(evs, wo) if wo else callouts.latest_whatif([e for e in evs if e["project"] == q.get("project", "")])
+            return self.send(200, b) if b else self.send(404, {"error": "no simulation to voice"})
         if u.path == "/api/worldmodel":
             loop = worldmodel.loop(wo)
             return self.send(200, loop) if loop else self.send(404, {"error": "no simulation for this work order"})
