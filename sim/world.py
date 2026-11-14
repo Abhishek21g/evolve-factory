@@ -27,6 +27,7 @@ import subprocess
 import sys
 import tempfile
 import types
+from concurrent.futures import ProcessPoolExecutor
 
 # ponytail: simglucose 0.2.x imports legacy gym only to register an env we don't use; stub it.
 _r = types.ModuleType("gym.envs.registration")
@@ -46,10 +47,6 @@ PATIENT_FILE = os.path.join(os.path.dirname(simglucose.__file__), "params", "vpa
 
 
 SHIM = os.path.join(os.path.dirname(os.path.abspath(__file__)), "shim.c")
-
-
-def load_pump(src_dir, out_dir):
-    return bind_pump(compile_pump(src_dir, os.path.join(out_dir, "libpump.so")))
 
 
 def compile_pump(src_dir, lib):
@@ -79,14 +76,18 @@ def bind_pump(lib):
 #   carbs: meal grams; typo: factor the user mistypes the correct dose by (1 = no typo);
 #   fallback when the pump rejects: "extended" (user picks extended mode) or "reenter" (user types the intended dose);
 #   cohort: adult | adolescent | child (10 virtual patients each).
-# Optional what-if knobs (defaults reproduce the gate scenarios exactly):
-#   meal_at: minute of the meal (30); minutes: run length (360); eaten: grams actually eaten (= carbs; 0 = bolused
+# Optional what-if knobs (defaults reproduce the gate scenarios, except run length):
+#   meal_at: minute of the meal (30); minutes: run length (360; gate: GATE_MINUTES); eaten: grams actually eaten (= carbs; 0 = bolused
 #   but skipped the meal); dose_u: units the user types (overrides carbs / CR * typo); bg_start: starting BG mg/dL
 #   (patient's own fasting BG); sensitivity: multiplier on insulin action above basal, Vmx (1; >1 approximates the
 #   raised insulin sensitivity after exercise; insulin-independent exercise uptake is not modeled).
+# Gate window: 12 h. An extended bolus (<= 25 U at 10 U/h) runs until ~min 180, and its glucose effect lags well
+# behind absorption: on main the large-meal nadirs land at min 482 (adult#010, 53 mg/dL) and min 697 (adult#009,
+# 42 mg/dL). A 6 h window sees neither.
+GATE_MINUTES = 720
 SCENARIOS = [
-    {"id": "large-meal", "label": "120 g meal, correct dose", "carbs": 120, "typo": 1, "fallback": "extended", "cohort": "adult"},
-    {"id": "decimal-slip", "label": "15 g snack, dose typed 10x", "carbs": 15, "typo": 10, "fallback": "reenter", "cohort": "adult"},
+    {"id": "large-meal", "label": "120 g meal, correct dose", "carbs": 120, "typo": 1, "fallback": "extended", "cohort": "adult", "minutes": GATE_MINUTES},
+    {"id": "decimal-slip", "label": "15 g snack, dose typed 10x", "carbs": 15, "typo": 10, "fallback": "reenter", "cohort": "adult", "minutes": GATE_MINUTES},
 ]
 
 
@@ -158,14 +159,17 @@ def names(sc):
     return [f"{sc.get('cohort', 'adult')}#{i:03d}" for i in range(1, 11)]
 
 
+def one_run(lib, sc, name):
+    return row(sc, name, *simulate(bind_pump(lib), name, sc, float(CR[name])))
+
+
 def cohort(src_dir, scenarios):
+    """Patients are independent and deterministic, so they run in parallel (one process per CPU)."""
     with tempfile.TemporaryDirectory() as d:
-        pump = load_pump(src_dir, d)
-        results = []
-        for sc in scenarios:
-            for name in names(sc):
-                results.append(row(sc, name, *simulate(pump, name, sc, float(CR[name]))))
-    return results
+        lib = compile_pump(src_dir, os.path.join(d, "libpump.so"))
+        jobs = [(sc, name) for sc in scenarios for name in names(sc)]
+        with ProcessPoolExecutor() as ex:
+            return list(ex.map(one_run, [lib] * len(jobs), *zip(*jobs)))
 
 
 def base_src(repo, base, d):
