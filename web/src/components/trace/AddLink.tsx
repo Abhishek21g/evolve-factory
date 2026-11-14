@@ -55,7 +55,7 @@ export function AddLink({ api, items, draft, onClose }: { api: Api; items: { id:
             </select>
           </Field>
           <Field label="To">
-            <div className="flex overflow-hidden rounded-md border border-line text-[12px]">
+            <div className="flex overflow-hidden rounded-md border border-line text-sm">
               {KINDS.map(([k, l]) => (
                 <button type="button" key={k} onClick={() => { setKind(k); setErr(""); }}
                   className={`whitespace-nowrap px-2.5 py-2 ${kind === k ? "bg-white/[.08] text-ink" : "text-mute hover:text-ink"}`}>{l}</button>
@@ -74,14 +74,14 @@ export function AddLink({ api, items, draft, onClose }: { api: Api; items: { id:
                 <input value={q} onChange={x => setQ(x.target.value)} autoFocus aria-label="Search the repository"
                   placeholder={kind === "doc" ? "Search docs and sections, e.g. traceability" : "Search files and code, e.g. extended_bolus"} className={inputCls + " pl-8"} />
               </div>
-              <div className="scroll-thin mt-2 h-72 overflow-y-auto rounded-md border border-line text-[12px]">
+              <div className="scroll-thin mt-2 h-72 overflow-y-auto rounded-md border border-line text-sm">
                 {hits?.sections.filter(() => kind === "doc" || kind === "code").map(h => (
                   <Hit key={`s${h.path}${h.anchor}`} on={path === h.path && anchor === h.anchor} onClick={() => pick(h.path, undefined, h.anchor)}
                     icon={<Hash size={12} />} main={h.text} sub={`${h.path}#${h.anchor}`} />
                 ))}
                 {kind !== "doc" && hits?.lines.map(h => (
                   <Hit key={`l${h.path}${h.line}`} on={path === h.path && s === h.line} onClick={() => pick(h.path, h.line)}
-                    icon={<FileCode2 size={12} />} main={<code className="font-mono text-[11px]">{h.text}</code>} sub={`${h.path}:${h.line}`} />
+                    icon={<FileCode2 size={12} />} main={<code className="font-mono text-xs">{h.text}</code>} sub={`${h.path}:${h.line}`} />
                 ))}
                 {hits?.files.filter(f => kind !== "doc" || f.endsWith(".md")).map(f => (
                   <Hit key={`f${f}`} on={path === f && !s && !anchor} onClick={() => pick(f)}
@@ -91,7 +91,7 @@ export function AddLink({ api, items, draft, onClose }: { api: Api; items: { id:
               </div>
             </div>
             <div className="min-w-0 space-y-3">
-              <Field label="File"><input className={inputCls + " font-mono text-[12px]"} value={path} onChange={x => setPath(x.target.value)} placeholder="demo/pump/pump.c" /></Field>
+              <Field label="File"><input className={inputCls + " font-mono text-sm"} value={path} onChange={x => setPath(x.target.value)} placeholder="demo/pump/pump.c" /></Field>
               {kind === "doc" ? (
                 <Field label="Section">
                   <select className={inputCls} value={anchor} onChange={x => setAnchor(x.target.value)}>
@@ -106,12 +106,12 @@ export function AddLink({ api, items, draft, onClose }: { api: Api; items: { id:
                 </div>
               )}
               {file && kind !== "doc" && <CodeLines file={file} start={s || 1} end={e || file.lines} only context={1} />}
-              {file === null && path && <p className="text-[12px] text-bad">Not a file in the repository.</p>}
+              {file === null && path && <p className="text-sm text-bad">Not a file in the repository.</p>}
             </div>
           </div>
         )}
         <Field label="Label (optional)"><input className={inputCls} value={label} onChange={x => setLabel(x.target.value)} placeholder="e.g. extended bolus applies the daily cap at every tick" /></Field>
-        {err && <p className="text-[12px] text-bad">{err}</p>}
+        {err && <p className="text-sm text-bad">{err}</p>}
         <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button primary type="submit" disabled={!ready || !api.live}>Add link</Button></div>
       </form>
     </Modal>
@@ -122,7 +122,7 @@ function Hit({ on, onClick, icon, main, sub }: { on: boolean; onClick: () => voi
   return (
     <button type="button" onClick={onClick} className={`flex w-full items-start gap-2 border-b border-line px-3 py-1.5 text-left last:border-0 ${on ? "bg-white/[.07]" : "hover:bg-white/[.03]"}`}>
       <span className="mt-0.5 text-dim">{icon}</span>
-      <span className="min-w-0 flex-1"><span className="block truncate">{main}</span>{sub && <span className="block truncate font-mono text-[10.5px] text-dim">{sub}</span>}</span>
+      <span className="min-w-0 flex-1"><span className="block truncate">{main}</span>{sub && <span className="block truncate font-mono text-2xs text-dim">{sub}</span>}</span>
     </button>
   );
 }

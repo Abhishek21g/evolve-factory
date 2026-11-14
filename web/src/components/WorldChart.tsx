@@ -49,7 +49,7 @@ export function simVerdict(w: World, rs = w.results): { label: string; tone: "ba
 
 const TONE = { bad: "text-bad bg-bad/10 border-bad/30", warn: "text-warn bg-warn/10 border-warn/25", ok: "text-ok bg-ok/10 border-ok/25" };
 export const VerdictChip = ({ v }: { v: ReturnType<typeof simVerdict> }) => (
-  <span className={`inline-flex items-center rounded border px-1.5 py-px text-[11px] font-semibold tracking-wide ${TONE[v.tone]}`}>{v.label}</span>
+  <span className={`inline-flex items-center rounded border px-1.5 py-px text-xs font-semibold tracking-wide ${TONE[v.tone]}`}>{v.label}</span>
 );
 
 function describe(s?: Scenario) {
@@ -70,7 +70,7 @@ export function WorldChart({ world }: { world: World }) {
   const subjects = new Set(world.results.map(r => r.patient)).size;
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-mute">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-mute">
         <VerdictChip v={simVerdict(world)} />
         <span>{world.results.length} simulated runs · {subjects} {ax.subject} · {scenarios.length} scenario{scenarios.length > 1 ? "s" : ""}</span>
         {ax.glucose && <span className="text-dim">simglucose (UVA/Padova T1D) · real pump.c in the loop · 1-min steps</span>}
@@ -91,7 +91,7 @@ function Legend({ world, ax }: { world: World; ax: Ax }) {
     ...(whatif ? [] : [[COL.base, `same run on ${world.base} (before)`, true] as [string, string, boolean]]),
   ];
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-mute">
+    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-mute">
       {items.map(([c, l, dash]) => (
         <span key={l} className="inline-flex items-center gap-1.5">
           <svg width="18" height="6"><line x1="0" x2="18" y1="3" y2="3" stroke={c} strokeWidth="2" strokeDasharray={dash ? "3 3" : undefined} /></svg>{l}
@@ -149,8 +149,8 @@ function ScenarioSim({ world, ax, sc, meta }: { world: World; ax: Ax; sc: string
     <figure className="@container rounded-lg border border-line bg-bg/60 p-3">
       <figcaption className="mb-2 flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
         <div className="min-w-0">
-          <div className="text-[13px] font-medium">{meta?.label || sc}</div>
-          <div className="text-[11px] text-dim">{rs.length} {meta?.cohort ? `virtual ${meta.cohort}s` : ax.subject} · {describe(meta)}{describe(meta) ? " · " : ""}{fmtT(total, ax)} simulated</div>
+          <div className="text-base font-medium">{meta?.label || sc}</div>
+          <div className="text-xs text-dim">{rs.length} {meta?.cohort ? `virtual ${meta.cohort}s` : ax.subject} · {describe(meta)}{describe(meta) ? " · " : ""}{fmtT(total, ax)} simulated</div>
         </div>
         <VerdictChip v={v} />
       </figcaption>
@@ -213,14 +213,14 @@ function ScenarioSim({ world, ax, sc, meta }: { world: World; ax: Ax; sc: string
           )}
         </svg>
         <div className="min-w-0 space-y-3">
-          <dl className="grid gap-x-6 gap-y-1.5 text-[12px] @lg:grid-cols-2 @4xl:grid-cols-1">
+          <dl className="grid gap-x-6 gap-y-1.5 text-sm @lg:grid-cols-2 @4xl:grid-cols-1">
             {stats.map(([k, val, cls]) => (
               <div key={k} className="flex justify-between gap-3 border-b border-line/60 pb-1.5">
                 <dt className="text-dim">{k}</dt><dd className={`text-right font-mono ${cls || "text-ink"}`}>{val}</dd>
               </div>
             ))}
           </dl>
-          <div className="rounded-md bg-white/[.03] p-2 text-[11.5px] leading-relaxed text-mute">
+          <div className="rounded-md bg-white/[.03] p-2 text-xs leading-relaxed text-mute">
             {sel ? <><b className="font-mono text-ink">{sel.patient}</b><br />{sel.note}
               {ax.glucose && <><br />min {sel.min} mg/dL{sel.nadir_at != null ? ` at ${fmtT(sel.nadir_at, ax)}` : ""} · max {sel.max}{sel.tir != null ? ` · in range ${sel.tir}%` : ""}</>}
               {!whatif ? <><br />on {world.base}: {ax.glucose ? `min ${sel.base_min} mg/dL` : `${sel.base_min} ${ax.unit}`}</> : null}</>
@@ -248,7 +248,7 @@ function PatientTable({ rows, st, world, hi, setHi }: TableProps) {
   const ax = axisOf(world);
   return (
     <div className="mt-2 overflow-x-auto">
-      <table className="w-full text-left text-[11.5px]">
+      <table className="w-full text-left text-xs">
         <thead className="text-dim">
           <tr>{["Patient", "Pump decision", cmpU ? "Insulin (U) main → new" : "Insulin (U)", whatif ? "Min BG" : "Min BG main → new", "Max BG", "In range", "> 250", "Result"].map(h => <th key={h} className={th}>{h}</th>)}</tr>
         </thead>
@@ -281,7 +281,7 @@ function RunTable({ rows, st, world, ax, hi, setHi }: TableProps & { ax: Ax }) {
   const label: Record<St, [string, string]> = { harm: ["text-bad", whatif ? "exceeded" : "exceeded (new)"], pre: ["text-warn", "pre-existing"], hyper: ["", ""], ok: ["text-ok", "inside"] };
   return (
     <div className="mt-2 overflow-x-auto">
-      <table className="w-full text-left text-[11.5px]">
+      <table className="w-full text-left text-xs">
         <thead className="text-dim">
           <tr>{["Run", "Outcome", whatif ? `Peak (${ax.unit})` : `Peak (${ax.unit}) ${world.base} → new`, "Result"].map(h => <th key={h} className={th}>{h}</th>)}</tr>
         </thead>

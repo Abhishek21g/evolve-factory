@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { ArrowUp, ListChecks, Play } from "lucide-react";
+import { ArrowUp, Bot, Brain, Code2, FileCheck2, FlaskConical, Github, ListChecks, ListTodo, Orbit, Play, Scale, ShieldAlert, ShieldCheck, type LucideIcon } from "lucide-react";
 import type { Member, State } from "@/lib/api";
 import type { Ev } from "@/lib/feed";
 import { WorldChart } from "@/components/WorldChart";
@@ -11,8 +11,13 @@ export type AgentCtx = {
   post: (p: string, b: object) => Promise<{ error?: string; id?: string; started?: string }>;
 };
 
-export const AGENT_ICON: Record<string, string> = {
-  planner: "◇", memory: "◎", safety: "△", "coder-claude": "</>", "coder-codex": "</>", gate: "✓", world: "∿", simulation: "?", evidence: "▤", reviewer: "⚖", actions: "↗",
+export const AGENT_ICON: Record<string, LucideIcon> = {
+  planner: ListTodo, memory: Brain, safety: ShieldAlert, "coder-claude": Code2, "coder-codex": Code2, gate: ShieldCheck, world: Orbit,
+  simulation: FlaskConical, evidence: FileCheck2, reviewer: Scale, actions: Github,
+};
+export const AgentIcon = ({ id, size = 28 }: { id: string; size?: number }) => {
+  const I = AGENT_ICON[id] || Bot;
+  return <span style={{ width: size, height: size }} className="grid shrink-0 place-items-center rounded-md bg-acc/10 text-acc ring-1 ring-acc/20"><I size={Math.round(size * 0.55)} /></span>;
 };
 
 /** What each agent can do, from factory/pipeline.py and gate/runner.py. */
@@ -47,10 +52,8 @@ const Dot = ({ s }: { s?: string }) => {
   const t = tone(s);
   return <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${t === "run" ? "pulse bg-run" : t === "bad" ? "bg-bad" : t === "ok" ? "bg-ok" : "bg-[#2a2f36]"}`} />;
 };
-const Icon = ({ id }: { id: string }) => (
-  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-white/[.05] font-mono text-[11px] text-acc">{AGENT_ICON[id] || "◇"}</span>
-);
-const Empty = ({ children }: { children: React.ReactNode }) => <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-[13px] text-dim">{children}</p>;
+const Icon = ({ id }: { id: string }) => <AgentIcon id={id} />;
+const Empty = ({ children }: { children: React.ReactNode }) => <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-base text-dim">{children}</p>;
 const at = (e: Ev) => Number(e.run) + e.t;
 
 type Run = { id: string; evs: Ev[]; wo: string | null; title?: string };
@@ -63,7 +66,7 @@ function toRuns(events: Ev[]): Run[] {
 const runName = (r: Run) => r.wo || "What-if";
 
 function RunLink({ r, pid }: { r: Run; pid: string }) {
-  return <a href={`#/p/${pid}/${r.wo ? `work-orders/${r.wo}` : "world-model"}`} className="whitespace-nowrap font-mono text-[12px] hover:underline">{runName(r)}</a>;
+  return <a href={`#/p/${pid}/${r.wo ? `work-orders/${r.wo}` : "world-model"}`} className="whitespace-nowrap font-mono text-sm hover:underline">{runName(r)}</a>;
 }
 
 /* ---------- the team: who is doing what, per run ---------- */
@@ -95,8 +98,8 @@ export function AgentTeam({ state, events, live, post, team }: AgentCtx) {
         <Button primary type="submit" disabled={!live || busy || !text.trim()}><ArrowUp size={14} /> Start work order</Button>
         {draft && <Button onClick={() => act("run", { wo: draft.id })} disabled={!live || busy}><Play size={14} /> Run draft {draft.id}</Button>}
       </form>
-      {err && <p className="mb-3 text-[12px] text-bad">{err}</p>}
-      <p className="mb-6 flex flex-wrap items-center gap-2 text-[12px] text-dim">
+      {err && <p className="mb-3 text-sm text-bad">{err}</p>}
+      <p className="mb-6 flex flex-wrap items-center gap-2 text-sm text-dim">
         {busy ? <>
           <Dot s="working" /> <span className="text-run">Working on {state.status?.running ? <a href={`#/p/${p.id}/work-orders/${state.status.running}`} className="underline">{state.status.running}</a> : "a what-if"}</span>
         </> : runs[0] ? <>
@@ -108,7 +111,7 @@ export function AgentTeam({ state, events, live, post, team }: AgentCtx) {
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <Section title={run ? `Team on ${runName(run)}${run.title ? ` · ${run.title}` : ""}` : "Team"}
           aside={runs.length > 1 ? (
-            <select aria-label="Run" value={run?.id} onChange={e => setSel(e.target.value)} className="cursor-pointer bg-transparent text-[12px] text-mute outline-none">
+            <select aria-label="Run" value={run?.id} onChange={e => setSel(e.target.value)} className="cursor-pointer bg-transparent text-sm text-mute outline-none">
               {runs.map((r, i) => <option key={r.id} value={r.id} className="bg-panel">{i === 0 ? "Latest: " : ""}{runName(r)} · {ago(Number(r.id))}</option>)}
             </select>) : undefined}>
           <div className="grid gap-2.5 sm:grid-cols-2">
@@ -121,12 +124,12 @@ export function AgentTeam({ state, events, live, post, team }: AgentCtx) {
                   <div className="flex items-center gap-2">
                     <Icon id={a.id} />
                     <span className="min-w-0">
-                      <span className="block truncate text-[13px] font-medium">{a.name}</span>
-                      <span className="block truncate text-[11px] text-dim">{a.role}</span>
+                      <span className="block truncate text-base font-medium">{a.name}</span>
+                      <span className="block truncate text-xs text-dim">{a.role}</span>
                     </span>
-                    <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] text-dim"><Dot s={s} /> {e ? (s === "stopped" ? "stopped" : word(s)) : "not in this run"}</span>
+                    <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-dim"><Dot s={s} /> {e ? (s === "stopped" ? "stopped" : word(s)) : "not in this run"}</span>
                   </div>
-                  <p className={`mt-2 line-clamp-2 min-h-[2.6em] text-[12px] leading-snug ${tone(s) === "bad" ? "text-bad" : "text-mute"}`}>{e?.msg || "—"}</p>
+                  <p className={`mt-2 line-clamp-2 min-h-[2.6em] text-sm leading-snug ${tone(s) === "bad" ? "text-bad" : "text-mute"}`}>{e?.msg || "—"}</p>
                 </a>
               );
             })}
@@ -144,15 +147,15 @@ function Log({ evs, team, pid }: { evs: Ev[]; team?: Record<string, Member>; pid
   return (
     <ol className="space-y-3 border-l border-line pl-4">
       {[...evs].reverse().map((e, i) => (
-        <li key={i} className="relative text-[13px]">
+        <li key={i} className="relative text-base">
           <span className={`absolute -left-[21px] top-1.5 h-2 w-2 rounded-full ${tone(e.state) === "bad" ? "bg-bad" : tone(e.state) === "run" ? "bg-run" : "bg-ok"}`} />
-          <div className="text-[11px] text-dim">
+          <div className="text-xs text-dim">
             <span className="font-mono">+{e.t.toFixed(0)}s</span>
             {team && <> · <a href={`#/p/${pid}/agents/${e.agent}`} className="hover:text-ink">{team[e.agent]?.name || e.agent}</a></>}
             {" · "}{word(e.state)}
           </div>
           <div className={tone(e.state) === "bad" ? "text-bad" : ""}>{e.msg}</div>
-          {e.pr && <a href={e.pr} target="_blank" rel="noopener noreferrer" className="text-[12px] text-acc hover:underline">{e.pr}</a>}
+          {e.pr && <a href={e.pr} target="_blank" rel="noopener noreferrer" className="text-sm text-acc hover:underline">{e.pr}</a>}
         </li>
       ))}
     </ol>
@@ -174,22 +177,22 @@ export function AgentPage({ state, events, team, id }: AgentCtx & { id: string }
 
   return (
     <>
-      <div className="mb-1 text-[12px] text-dim"><a href={`#/p/${p.id}/agents`} className="hover:text-ink">Agents</a> / {a.name}</div>
+      <div className="mb-1 text-sm text-dim"><a href={`#/p/${p.id}/agents`} className="hover:text-ink">Agents</a> / {a.name}</div>
       <PageHead title={a.name} sub={<span className="inline-flex flex-wrap items-center gap-2">
         {active ? <Badge tone="Running">working</Badge> : <Badge tone={last?.state === "blocked" ? "Blocked" : "Draft"}>{inRun ? "waiting on the team" : "idle"}</Badge>}
         {a.role}
       </span>}>
-        {run?.wo && <a href={`#/p/${p.id}/work-orders/${run.wo}`} className="inline-flex items-center gap-1.5 rounded-md border border-line bg-panel2 px-3 py-1.5 text-[13px] font-medium hover:border-white/20"><ListChecks size={14} /> Open {run.wo}</a>}
+        {run?.wo && <a href={`#/p/${p.id}/work-orders/${run.wo}`} className="inline-flex items-center gap-1.5 rounded-md border border-line bg-panel2 px-3 py-1.5 text-base font-medium hover:border-white/20"><ListChecks size={14} /> Open {run.wo}</a>}
       </PageHead>
 
       <div className={`mb-8 rounded-lg border bg-panel p-4 ${active ? "border-run/40" : "border-line"}`}>
-        <div className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-wider text-dim"><Dot s={active ? "working" : last?.state} /> {active ? "Now" : last ? "Last action" : "Status"}</div>
+        <div className="mb-1 flex items-center gap-2 text-xs uppercase tracking-wider text-dim"><Dot s={active ? "working" : last?.state} /> {active ? "Now" : last ? "Last action" : "Status"}</div>
         {last ? <>
-          <p className={`text-[14px] ${last.state === "blocked" ? "text-bad" : ""}`}>{last.msg}</p>
-          <p className="mt-1 text-[12px] text-dim">
+          <p className={`text-md ${last.state === "blocked" ? "text-bad" : ""}`}>{last.msg}</p>
+          <p className="mt-1 text-sm text-dim">
             {active ? "Working on " : `${inRun ? "Waiting on the team" : "Idle"} · ${word(last.state) === "working" ? "stopped" : word(last.state)} on `}<RunLink r={run} pid={p.id} />{run.title ? ` · ${run.title}` : ""} · {ago(at(last))}
           </p>
-        </> : <p className="text-[13px] text-mute">Idle. {a.name} has not run yet{id === "actions" ? " (connect GitHub on Home)" : ""}.</p>}
+        </> : <p className="text-base text-mute">Idle. {a.name} has not run yet{id === "actions" ? " (connect GitHub on Home)" : ""}.</p>}
       </div>
 
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
@@ -199,19 +202,19 @@ export function AgentPage({ state, events, team, id }: AgentCtx & { id: string }
           </Section>
           <Section title="Output">
             <Output evs={evs} />
-            {run?.wo && <p className="mt-3 text-[12px] text-dim">Code change, requirement tests and evidence pack: <a href={`#/p/${p.id}/work-orders/${run.wo}`} className="underline hover:text-ink">{run.wo}</a></p>}
+            {run?.wo && <p className="mt-3 text-sm text-dim">Code change, requirement tests and evidence pack: <a href={`#/p/${p.id}/work-orders/${run.wo}`} className="underline hover:text-ink">{run.wo}</a></p>}
           </Section>
         </div>
         <div className="min-w-0">
           <Section title="Skills">
-            <ul className="space-y-1.5 text-[13px] text-mute">{(SKILLS_BY_DEVICE[p.device]?.[id] || SKILLS[id] || [a.role]).map(s => <li key={s} className="flex gap-2"><span className="text-acc">·</span>{s}</li>)}</ul>
+            <ul className="space-y-1.5 text-base text-mute">{(SKILLS_BY_DEVICE[p.device]?.[id] || SKILLS[id] || [a.role]).map(s => <li key={s} className="flex gap-2"><span className="text-acc">·</span>{s}</li>)}</ul>
           </Section>
           <Section title="History" aside={`${mine.length} run${mine.length === 1 ? "" : "s"}`}>
             <Table head={["Run", "Request", "Result", "When"]} empty="No runs yet."
               rows={mine.map(r => {
                 const s = steps(r), e = s[s.length - 1];
                 return [<RunLink key="r" r={r} pid={p.id} />, <span key="t" className="line-clamp-1 text-mute">{r.title || "—"}</span>,
-                  <span key="x" className="inline-flex items-center gap-1.5 whitespace-nowrap text-[12px]"><Dot s={e.state} /> {word(e.state)} · {s.length} step{s.length === 1 ? "" : "s"}</span>,
+                  <span key="x" className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm"><Dot s={e.state} /> {word(e.state)} · {s.length} step{s.length === 1 ? "" : "s"}</span>,
                   <span key="w" className="whitespace-nowrap text-mute">{ago(at(e))}</span>];
               })} />
           </Section>
@@ -229,32 +232,32 @@ function Output({ evs }: { evs: Ev[] }) {
   const sc = ([...evs].reverse().find(e => (e as { scenarios?: unknown }).scenarios) as { scenarios?: { id: string; label: string; carbs: number; cohort: string }[] } | undefined)?.scenarios;
   if (!mem && !lesEv && !saved && !an && !gate && !world && !ev && !pr && !sc) return <Empty>No artifact from this step; its log above is the output.</Empty>;
   const via = (r?: Ev["recall"]) => r ? (r.backend === "HydraDB" ? `HydraDB · ${r.ms} ms` : "local memory (HydraDB unreachable)") : "";
-  const tag = (k: string) => <span className="mr-2 rounded bg-white/[.05] px-1.5 py-0.5 font-mono text-[10px] uppercase text-mute">{k.replace("_", " ")}</span>;
+  const tag = (k: string) => <span className="mr-2 rounded bg-white/[.05] px-1.5 py-0.5 font-mono text-2xs uppercase text-mute">{k.replace("_", " ")}</span>;
   return (
-    <div className="space-y-4 text-[13px]">
+    <div className="space-y-4 text-base">
       {saved?.lesson && <div className="rounded-lg border border-line px-3 py-2">
-        <div className="text-[11px] text-dim">Lesson saved to {via(saved.recall)} · {saved.lesson.source.split(" · ")[1]}</div>
+        <div className="text-xs text-dim">Lesson saved to {via(saved.recall)} · {saved.lesson.source.split(" · ")[1]}</div>
         <div className="mt-0.5 font-medium">{saved.lesson.title}</div>
-        <p className="mt-0.5 text-[12.5px] text-mute">{saved.lesson.summary}</p>
+        <p className="mt-0.5 text-sm text-mute">{saved.lesson.summary}</p>
       </div>}
       {lesEv && <div>
-        <div className="mb-1.5 text-[11px] text-dim">Similar past work orders recalled from {via(lesEv.recall)} · factory_lessons</div>
+        <div className="mb-1.5 text-xs text-dim">Similar past work orders recalled from {via(lesEv.recall)} · factory_lessons</div>
         {lesEv.lessons!.length ? <ul className="divide-y divide-line rounded-lg border border-line">{lesEv.lessons!.map((h, i) => (
           <li key={i} className="px-3 py-2">{tag("lesson")}<span className="font-medium">{h.title}</span>
-            <p className="mt-0.5 text-[12.5px] text-mute">{h.summary}</p></li>))}</ul>
+            <p className="mt-0.5 text-sm text-mute">{h.summary}</p></li>))}</ul>
           : <Empty>No similar past work order yet. This run&apos;s lesson is saved for the next one.</Empty>}
       </div>}
       {mem && <div>
-        {memEv?.recall && <div className="mb-1.5 text-[11px] text-dim">Recalled from {via(memEv.recall)} · {memEv.recall.collections?.join(", ")}</div>}
+        {memEv?.recall && <div className="mb-1.5 text-xs text-dim">Recalled from {via(memEv.recall)} · {memEv.recall.collections?.join(", ")}</div>}
         <ul className="divide-y divide-line rounded-lg border border-line">{mem.map((h, i) => (
           <li key={i} className="flex items-baseline gap-2 px-3 py-2"><span className="min-w-0">{tag(h.kind)}{h.title}</span>
-            {h.collection && <span className="ml-auto shrink-0 font-mono text-[10.5px] text-dim">{h.collection}</span>}</li>))}</ul>
+            {h.collection && <span className="ml-auto shrink-0 font-mono text-2xs text-dim">{h.collection}</span>}</li>))}</ul>
       </div>}
       {an && <dl className="grid grid-cols-[110px_minmax(0,1fr)] gap-x-3 gap-y-1.5">
         {([["Hazards", an.hazards?.join(", ")], ["Requirements", an.requirements?.join(", ")], ["Risk", an.risk], ["Guidance", an.guidance], ["New hazard", an.new_hazard]] as const)
           .filter(([, v]) => v).flatMap(([k, v]) => [<dt key={k} className="text-dim">{k}</dt>, <dd key={k + "v"} className="text-mute">{v}</dd>])}
       </dl>}
-      {gate && <Table head={["Requirement", "Result"]} rows={gate.rows.map(r => [<span key="r"><b className="font-mono text-[12px]">{r.id}</b> <span className="text-mute">{r.text}</span></span>, <Badge key="x">{r.result}</Badge>])} />}
+      {gate && <Table head={["Requirement", "Result"]} rows={gate.rows.map(r => [<span key="r"><b className="font-mono text-sm">{r.id}</b> <span className="text-mute">{r.text}</span></span>, <Badge key="x">{r.result}</Badge>])} />}
       {world && world.results.length > 0 && <WorldChart world={world} />}
       {sc && <ul className="space-y-1 text-mute">{sc.map(s => <li key={s.id}>{s.label || s.id} · {s.carbs} g · {s.cohort}</li>)}</ul>}
       {ev && <p><Badge>{ev.decision}</Badge> <span className="text-mute">{ev.headline}</span></p>}

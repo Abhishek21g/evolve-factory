@@ -48,15 +48,15 @@ export function SimVsWorld({ air }: { air: boolean }) {
   return (
     <div className="mb-6 grid gap-2.5 md:grid-cols-2">
       <div className="rounded-lg border border-line bg-panel p-3">
-        <div className="mb-1 flex items-center gap-2 text-[12px] font-semibold"><span className="font-mono text-acc">∿</span> Simulation <span className="font-normal text-dim">the physics</span></div>
-        <p className="text-[12px] leading-relaxed text-mute">
+        <div className="mb-1 flex items-center gap-2 text-sm font-semibold"><span className="font-mono text-acc">∿</span> Simulation <span className="font-normal text-dim">the physics</span></div>
+        <p className="text-sm leading-relaxed text-mute">
           {air ? <>A 737-class flight model (<code className="text-ink">sim/flight.py</code>) flies the real <code className="text-ink">fcc.c</code> at 50 Hz: AoA, pitch, altitude and the trim the code commands, for every scenario and weight/CG config.</>
             : <>UVA/Padova virtual patients (<code className="text-ink">sim/world.py</code>, simglucose) run the real <code className="text-ink">pump.c</code> minute by minute: glucose and the insulin the code delivers.</>}
         </p>
       </div>
       <div className="rounded-lg border border-acc/25 bg-acc/[.03] p-3">
-        <div className="mb-1 flex items-center gap-2 text-[12px] font-semibold"><span className="font-mono text-acc">◈</span> World model <span className="font-normal text-dim">scenarios, diagnosis, the fix loop</span></div>
-        <p className="text-[12px] leading-relaxed text-mute">
+        <div className="mb-1 flex items-center gap-2 text-sm font-semibold"><span className="font-mono text-acc">◈</span> World model <span className="font-normal text-dim">scenarios, diagnosis, the fix loop</span></div>
+        <p className="text-sm leading-relaxed text-mute">
           Generates adversarial scenarios ({air ? "sensor failures, sideslip, gusts, weights" : "meals, dose typos, cohorts"}), runs them through the simulation, finds the moment a run leaves the safe envelope,
           and diagnoses it: which requirement and hazard, when, why, and which code lines. Claude Code gets that report, fixes the code, and the loop re-runs until PASS. Facts come from code; no LLM decides.
         </p>
@@ -99,9 +99,9 @@ function LoopChart({ s, air, threshold, diag, label }: { s: Series; air: boolean
   ];
   return (
     <figure className="@container rounded-lg border border-line bg-bg/60 p-3">
-      <figcaption className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2 text-[12px]">
+      <figcaption className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2 text-sm">
         <span className="font-medium">{label}</span>
-        <span className="font-mono text-[11px] text-dim">{s.run}</span>
+        <span className="font-mono text-xs text-dim">{s.run}</span>
       </figcaption>
       <div className="grid gap-4 @3xl:grid-cols-[minmax(0,640px)_minmax(0,1fr)]">
       <div>
@@ -146,18 +146,18 @@ function LoopChart({ s, air, threshold, diag, label }: { s: Series; air: boolean
           </g>
         )}
       </svg>
-      <div className="mt-1 flex flex-wrap gap-x-4 text-[11px] text-mute">
+      <div className="mt-1 flex flex-wrap gap-x-4 text-xs text-mute">
         <span className="inline-flex items-center gap-1.5"><svg width="18" height="6"><line x1="0" x2="18" y1="3" y2="3" stroke={col} strokeWidth="2" /></svg>candidate code</span>
         {s.base_trace && <span className="inline-flex items-center gap-1.5"><svg width="18" height="6"><line x1="0" x2="18" y1="3" y2="3" stroke="#6b7280" strokeWidth="1.5" strokeDasharray="3 3" /></svg>same run on main</span>}
       </div>
       </div>
       <div className="min-w-0 space-y-3">
-        <dl className="grid gap-y-1.5 text-[12px]">
+        <dl className="grid gap-y-1.5 text-sm">
           {facts.map(([k, v, cls]) => (
             <div key={k} className="flex justify-between gap-3 border-b border-line/60 pb-1.5"><dt className="text-dim">{k}</dt><dd className={`text-right font-mono ${cls || "text-ink"}`}>{v}</dd></div>
           ))}
         </dl>
-        <p className="rounded-md bg-white/[.03] p-2 text-[11.5px] leading-relaxed text-mute">{s.note}</p>
+        <p className="rounded-md bg-white/[.03] p-2 text-xs leading-relaxed text-mute">{s.note}</p>
       </div>
       </div>
     </figure>
@@ -174,39 +174,39 @@ function DiagnosisCard({ d, air }: { d: Diag; air: boolean }) {
   return (
     <div className="rounded-lg border border-bad/30 bg-bad/[.03] p-4">
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <span className="text-[13px] font-semibold">Diagnosis</span>
-        <span className="rounded border border-line px-1.5 py-px text-[10.5px] text-dim">deterministic: sim trace + code + safety.json · no LLM</span>
-        <span className="ml-auto text-[12px] text-mute">{d.failing} of {d.total} simulated {air ? "flights" : "patients"} failed</span>
+        <span className="text-base font-semibold">Diagnosis</span>
+        <span className="rounded border border-line px-1.5 py-px text-2xs text-dim">deterministic: sim trace + code + safety.json · no LLM</span>
+        <span className="ml-auto text-sm text-mute">{d.failing} of {d.total} simulated {air ? "flights" : "patients"} failed</span>
       </div>
-      <p className="mb-4 font-mono text-[13px] leading-relaxed text-ink">{d.headline}</p>
+      <p className="mb-4 font-mono text-base leading-relaxed text-ink">{d.headline}</p>
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-3">
-          <div className="text-[11px] font-medium uppercase tracking-wider text-dim">{d.uncovered ? "Requirement gap" : "Requirement violated"}</div>
+          <div className="text-xs font-medium uppercase tracking-wider text-dim">{d.uncovered ? "Requirement gap" : "Requirement violated"}</div>
           {d.requirements.map(r => (
-            <div key={r.id} className="rounded-md border border-line bg-panel p-3 text-[12.5px]">
+            <div key={r.id} className="rounded-md border border-line bg-panel p-3 text-sm">
               <div className="flex flex-wrap items-center gap-2">
-                <b className="font-mono">{r.id}</b>{r.dal && <span className="rounded bg-white/[.06] px-1.5 text-[10.5px] text-mute">DAL {r.dal}</span>}
+                <b className="font-mono">{r.id}</b>{r.dal && <span className="rounded bg-white/[.06] px-1.5 text-2xs text-mute">DAL {r.dal}</span>}
                 {r.unit_test && <Badge tone={r.unit_test === "FAIL" ? "FAIL" : "PASS"}>unit test {r.unit_test}</Badge>}
                 {r.monitor && <Badge tone="FAIL">world model: violated</Badge>}
               </div>
               <p className="mt-1 text-mute">{r.text}</p>
-              {r.objectives.length > 0 && <p className="mt-1 text-[11.5px] text-dim">{r.objectives.join(" · ")}</p>}
+              {r.objectives.length > 0 && <p className="mt-1 text-xs text-dim">{r.objectives.join(" · ")}</p>}
             </div>
           ))}
-          {d.uncovered && <p className="rounded-md border border-warn/30 bg-warn/5 p-3 text-[12.5px] text-warn">Every requirement test passed, yet the simulated {air ? "flight" : "patient"} left the safe envelope: no requirement covers this. The factory flags it for a new safety requirement.</p>}
+          {d.uncovered && <p className="rounded-md border border-warn/30 bg-warn/5 p-3 text-sm text-warn">Every requirement test passed, yet the simulated {air ? "flight" : "patient"} left the safe envelope: no requirement covers this. The factory flags it for a new safety requirement.</p>}
           <div className="flex flex-wrap gap-1.5">
-            {d.hazards.map(h => <span key={h.id} className="rounded border border-bad/30 px-1.5 py-0.5 text-[11px] text-bad">{h.id} {h.title}{h.severity ? ` · ${h.severity}` : ""}{h.dal ? ` · DAL ${h.dal}` : ""}</span>)}
+            {d.hazards.map(h => <span key={h.id} className="rounded border border-bad/30 px-1.5 py-0.5 text-xs text-bad">{h.id} {h.title}{h.severity ? ` · ${h.severity}` : ""}{h.dal ? ` · DAL ${h.dal}` : ""}</span>)}
           </div>
-          {sc.violations.map(v => <p key={v.req} className="text-[12px] text-mute"><b className="text-ink">{v.req} at t={v.at}{air ? " s" : " min"}:</b> {v.evidence}</p>)}
+          {sc.violations.map(v => <p key={v.req} className="text-sm text-mute"><b className="text-ink">{v.req} at t={v.at}{air ? " s" : " min"}:</b> {v.evidence}</p>)}
         </div>
         <div>
-          <div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-dim">Why: causal chain from the simulation trace</div>
+          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-dim">Why: causal chain from the simulation trace</div>
           <ol className="relative space-y-2 border-l border-line pl-4">
             {sc.chain.map((c, i) => (
-              <li key={i} className="relative text-[12px] leading-snug">
+              <li key={i} className="relative text-sm leading-snug">
                 <span className={`absolute -left-[21px] top-1 h-2 w-2 rounded-full border-2 border-bg ${c.kind === "violation" ? "bg-bad" : c.kind === "code" ? "bg-warn" : c.kind === "sim" ? "bg-run" : "bg-acc"}`} />
-                <span className="mr-2 font-mono text-[11px] text-dim">t={air ? `${c.t}s` : `${(c.t / 60).toFixed(1)}h`}</span>
-                <span className={`mr-1.5 text-[10.5px] uppercase tracking-wide ${KIND[c.kind][0]}`}>{KIND[c.kind][1]}</span>
+                <span className="mr-2 font-mono text-xs text-dim">t={air ? `${c.t}s` : `${(c.t / 60).toFixed(1)}h`}</span>
+                <span className={`mr-1.5 text-2xs uppercase tracking-wide ${KIND[c.kind][0]}`}>{KIND[c.kind][1]}</span>
                 <span className="text-mute">{c.text}</span>
               </li>
             ))}
@@ -215,12 +215,12 @@ function DiagnosisCard({ d, air }: { d: Diag; air: boolean }) {
       </div>
       {d.code.length > 0 && (
         <div className="mt-4">
-          <div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-dim">Responsible code</div>
+          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-dim">Responsible code</div>
           <div className="grid gap-2 lg:grid-cols-2">
             {d.code.map(f => (
               <div key={f.file} className="overflow-hidden rounded-md border border-line bg-bg">
-                <div className="border-b border-line px-2.5 py-1 font-mono text-[11px] text-mute">{f.file}</div>
-                <pre className="scroll-thin overflow-x-auto py-1 font-mono text-[11px] leading-relaxed">
+                <div className="border-b border-line px-2.5 py-1 font-mono text-xs text-mute">{f.file}</div>
+                <pre className="scroll-thin overflow-x-auto py-1 font-mono text-xs leading-relaxed">
                   {f.snippet.map(l => (
                     <div key={l.line} className={l.hot ? "bg-bad/15 text-ink" : "text-dim"}><span className="inline-block w-9 select-none pr-2 text-right text-dim">{l.line}</span>{l.text || " "}</div>
                   ))}
@@ -228,17 +228,17 @@ function DiagnosisCard({ d, air }: { d: Diag; air: boolean }) {
               </div>
             ))}
           </div>
-          {d.changed.length > 0 && <p className="mt-2 text-[12px] text-mute">Certified limit{d.changed.length > 1 ? "s" : ""} changed vs main: {d.changed.map(c => <code key={c.symbol} className="mr-2 text-warn">{c.symbol} {c.base ?? "(new)"} → {c.cand}</code>)}</p>}
+          {d.changed.length > 0 && <p className="mt-2 text-sm text-mute">Certified limit{d.changed.length > 1 ? "s" : ""} changed vs main: {d.changed.map(c => <code key={c.symbol} className="mr-2 text-warn">{c.symbol} {c.base ?? "(new)"} → {c.cand}</code>)}</p>}
         </div>
       )}
-      <p className="mt-4 rounded-md bg-white/[.03] p-2.5 text-[12px] leading-relaxed text-mute">{d.explain}</p>
+      <p className="mt-4 rounded-md bg-white/[.03] p-2.5 text-sm leading-relaxed text-mute">{d.explain}</p>
     </div>
   );
 }
 
 function Diff({ src }: { src: string }) {
   return (
-    <pre className="scroll-thin mt-2 max-h-80 overflow-auto rounded-md bg-bg p-3 font-mono text-[11px] leading-relaxed">
+    <pre className="scroll-thin mt-2 max-h-80 overflow-auto rounded-md bg-bg p-3 font-mono text-xs leading-relaxed">
       {src.split("\n").map((l, i) => (
         <div key={i} className={l.startsWith("+") && !l.startsWith("+++") ? "text-ok" : l.startsWith("-") && !l.startsWith("---") ? "text-bad" : l.startsWith("@@") ? "text-acc" : "text-mute"}>{l || " "}</div>
       ))}
@@ -262,8 +262,8 @@ function Stepper({ loop }: { loop: Loop }) {
     <ol className="mb-6 grid grid-cols-2 gap-2 md:grid-cols-6">
       {steps.map(([k, v, t], i) => (
         <li key={k} className={`rounded-lg border p-2.5 ${t === "bad" ? "border-bad/40" : t === "ok" ? "border-ok/30" : t === "run" ? "border-run/40" : "border-line"}`}>
-          <div className="flex items-center gap-1.5 text-[11px] text-dim"><span className="font-mono">{i + 1}</span>{k}</div>
-          <div className={`mt-0.5 truncate text-[12.5px] font-medium ${t === "bad" ? "text-bad" : t === "ok" ? "text-ok" : t === "run" ? "text-run" : "text-mute"}`} title={v}>{v}</div>
+          <div className="flex items-center gap-1.5 text-xs text-dim"><span className="font-mono">{i + 1}</span>{k}</div>
+          <div className={`mt-0.5 truncate text-sm font-medium ${t === "bad" ? "text-bad" : t === "ok" ? "text-ok" : t === "run" ? "text-run" : "text-mute"}`} title={v}>{v}</div>
         </li>
       ))}
     </ol>
@@ -285,30 +285,30 @@ export function LoopView({ loop }: { loop: Loop }) {
             <div className="space-y-3">
               {a.fix && prev?.diagnosis && (
                 <div className="rounded-lg border border-line bg-panel p-3">
-                  <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
                     <span className="font-mono text-acc">{"</>"}</span><b>Claude Code&apos;s fix</b>
                     <span className="text-mute">after the world model&apos;s report on attempt {prev.n}</span>
-                    <button onClick={() => setDiff(diff === a.n ? null : a.n)} className="ml-auto text-[12px] text-acc hover:underline">{diff === a.n ? "Hide diff" : "View diff"}</button>
+                    <button onClick={() => setDiff(diff === a.n ? null : a.n)} className="ml-auto text-sm text-acc hover:underline">{diff === a.n ? "Hide diff" : "View diff"}</button>
                   </div>
-                  {a.fix.changed.length > 0 && <p className="mt-1.5 text-[12px] text-mute">{a.fix.changed.map(c => <code key={c.symbol} className="mr-3 text-ink">{c.base == null ? `+ ${c.symbol} = ${c.cand}` : `${c.symbol} ${c.base} → ${c.cand}`}</code>)}</p>}
+                  {a.fix.changed.length > 0 && <p className="mt-1.5 text-sm text-mute">{a.fix.changed.map(c => <code key={c.symbol} className="mr-3 text-ink">{c.base == null ? `+ ${c.symbol} = ${c.cand}` : `${c.symbol} ${c.base} → ${c.cand}`}</code>)}</p>}
                   {diff === a.n && <Diff src={a.fix.diff} />}
                 </div>
               )}
               {a.series && <LoopChart s={a.series} air={air} threshold={thr} diag={a.diagnosis?.scenarios[0]}
                 label={a.diagnosis ? `Simulated ${air ? "flight" : "patient"}: ${a.diagnosis.scenarios[0].label}` : `Re-simulated: the same ${air ? "flight" : "patient"} on the fixed code`} />}
               {a.resim && (
-                <p className={`rounded-md border px-3 py-2 text-[12.5px] ${a.world_verdict === "PASS" ? "border-ok/30 bg-ok/5 text-ok" : "border-line text-mute"}`}>
+                <p className={`rounded-md border px-3 py-2 text-sm ${a.world_verdict === "PASS" ? "border-ok/30 bg-ok/5 text-ok" : "border-line text-mute"}`}>
                   {a.world_verdict === "PASS" ? "PASS" : a.world_verdict}: {a.total - a.failing} of {a.total} simulated runs inside the safe envelope. {a.resim.run} now: {a.resim.note}.
                 </p>
               )}
               {a.diagnosis && <DiagnosisCard d={a.diagnosis} air={air} />}
               {a.diagnosis && (
                 <details className="rounded-lg border border-line bg-panel p-3" open={i === loop.attempts.length - 1}>
-                  <summary className="cursor-pointer text-[12.5px]"><b>Sent to Claude Code</b> <span className="text-mute">structured failure report for attempt {a.n + 1}{loop.attempts[i + 1] ? "" : " (waiting for the coder)"}</span></summary>
-                  <pre className="scroll-thin mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-md bg-bg p-3 font-mono text-[11px] leading-relaxed text-mute">{a.diagnosis.handoff}</pre>
+                  <summary className="cursor-pointer text-sm"><b>Sent to Claude Code</b> <span className="text-mute">structured failure report for attempt {a.n + 1}{loop.attempts[i + 1] ? "" : " (waiting for the coder)"}</span></summary>
+                  <pre className="scroll-thin mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-md bg-bg p-3 font-mono text-xs leading-relaxed text-mute">{a.diagnosis.handoff}</pre>
                 </details>
               )}
-              {!a.series && !a.diagnosis && <p className="text-[12px] text-dim">Simulating…</p>}
+              {!a.series && !a.diagnosis && <p className="text-sm text-dim">Simulating…</p>}
             </div>
           </Section>
         );
@@ -329,7 +329,7 @@ export function WorldLoopPage({ state, events, live, getJSON, id }: Props & { id
       <PageHead title="World Model" sub={<>Where a change is flown before it can merge: the world model picks the scenarios, the simulation runs them, and every failure comes back as a diagnosis the coding agent fixes. {loop?.replay && <Replayed r={loop.replay} />}</>}>
         {wos.length > 0 && (
           <select aria-label="Work order" value={wo || ""} onChange={e => { location.hash = `/p/${p.id}/world-loop/${e.target.value}`; }}
-            className="max-w-[22rem] truncate rounded-md border border-line bg-panel2 px-2 py-1.5 text-[12.5px] outline-none">
+            className="max-w-[22rem] truncate rounded-md border border-line bg-panel2 px-2 py-1.5 text-sm outline-none">
             {wos.map(w => <option key={w.id} value={w.id}>{w.id} · {w.title}</option>)}
           </select>
         )}
@@ -337,10 +337,10 @@ export function WorldLoopPage({ state, events, live, getJSON, id }: Props & { id
       <SimVsWorld air={air} />
       {loop ? (
         <>
-          <p className="mb-3 text-[13px]"><a href={`#/p/${p.id}/work-orders/${loop.wo}`} className="font-mono text-mute hover:underline">{loop.wo}</a> <span className="text-ink">{loop.title}</span></p>
+          <p className="mb-3 text-base"><a href={`#/p/${p.id}/work-orders/${loop.wo}`} className="font-mono text-mute hover:underline">{loop.wo}</a> <span className="text-ink">{loop.title}</span></p>
           <LoopView loop={loop} />
         </>
-      ) : loop === undefined ? null : <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-[13px] text-dim">{wo ? "No simulation for this work order yet. Run it: the world model flies every attempt." : "Run a work order: every attempt is flown in the world model and diagnosed here."}</p>}
+      ) : loop === undefined ? null : <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-base text-dim">{wo ? "No simulation for this work order yet. Run it: the world model flies every attempt." : "Run a work order: every attempt is flown in the world model and diagnosed here."}</p>}
     </>
   );
 }
@@ -354,14 +354,14 @@ export function LoopSummary({ state, events, live, getJSON, wo }: Props & { wo?:
   if (!loop || !loop.attempts.length) return null;
   return (
     <a href={`#/p/${p.id}/world-loop/${loop.wo}`} className="mb-8 block rounded-lg border border-line bg-panel p-3 hover:border-white/20">
-      <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="font-mono text-acc">◈</span><b>World model loop</b><span className="font-mono text-dim">{loop.wo}</span>
         <span className="ml-auto inline-flex items-center gap-1.5">
           {loop.attempts.map((a, i) => <span key={a.n} className="inline-flex items-center gap-1.5">{i > 0 && <span className="text-dim">→</span>}<Badge tone={a.world_verdict === "PASS" ? "PASS" : a.world_verdict ? "BLOCKED" : "Draft"}>{a.world_verdict || "…"}</Badge></span>)}
         </span>
       </div>
-      {d ? <p className="mt-1.5 font-mono text-[12px] text-mute">{d.headline} · {d.requirements.map(r => r.id).join(", ") || "requirement gap"}</p>
-        : <p className="mt-1.5 text-[12px] text-mute">Every simulated run stayed inside the safe envelope.</p>}
+      {d ? <p className="mt-1.5 font-mono text-sm text-mute">{d.headline} · {d.requirements.map(r => r.id).join(", ") || "requirement gap"}</p>
+        : <p className="mt-1.5 text-sm text-mute">Every simulated run stayed inside the safe envelope.</p>}
     </a>
   );
 }
