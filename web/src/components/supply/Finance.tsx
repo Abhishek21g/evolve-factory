@@ -53,16 +53,16 @@ export function Finance({ state, getJSON, live }: PageCtx) {
       </Section>
 
       <div className="grid gap-8 xl:grid-cols-2">
-        <Section title="Supplier spend (sample)" aside={<a href={`#/p/${p.id}/suppliers`} className="hover:text-ink">Suppliers</a>}>
+        <Section title="Supplier spend (sample)" aside={<a href={`#/p/${p.id}/supply-chain/suppliers`} className="hover:text-ink">Suppliers</a>}>
           <Table head={["Supplier", "Tier", "PO value", "Invoiced", ""]} rows={f.spend.filter(s => s.po).map(s => [
-            <a key="n" href={`#/p/${p.id}/suppliers/${s.supplier}`} className="hover:underline">{s.name}</a>, s.tier,
+            <a key="n" href={`#/p/${p.id}/supply-chain/${s.supplier}`} className="hover:underline">{s.name}</a>, s.tier,
             <span key="p" className="tabular-nums">{money(s.po)}</span>, <span key="i" className="tabular-nums">{money(s.invoiced)}</span>,
             <div key="b" className="min-w-[80px]"><Bar value={s.invoiced} max={s.po} /></div>,
           ])} />
         </Section>
         <Section title="BOM cost per unit (sample)" aside={<a href={`#/p/${p.id}/supply-chain`} className="hover:text-ink">Supply chain</a>}>
           <Table head={["Part", "Supplier", "Qty", "Unit", "Extended"]} rows={[
-            ...f.bom.map(b => [b.name, <a key="s" href={`#/p/${p.id}/suppliers/${b.supplier}`} className="text-mute hover:underline">{sups[b.supplier]}</a>, b.qty,
+            ...f.bom.map(b => [b.name, <a key="s" href={`#/p/${p.id}/supply-chain/${b.supplier}`} className="text-mute hover:underline">{sups[b.supplier]}</a>, b.qty,
               <span key="u" className="tabular-nums">{money(b.unit_cost)}</span>, <span key="e" className="tabular-nums">{money(b.qty * b.unit_cost)}</span>]),
             [<b key="t">Total per unit</b>, "", "", "", <b key="v" className="tabular-nums">{money(f.bom_unit)}</b>],
           ]} />
