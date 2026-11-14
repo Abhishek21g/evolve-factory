@@ -45,7 +45,7 @@ function Tile({ title, icon, href, more, children }: { title: string; icon: Reac
 }
 
 const Num = ({ n, label, tone, href }: { n: ReactNode; label: string; tone?: Tone; href: string }) => (
-  <a href={href} className="block rounded-md px-1 hover:bg-white/[.03]">
+  <a href={href} {...(href.startsWith("http") ? { target: "_blank", rel: "noopener" } : {})} className="block rounded-md px-1 hover:bg-white/[.03]">
     <div className={`text-xl font-semibold tabular-nums ${tone === "bad" ? "text-bad" : tone === "warn" ? "text-warn" : tone === "ok" ? "text-ok" : tone === "run" ? "text-run" : ""}`}>{n}</div>
     <div className="text-xs text-dim">{label}</div>
   </a>
