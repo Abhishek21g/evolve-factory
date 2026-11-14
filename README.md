@@ -53,6 +53,21 @@ python3 -m venv .venv && .venv/bin/pip install -r sim/requirements.txt
 
 It runs as the `world-model` check in `gate/checks.json`, and draws blood-sugar traces on the dashboard.
 
+**Ask it in plain English (Simulation Agent).** Claude (Anthropic API, tool use) plans scenarios and drives the
+world model through deterministic tools (`run_scenario`, `compare_to_main`, `list_patients`, `get_safety_requirements`):
+meal size and time, dose typos or exact doses, skipped meals, starting BG, post-exercise insulin sensitivity, adult /
+adolescent / child cohorts, on any pump build (`worktree`, `main`, a branch, or a worktree path). Every number in the
+answer comes from a simulation; Claude never approves a change. Needs `ANTHROPIC_API_KEY` (env or `.env`).
+
+```bash
+.venv/bin/python sim/agent.py "What happens if an adult enters 10x their meal dose by mistake?"   # ~30-60 s
+.venv/bin/python sim/agent.py "Is branch wo/WO-13 safer than main for a 150 g dinner after exercise?"
+```
+
+Progress goes to the dashboard feed (`simulation` and `world` agents); the full result (scenarios, per-patient
+traces, answer, tool calls) is written to `.runs/whatif-<ts>.json`. From Python: `agent.ask(question, repo, ref)`.
+Max 8 tool calls per question; simulations run in parallel and are cached in `.runs/sim-cache/`.
+
 ## Tools, libraries and licenses
 
 Keep this list current; judges require it.
@@ -68,6 +83,7 @@ Keep this list current; judges require it.
 | Cursor | IDE | proprietary |
 | simglucose 0.2.11 (UVA/Padova T1D simulator) | world model, simulated patients | MIT |
 | numpy, pandas, scipy (simglucose deps) | simulation | BSD-3-Clause |
+| Anthropic Python SDK (anthropic 2.8.0) + Claude API | Simulation Agent (`sim/agent.py`) | MIT SDK; API under Anthropic commercial terms |
 | Next.js 15, React 19, Tailwind CSS 4 | web UI | MIT |
 | HydraDB (hydradb-sdk) | shared memory / context layer | proprietary SDK, hosted service (sponsor) |
 | Composio (composio 0.32) | agent actions in GitHub / Slack | Apache-2.0 (sponsor) |
