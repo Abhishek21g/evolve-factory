@@ -1,9 +1,4 @@
-# 8090 deep dive (for picking + pitching our project)
-
-## Timing
-- Luma: Fri Nov 13 5:30 PM → **Sat Nov 14 7:00 PM PST** (description says "around 6:30 PM").
-- Opening ceremony was 6:30 PM Fri (rules, judging, credits, SF setup). We missed it.
-- **Code freeze time not published anywhere public.** Judging + live demos + Q&A + Chamath ceremony must fit before ~6:30 PM, so assume **code freeze ~2:00–3:00 PM Sat** until Discord says otherwise. Judging slots are assigned on Discord.
+# 8090 deep dive (from public docs, for picking our project)
 
 ## What Software Factory (SF) is
 "AI-native software development control plane." Humans + agents in one governed workspace. Pitch line: *"As AI writes more of your software, speed stops being the edge. Control is."*

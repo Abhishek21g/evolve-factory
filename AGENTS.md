@@ -1,6 +1,6 @@
 # Agent instructions (Claude Code, Codex, Cursor)
 
-- Read docs/PLAN.md first. It holds the goal, chosen idea and timeline.
+- Read docs/PLAN.md first. It holds the chosen idea and build plan.
 - One agent per branch/worktree. Never edit files another agent is working on.
 - Small PRs into `main`. `main` must always run the demo.
 - Put the Software Factory Work Order ID (e.g. `WO-12`) in PR titles so it auto-links.
