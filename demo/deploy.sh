@@ -6,7 +6,8 @@
 #   demo/deploy.sh       # needs `vercel login` once
 set -euo pipefail
 cd "$(dirname "$0")/.."
-.venv/bin/python factory/snapshot.py
+# No local factory state (clean checkout): ship the committed web/public/snapshot.json instead of an empty one.
+if [ -f .runs/factory.json ]; then .venv/bin/python factory/snapshot.py; fi
 (cd web && { [ -d node_modules ] || npm ci --no-audit --no-fund --loglevel=error; } && npm run build >/dev/null)
 # Deploy from a folder named after the project; never from web/ (an unrelated Vercel project is called "web").
 DIR=.runs/vercel/certus-factory
