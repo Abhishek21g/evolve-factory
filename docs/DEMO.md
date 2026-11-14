@@ -82,11 +82,15 @@ table, then **Activity**. Nothing spins: steps appear as they land.
 | 1:21-1:43 | D3 the fix, blocked again | 1:21 "Attempt 2: fixing what the gate blocked", 1:27 "Attempt 2: committed". At 1:29-1:31: "Attempt 2: BLOCKED", World model "BLOCKED: 2 new ...", all 5 test rows PASS | scroll back up: the **"120 g meal, correct dose"** card is now red **BLOCKED**, "2 / 10", two red traces crash hours after the meal (adult#009, adult#010 in the table). Holds 15 s |
 | 1:43-1:55 | D3 final fix | 1:43 "Attempt 3: fixing what the gate blocked", 1:48 "Attempt 3: committed", 1:53 "Attempt 3: all checks passed" | nothing; keep talking |
 | 1:55-2:20 | D4 green | Badge **Approved** (1:55). World model "PASS: 0 new severe-hypo runs caused by this change; 2 pre-existing", both scenario cards green **PASS**, Decision "approved by deterministic checks". At ~1:59 Activity adds "Composio filed GitHub issue #N with the WO evidence pack (APPROVED)" | click **Code change**: `request_extended_bolus`, `MAX_EXTENDED_U 15.0` "24 U caused severe hypo in the world model", `MAX_BOLUS_U` stays 10; **Esc**. **Evidence** (Rust verdict digest, hazard analysis, requirement -> test, world model table, trace links), scroll, **Esc**. **Pull request** (PR #30 opens in a new tab) |
-| 2:20-3:00 | Why it matters, close (A) | World model loop, then Traceability | click **World model loop**: the loop strip "Scenario -> Simulation 4/20 runs failed -> Diagnosis SR-1 · H-1, H-3 -> Sent to Claude Code -> Fix -> Re-simulation PASS", and the deterministic **Diagnosis** with the causal chain and the responsible `pump.h` line. Then sidebar **Traceability** (opens on **Matrix**: 5/5 requirements -> code, 5/5 -> tests, 3 untraced functions in red), click **Graph**, click **H-1** to light its chain; leave it |
+| 2:20-3:00 | Why it matters, close (A) | World model loop, then Traceability | click **World model loop** (sidebar **World Model** opens the same page): on top "Hear the pump: before vs after" (blocked patch: "No alarm, typed 15.0 U ... the pump delivered it", then URGENT LOW; the fix: BOLUS EXCEEDS LIMIT), then the loop strip "Scenario -> Simulation 4/20 runs failed -> Diagnosis SR-1 · H-1, H-3 -> Sent to Claude Code -> Fix -> Re-simulation PASS", and the deterministic **Diagnosis** with the causal chain and the responsible `pump.h` line. Then sidebar **Traceability** (opens on **Matrix**: 5/5 requirements -> code, 5/5 -> tests, 3 untraced functions in red), click **Graph**, click **H-1** to light its chain; leave it |
 
 Optional if ahead of time: click the Home suggestion chip `What if a child eats 80 g and the parent types the dose 10x?`
 (~7 s, lands on **Simulations**). Avoid **Source of Record** on stage: its "Simulation evidence" card reads
-"20 runs · UNSAFE" for main's pre-existing lows, which invites a question you don't have time for.
+"20 runs · UNSAFE" for main's pre-existing lows, which invites a question you don't have time for. Also skip
+**Incidents** (the hotline needs `ELEVENLABS_API_KEY` and `factory/hotline.py setup`, docs/HOTLINE.md) and the
+**Play** buttons on "Hear the pump" (silent until `.venv/bin/python factory/callouts.py audio` has synthesized
+`web/public/audio/`). **Control Tower**, **Suppliers**, **Supply Chain** and **Finance** are labelled sample data:
+fine for Q&A, not part of the 3 minutes.
 If the hosted backup is all you have: open WO-345 from Recent work orders, narrate D2/D3 over its Activity
 entries, then do the D4 clicks; Run is disabled there.
 
@@ -103,7 +107,7 @@ entries, then do the D4 clicks; Run is disabled there.
 | 7 | 0:15 | "Attempt 3: committed", then **Approved**: both scenario cards PASS, "0 new ...; 2 pre-existing"; Activity "Composio filed GitHub issue" | screen |
 | 8 | 0:15 | **Code change**: `request_extended_bolus`, `MAX_EXTENDED_U 15.0` and its comment, `MAX_BOLUS_U` still 10 | screen, zoom on `pump.h` |
 | 9 | 0:15 | **Evidence**: Rust verdict digest, hazard analysis, requirement -> test table, world model table, trace links | screen, scroll |
-| 10 | 0:15 | **World model loop**: loop strip, attempt 1 patient chart, Diagnosis causal chain and responsible code | screen, slow scroll |
+| 10 | 0:15 | **World model loop**: "Hear the pump: before vs after" (no alarm vs BOLUS EXCEEDS LIMIT; with sound once the clips exist), loop strip, Diagnosis causal chain and responsible code | screen, slow scroll |
 | 11 | 0:10 | GitHub [PR #30](https://github.com/Abhishek21g/evolve-factory/pull/30) ("WO-304: Raise the single-bolus limit to 25 U", checks report in the body) | browser |
 | 12 | 0:15 | **Traceability** Matrix (5/5, untraced code in red), click `MAX_BOLUS_U` (code viewer, line highlighted), **Graph**, click H-1 to light its chain; end on the card "Approval is never an LLM decision." | screen, then static |
 
