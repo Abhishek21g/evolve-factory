@@ -301,7 +301,7 @@ function RunRow({ r, name, pid, air, open, toggle, getJSON }: { r: Run; name: st
                     {r.findings.map((f, i) => (
                       <p key={i} className={`text-[12px] ${sevCls(f.severity)}`}>● {f.text}
                         {f.link === "record" && <a href={`#/p/${pid}/source-of-record`} className="ml-2 text-acc hover:underline">source of record</a>}
-                        {f.link === "suppliers" && <a href={`#/p/${pid}/suppliers`} className="ml-2 text-acc hover:underline">suppliers</a>}
+                        {f.link === "suppliers" && <a href={`#/p/${pid}/supply-chain/suppliers`} className="ml-2 text-acc hover:underline">suppliers</a>}
                       </p>
                     ))}
                   </div>

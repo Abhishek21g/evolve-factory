@@ -57,7 +57,7 @@ on stage; they are good Q&A answers ("show me the supply chain", "can my agent a
 
 ## Q&A click paths
 
-- **Supply chain / finance:** Boeing → **Suppliers** (tiers, certificates, deliverables), **Supply Chain** (parts, raw materials, imports, risk dots), **Finance**. All sample data, labelled.
+- **Supply chain / finance:** Boeing → **Supply Chain** (Parts tab: parts, raw materials, imports, risk dots; Suppliers tab: tiers, certificates, deliverables, the parts each supplier is in), **Finance**. All sample data, labelled.
 - **Monitoring:** **Automations** (four monitoring agents, schedules, run history) and **Source of Record** (each requirement checked against test, code value, trace links, simulation evidence). Don't press **Run now** or **Resync** on stage.
 - **Memory:** **Memory**, type `typing errors overdose`, Enter: HydraDB answers in under a second.
 - **All projects:** sidebar **All projects** → **Control Tower**: both projects in one view.

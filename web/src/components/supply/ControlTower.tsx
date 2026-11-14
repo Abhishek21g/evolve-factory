@@ -64,7 +64,7 @@ function attention(t: Tower): Attn[] {
     out.push({ tone: "bad", tag: "World model", text: `${s.wo ? `${s.wo} simulation` : `What-if “${s.question}”`}: ${s.verdict}`, href: at(s.wo ? `world-loop/${s.wo}` : "world-model") });
   for (const g of t.safety.gaps) out.push({ tone: "bad", tag: "Trace gap", text: `${g.id}: ${g.gaps.join(", ")}`, href: at(`traceability/${g.id}`) });
   for (const r of t.supply?.top || []) if (r.tone === "bad")
-    out.push({ tone: "bad", tag: RISK_LABEL[r.kind], text: r.text, href: r.part ? at("supply-chain") : at(`suppliers/${r.supplier}`) });
+    out.push({ tone: "bad", tag: RISK_LABEL[r.kind], text: r.text, href: r.part ? at("supply-chain") : at(`supply-chain/${r.supplier}`) });
   const f = t.finance;
   if (f && f.budget_usd && f.factory_usd > 0.85 * f.budget_usd) out.push({ tone: "warn", tag: "Budget", text: `Factory spend at ${Math.round(100 * f.factory_usd / f.budget_usd)}% of budget`, href: at("finance") });
   return out;
@@ -128,19 +128,19 @@ export function ControlTower({ state, getJSON, live }: PageCtx) {
         </Tile>
 
         <Tile title="Supply chain" icon={<Package size={16} />} href={at("supply-chain")}
-          more={[["Suppliers", at("suppliers")], ["Parts and imports", at("supply-chain")]]}>
+          more={[["Suppliers", at("supply-chain/suppliers")], ["Parts and imports", at("supply-chain")]]}>
           {su ? <>
             <div className="grid grid-cols-4 gap-2">
-              <Num n={su.suppliers} label={`suppliers · ${su.tiers["1"]}/${su.tiers["2"]}/${su.tiers["3"]} by tier`} href={at("suppliers")} />
-              <Num n={riskN("expiring_cert") + riskN("expired_cert")} label="certs expiring / expired" tone={riskN("expired_cert") ? "bad" : riskN("expiring_cert") ? "warn" : "ok"} href={at("suppliers")} />
-              <Num n={riskN("missing_deliverable")} label="missing deliverables" tone={riskN("missing_deliverable") ? "bad" : "ok"} href={at("suppliers")} />
+              <Num n={su.suppliers} label={`suppliers · ${su.tiers["1"]}/${su.tiers["2"]}/${su.tiers["3"]} by tier`} href={at("supply-chain/suppliers")} />
+              <Num n={riskN("expiring_cert") + riskN("expired_cert")} label="certs expiring / expired" tone={riskN("expired_cert") ? "bad" : riskN("expiring_cert") ? "warn" : "ok"} href={at("supply-chain/suppliers")} />
+              <Num n={riskN("missing_deliverable")} label="missing deliverables" tone={riskN("missing_deliverable") ? "bad" : "ok"} href={at("supply-chain/suppliers")} />
               <Num n={riskN("import_delay")} label="import delays" tone={riskN("import_delay") ? "bad" : "ok"} href={at("supply-chain")} />
             </div>
             <ul className="space-y-1.5 text-sm">
               {su.top.map((r, i) => (
                 <li key={i} className="flex items-center gap-2">
                   <Pill tone={r.tone}>{RISK_LABEL[r.kind]}</Pill>
-                  <a href={r.part ? at("supply-chain") : at(`suppliers/${r.supplier}`)} className="min-w-0 flex-1 truncate text-mute hover:text-ink">{r.text}</a>
+                  <a href={r.part ? at("supply-chain") : at(`supply-chain/${r.supplier}`)} className="min-w-0 flex-1 truncate text-mute hover:text-ink">{r.text}</a>
                   <Items ids={r.affects.slice(0, 2)} pid={p.id} />
                 </li>
               ))}
@@ -212,7 +212,7 @@ export function AllTowers({ getJSON, live }: Pick<PageCtx, "getJSON" | "live">) 
                   </div></div>
                 <div><div className="mb-1 flex items-center gap-1.5 text-xs text-dim"><Package size={13} /> Supply chain</div>
                   {t.supply ? <div className="grid grid-cols-2 gap-1">
-                    <Num n={t.supply.suppliers} label="suppliers" href={at("suppliers")} />
+                    <Num n={t.supply.suppliers} label="suppliers" href={at("supply-chain/suppliers")} />
                     <Num n={risks(t)} label="open risks" tone={risks(t) ? "warn" : "ok"} href={at("supply-chain")} />
                   </div> : <p className="text-xs text-dim">No data</p>}</div>
                 <div><div className="mb-1 flex items-center gap-1.5 text-xs text-dim"><Wallet size={13} /> Finance</div>

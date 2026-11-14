@@ -51,7 +51,7 @@ You sign in (or open the app with `?demo` to enter the demo workspace) and pick 
 
 **Safety hotline** (Incidents). An ElevenLabs voice agent takes an incident report; its `create_incident` tool turns the call into a draft work order, a HydraDB memory item and a trace link to the most likely hazard. A real recorded call plays on the Boeing project.
 
-**Supply chain and finance** (Control Tower, Suppliers, Supply Chain, Finance) run on **sample data, labelled as such in the UI**: supplier tiers, certificates and deliverables, parts, raw materials and imports with risk flags, spend vs budget. A supplier deliverable that gets submitted becomes a real trace link in the evidence pack. The Control Tower shows every project's software, safety, supply and finance status in one deterministic sentence.
+**Supply chain and finance** (Control Tower, Supply Chain with its suppliers, Finance) run on **sample data, labelled as such in the UI**: supplier tiers, certificates and deliverables, parts, raw materials and imports with risk flags, spend vs budget. A supplier deliverable that gets submitted becomes a real trace link in the evidence pack. The Control Tower shows every project's software, safety, supply and finance status in one deterministic sentence.
 
 **Integrations.** Connected tools, a Composio plugin catalog with real Connect links, and MCP servers you can add and test. Certus Factory is itself a read-only MCP server (`list_projects`, `get_trace`, `get_verdict`, `list_gaps`, `recall_memory`) for Claude Code, Cursor or any MCP client, over stdio or HTTP.
 

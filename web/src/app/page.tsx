@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import {
-  Activity, BookCheck, Bot, Info, Orbit, Boxes, Brain, FlaskConical, Handshake, Home, ListChecks, Network, Package, Phone, Plus, Radar, Search, ShieldAlert, Timer, Users, Wallet,
+  Activity, BookCheck, Bot, Info, Orbit, Boxes, Brain, FlaskConical, Home, ListChecks, Network, Package, Phone, Plus, Radar, Search, ShieldAlert, Timer, Users, Wallet,
 } from "lucide-react";
 import { useFactoryState, type MemoryView, type Member, type State } from "@/lib/api";
 import { go, type Ctx } from "@/lib/ctx";
@@ -21,14 +21,18 @@ import { Incidents } from "@/components/Hotline";
 import { Ago, Badge, Button, Field, Modal, PageHead, Section, Table, Who, ago, inputCls } from "@/components/ui";
 import { AllTowers, ControlTower } from "@/components/supply/ControlTower";
 import { Finance } from "@/components/supply/Finance";
-import { Suppliers } from "@/components/supply/Suppliers";
 import { SupplyChain } from "@/components/supply/SupplyChain";
 
 /* ---------- routing: #/p/<project>/<page>[/<wo>] ---------- */
 function useRoute() {
   const [hash, setHash] = useState("");
   useEffect(() => {
-    const f = () => setHash(location.hash.slice(1));
+    const f = () => {
+      // Suppliers is part of Supply Chain now: old links (#/p/<id>/suppliers[/<supplier>]) land on the merged page.
+      const old = location.hash.match(/^#\/p\/([^/]+)\/suppliers(?:\/([^/]+))?$/);
+      if (old) history.replaceState(null, "", `#/p/${old[1]}/supply-chain/${old[2] || "suppliers"}`);
+      setHash(location.hash.slice(1));
+    };
     f(); addEventListener("hashchange", f);
     return () => removeEventListener("hashchange", f);
   }, []);
@@ -65,8 +69,7 @@ export default function App() {
           route.page === "integrations" ? <Integrations {...ctx} /> :
           !p ? (route.page === "control-tower" ? <AllTowers {...ctx} /> : <Projects {...ctx} />) :
           route.page === "control-tower" ? <ControlTower {...ctx} /> :
-          route.page === "suppliers" ? <Suppliers {...ctx} item={route.item} /> :
-          route.page === "supply-chain" ? <SupplyChain {...ctx} /> :
+          route.page === "supply-chain" ? <SupplyChain {...ctx} item={route.item} /> :
           route.page === "finance" ? <Finance {...ctx} /> :
           route.page === "requirements" ? <Requirements {...ctx} /> :
           route.page === "work-orders" && route.item ? <WorkOrderView {...ctx} id={route.item} /> :
@@ -94,7 +97,7 @@ function Sidebar({ state, project, page, me, setMe, live }: { state: State; proj
     ["control-tower", "Control Tower", Radar], ["overview", "Home", Home], ["agents", "Agents", Bot], ["memory", "Memory", Brain], null,
     ["requirements", "Requirements", ShieldAlert], ["work-orders", "Work Orders", ListChecks], ["world-loop", "World Model", Orbit], ["world-model", "Simulations", FlaskConical],
     ["traceability", "Traceability", Network], ["source-of-record", "Source of Record", BookCheck], ["automations", "Automations", Timer], ["incidents", "Incidents", Phone], null,
-    ["suppliers", "Suppliers", Handshake], ["supply-chain", "Supply Chain", Package], ["finance", "Finance", Wallet], null, ["audit", "Audit Trail", Activity], ["team", "Team", Users],
+    ["supply-chain", "Supply Chain", Package], ["finance", "Finance", Wallet], null, ["audit", "Audit Trail", Activity], ["team", "Team", Users],
   ] as const;
   const humans = state.team.filter(m => m.kind === "human");
   const item = (active: boolean) => `group flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm font-medium transition-colors ${active ? "bg-white/[.07] text-ink" : "text-mute hover:bg-white/[.04] hover:text-ink"}`;

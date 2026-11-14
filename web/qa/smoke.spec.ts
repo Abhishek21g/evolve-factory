@@ -6,13 +6,15 @@ import { expect, test, type Page } from "@playwright/test";
 
 type Project = { id: string; name: string; device: string };
 const PAGES = ["control-tower", "overview", "agents", "memory", "requirements", "work-orders", "world-loop", "world-model", "traceability",
-  "source-of-record", "automations", "incidents", "suppliers", "supply-chain", "finance", "audit", "team", "integrations"];
+  "source-of-record", "automations", "incidents", "supply-chain", "supply-chain/suppliers", "finance", "audit", "team", "integrations"];
 /** Pages outside a project: the projects list, the all-projects Control Tower and the workspace integrations. */
 const GLOBAL = ["#/", "#/control-tower", "#/settings/integrations"];
 /** Pages that are shared across projects by design (org memory, workspace integrations). */
 const SHARED = new Set(["memory", "integrations"]);
 /** Detail pages: the first link of this kind on the list page is swept too. */
-const DETAILS: Record<string, string> = { "work-order": "work-orders", supplier: "suppliers", incident: "incidents", agent: "agents", "trace-item": "traceability", "world-loop-wo": "world-loop" };
+const DETAILS: Record<string, string> = { "work-order": "work-orders", supplier: "supply-chain/suppliers", incident: "incidents", agent: "agents", "trace-item": "traceability", "world-loop-wo": "world-loop" };
+/** Detail links that don't sit under their list page: a supplier workspace is #/p/<id>/supply-chain/<supplier>. */
+const DETAIL_LINK: Record<string, string> = { supplier: "supply-chain/SUP-" };
 const MUTATING = /\/api\/(run|ask|whatif|workorders|projects|memory|trace\/links(\/delete)?|trace\/tests|incidents(\/transcript)?|record\/resync|monitors\/run|supply\/(suppliers|deliverables)|integrations\/.+)$/;
 const CLICKABLE = "main button, main a[href], main [role=tab], main [role=radio], main summary";
 /** Already-active controls: clicking them again rightly changes nothing. */
@@ -37,7 +39,7 @@ async function detailUrl(page: Page, pid: string, kind: string): Promise<string 
   }
   const list = DETAILS[kind];
   await open(page, `#/p/${pid}/${list}`);
-  const href = await page.locator(`main a[href^="#/p/${pid}/${list}/"]`).first().getAttribute("href", { timeout: 5000 }).catch(() => null);
+  const href = await page.locator(`main a[href^="#/p/${pid}/${DETAIL_LINK[kind] || `${list}/`}"]`).first().getAttribute("href", { timeout: 5000 }).catch(() => null);
   return href;
 }
 
@@ -114,6 +116,38 @@ test.describe("every page, both projects", () => {
       if (o) wide.push(`${g}: ${o}`);
     }
     expect(wide, "pages wider than the window").toEqual([]);
+    expect(problems).toEqual([]);
+  });
+
+  test("supply chain: suppliers are part of it, old Suppliers links land there, no cross-project suppliers", async ({ page }) => {
+    const problems = watch(page);
+    const names: Record<string, string[]> = {};
+    for (const p of await projects(page)) {
+      const sups: { id: string; name: string }[] = (await (await page.request.get(`/api/supply?project=${p.id}`)).json()).suppliers || [];
+      names[p.id] = sups.map(s => s.name);
+      await page.goto(`/#/p/${p.id}/suppliers`);
+      await expect(page).toHaveURL(new RegExp(`#/p/${p.id}/supply-chain/suppliers$`));
+      await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Supply Chain", exact: true })).toHaveAttribute("aria-current", "page");
+      await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Suppliers", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("tab", { name: /Suppliers/ })).toHaveAttribute("aria-selected", "true");
+      if (!sups.length) continue;
+      const text = await page.locator("main").innerText();
+      for (const s of sups) expect(text, `${p.name} lists ${s.name}`).toContain(s.name);
+      await page.goto(`/#/p/${p.id}/suppliers/${sups[0].id}`);
+      await expect(page).toHaveURL(new RegExp(`#/p/${p.id}/supply-chain/${sups[0].id}$`));
+      await expect(page.locator("main h1")).toHaveText(sups[0].name);
+      await open(page, `#/p/${p.id}/supply-chain/suppliers`);
+      await page.getByRole("button", { name: "Show in parts" }).first().click();
+      await expect(page).toHaveURL(new RegExp(`#/p/${p.id}/supply-chain$`));
+      await expect(page.getByRole("tab", { name: /Parts/ })).toHaveAttribute("aria-selected", "true");
+      await expect(page.getByTitle("Show every supplier's parts")).toBeVisible();
+    }
+    for (const [pid, own] of Object.entries(names)) {
+      await open(page, `#/p/${pid}/supply-chain/suppliers`);
+      const text = await page.locator("main").innerText();
+      const leaked = Object.entries(names).filter(([o]) => o !== pid).flatMap(([, ns]) => ns).filter(nm => !own.includes(nm) && text.includes(nm));
+      expect(leaked, `${pid} shows another project's suppliers`).toEqual([]);
+    }
     expect(problems).toEqual([]);
   });
 
