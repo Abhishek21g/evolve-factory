@@ -6,7 +6,8 @@ Usage:
 
 Agent command comes from $AGENT_CMD (default: claude -p ...). The prompt is appended as the last argument.
 Safety spec is read from the main checkout (trusted), never from the agent's worktree.
-Exit code 0 = gate passed, 1 = still blocked after retries.
+Exit code 0 = gate passed, 1 = still blocked after retries, 2 = the agent itself failed to run.
+Agent output is saved to .runs/<WO>.agent.log.
 """
 import argparse
 import json
@@ -67,8 +68,11 @@ def run_checks(checks, wt, base, wo, gate_json):
 
 def run_agent(wt, prompt):
     cmd = shlex.split(os.environ.get("AGENT_CMD", DEFAULT_AGENT)) + [prompt]
-    p = subprocess.run(cmd, cwd=wt, capture_output=True, text=True)
-    return p.stdout[-1500:] + p.stderr[-500:]
+    try:
+        p = subprocess.run(cmd, cwd=wt, capture_output=True, text=True)
+    except FileNotFoundError:
+        return 127, f"agent command not found: {cmd[0]!r} (is it installed and on PATH? set $AGENT_CMD to override)"
+    return p.returncode, (p.stdout + p.stderr).strip()
 
 
 def commit(wt, msg):
@@ -97,6 +101,7 @@ def main(argv=None):
     sh(["git", "worktree", "add", "-q", "-b", branch, wt, args.base], ROOT)
 
     os.makedirs(os.path.join(ROOT, ".runs"), exist_ok=True)
+    open(os.path.join(ROOT, ".runs", f"{args.wo}.agent.log"), "w").close()
     out = os.path.join(ROOT, ".runs", f"{args.wo}.md")
     prompt = PROMPT.format(wo=args.wo, text=text)
     gate_json = os.path.join(ROOT, ".runs", f"{args.wo}.gate.json")
@@ -108,13 +113,24 @@ def main(argv=None):
         n = attempt + 1
         print(f"[{args.wo}] attempt {n}: running agent", flush=True)
         say(coder, "working", f"Attempt {n}: implementing" if n == 1 else f"Attempt {n}: fixing what the gate blocked", wo=args.wo)
-        run_agent(wt, prompt)
+        rc, agent_out = run_agent(wt, prompt)
+        with open(os.path.join(ROOT, ".runs", f"{args.wo}.agent.log"), "a") as f:
+            f.write(f"--- attempt {n} (exit {rc}) ---\n{agent_out}\n")
+        if rc != 0:
+            msg = f"agent failed (exit {rc}): {agent_out[-300:]}"
+            print(f"[{args.wo}] {msg}", file=sys.stderr)
+            say(coder, "blocked", msg[:200], wo=args.wo)
+            return 2
         commit(wt, f"{args.wo}: {text.splitlines()[0][:60]} (attempt {attempt + 1})")
         say(coder, "done", f"Attempt {n}: committed", wo=args.wo)
-        say("gate", "working", "Running checks", wo=args.wo)
-        if os.path.exists(gate_json):
-            os.remove(gate_json)
-        ok, report = run_checks(checks, wt, args.base, args.wo, gate_json)
+        if sh(["git", "diff", "--quiet", f"{args.base}..HEAD"], wt, check=False).returncode == 0:
+            ok, report = False, "## Checks: BLOCKED\n\nThe agent made no changes to the code."
+            print(f"[{args.wo}] attempt {n}: agent made no changes (see .runs/{args.wo}.agent.log)", flush=True)
+        else:
+            say("gate", "working", "Running checks", wo=args.wo)
+            if os.path.exists(gate_json):
+                os.remove(gate_json)
+            ok, report = run_checks(checks, wt, args.base, args.wo, gate_json)
         extra = {}
         if os.path.exists(gate_json):
             extra["gate"] = json.load(open(gate_json))
