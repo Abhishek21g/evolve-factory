@@ -5,8 +5,15 @@ import { expect, test, type Page } from "@playwright/test";
  * what-ifs, new work orders, memory, trace links) are answered by the test, so the sweep changes nothing. */
 
 type Project = { id: string; name: string; device: string };
-const PAGES = ["overview", "agents", "memory", "requirements", "work-orders", "world-loop", "world-model", "traceability", "audit", "team"];
-const MUTATING = /\/api\/(run|ask|whatif|workorders|projects|memory|trace\/links(\/delete)?|trace\/tests)$/;
+const PAGES = ["control-tower", "overview", "agents", "memory", "requirements", "work-orders", "world-loop", "world-model", "traceability",
+  "source-of-record", "automations", "incidents", "suppliers", "supply-chain", "finance", "audit", "team", "integrations"];
+/** Pages outside a project: the projects list, the all-projects Control Tower and the workspace integrations. */
+const GLOBAL = ["#/", "#/control-tower", "#/settings/integrations"];
+/** Pages that are shared across projects by design (org memory, workspace integrations). */
+const SHARED = new Set(["memory", "integrations"]);
+/** Detail pages: the first link of this kind on the list page is swept too. */
+const DETAILS: Record<string, string> = { "work-order": "work-orders", supplier: "suppliers", incident: "incidents", agent: "agents", "trace-item": "traceability", "world-loop-wo": "world-loop" };
+const MUTATING = /\/api\/(run|ask|whatif|workorders|projects|memory|trace\/links(\/delete)?|trace\/tests|incidents(\/transcript)?|record\/resync|monitors\/run|supply\/(suppliers|deliverables)|integrations\/.+)$/;
 const CLICKABLE = "main button, main a[href], main [role=tab], main [role=radio], main summary";
 /** Already-active controls: clicking them again rightly changes nothing. */
 const ACTIVE = "[aria-pressed=true],[aria-selected=true],[aria-checked=true],[data-state=on],[data-state=active],[aria-current=page],.react-flow__controls-fitview";
@@ -22,10 +29,24 @@ async function projects(page: Page): Promise<Project[]> {
   return (await r.json()).projects;
 }
 
-async function latestWO(page: Page, pid: string): Promise<string | null> {
-  const wos = (await (await page.request.get(`/api/state?project=${pid}`)).json()).work_orders || [];
-  return wos.length ? wos[wos.length - 1].id : null;
+/** URL of a detail page: the first link of that kind on its list page (work order: the latest one). */
+async function detailUrl(page: Page, pid: string, kind: string): Promise<string | null> {
+  if (kind === "work-order" || kind === "world-loop-wo") {
+    const wos = (await (await page.request.get(`/api/state?project=${pid}`)).json()).work_orders || [];
+    return wos.length ? `#/p/${pid}/${DETAILS[kind]}/${wos[wos.length - 1].id}` : null;
+  }
+  const list = DETAILS[kind];
+  await open(page, `#/p/${pid}/${list}`);
+  const href = await page.locator(`main a[href^="#/p/${pid}/${list}/"]`).first().getAttribute("href", { timeout: 5000 }).catch(() => null);
+  return href;
 }
+
+/** Page or main content wider than the window (a horizontal scrollbar). */
+const overflow = (page: Page) => page.evaluate(() => {
+  const m = document.querySelector("main")!;
+  return document.documentElement.scrollWidth > innerWidth + 1 ? `page ${document.documentElement.scrollWidth}px > ${innerWidth}px`
+    : m.scrollWidth > m.clientWidth + 1 ? `main ${m.scrollWidth}px > ${m.clientWidth}px` : "";
+});
 
 /** Console errors, uncaught exceptions and failed requests while the page is used. */
 function watch(page: Page) {
@@ -39,13 +60,19 @@ function watch(page: Page) {
   return problems;
 }
 
-/** Answer side-effecting POSTs in the test so clicking everything is safe; returns the paths that were called. */
+/** Answer side-effecting POSTs in the test so clicking everything is safe; returns the paths that were called.
+ *  Composio connect links (opened in a new tab) are answered too, and there is no microphone, so the hotline
+ *  button can't start a real ElevenLabs call. */
 async function dryRun(page: Page) {
   const called: string[] = [];
-  await page.route(MUTATING, async (route, req) => {
+  await page.context().route(MUTATING, async (route, req) => {
     if (req.method() !== "POST") return route.continue();
     called.push(new URL(req.url()).pathname);
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ error: "QA dry run: not started" }) });
+  });
+  await page.context().route(/\/api\/(integrations\/)?connect/, route => route.fulfill({ status: 200, contentType: "text/html", body: "QA dry run" }));
+  await page.addInitScript(() => {
+    if (navigator.mediaDevices) navigator.mediaDevices.getUserMedia = () => Promise.reject(new Error("QA dry run: no microphone"));
   });
   return called;
 }
@@ -66,20 +93,44 @@ async function open(page: Page, hash: string) {
 }
 
 test.describe("every page, both projects", () => {
-  test("pages render with no errors and no foreign-device content", async ({ page }) => {
+  test("pages render with no errors, no overflow and no foreign-device content", async ({ page }) => {
     const problems = watch(page);
+    const wide: string[] = [];
     for (const p of await projects(page)) {
       for (const pg of PAGES) {
         await open(page, `#/p/${p.id}/${pg}`);
         const text = await page.locator("main").innerText();
         expect(text, `${p.name} / ${pg} shows "not found"`).not.toMatch(/\bnot found\b/i);
-        if (pg === "memory") continue; // org memory is shared across projects by design
+        const o = await overflow(page);
+        if (o) wide.push(`${p.name} / ${pg}: ${o}`);
+        if (SHARED.has(pg)) continue;
         const foreign = text.match(FOREIGN[p.device] || /$^/);
         expect(foreign?.[0], `${p.name} / ${pg} shows another device's content`).toBeUndefined();
       }
     }
-    await open(page, "#/");
+    for (const g of GLOBAL) {
+      await open(page, g);
+      const o = await overflow(page);
+      if (o) wide.push(`${g}: ${o}`);
+    }
+    expect(wide, "pages wider than the window").toEqual([]);
     expect(problems).toEqual([]);
+  });
+
+  test("recorded media: every callout clip and the hotline sample call load", async ({ page }) => {
+    const rec = await (await page.request.get("/callouts.json")).json();
+    const clips = new Set<string>();
+    JSON.stringify(rec, (k, v) => { if (k === "clip" && v) clips.add(v); return v; });
+    expect(clips.size, "callouts.json names its clips").toBeGreaterThan(0);
+    const sample = await page.request.get("/hotline/sample-call.json");
+    expect(sample.status(), "/hotline/sample-call.json").toBe(200);
+    const files = [...[...clips].map(c => `/audio/${c}.mp3`), (await sample.json()).audio as string];
+    const bad: string[] = [];
+    for (const f of files) {
+      const r = await page.request.get(f);
+      if (r.status() !== 200 || (await r.body()).length < 1000) bad.push(`${f}: HTTP ${r.status()}`);
+    }
+    expect(bad).toEqual([]);
   });
 
   test("sidebar: every nav item, project switcher and actor menu work", async ({ page }) => {
@@ -106,17 +157,22 @@ test.describe("every page, both projects", () => {
     expect(problems).toEqual([]);
   });
 
-  for (const pg of [...PAGES, "work-order"]) {
+  for (const pg of [...PAGES, ...Object.keys(DETAILS), ...GLOBAL]) {
     test(`click sweep: ${pg}`, async ({ page, context }) => {
+      test.setTimeout(6 * 60_000);
       const problems = watch(page);
       const called = await dryRun(page);
-      context.on("page", p => p.close().catch(() => {})); // external links open a tab: that counts as working
+      let popups = 0;
+      context.on("page", p => { popups++; p.close().catch(() => {}); }); // external links open a tab: that counts as working
       const dead: string[] = [];
       let clicked = 0;
-      for (const p of await projects(page)) {
-        const wo = pg === "work-order" ? await latestWO(page, p.id) : null;
-        if (pg === "work-order" && !wo) continue;
-        const url = wo ? `#/p/${p.id}/work-orders/${wo}` : `#/p/${p.id}/${pg}`;
+      const ps = GLOBAL.includes(pg) ? [{ id: "", name: "All projects", device: "" }] : await projects(page);
+      for (const p of ps) {
+        const url = GLOBAL.includes(pg) ? pg : DETAILS[pg] ? await detailUrl(page, p.id, pg) : `#/p/${p.id}/${pg}`;
+        if (!url) {  // a project may have no incidents yet; every other list must have a detail page
+          if (pg !== "incident") dead.push(`${p.name} / ${pg}: no detail page to open`);
+          continue;
+        }
         await open(page, url);
         const n = await page.locator(CLICKABLE).count();
         for (let i = 0; i < n; i++) {
@@ -128,12 +184,12 @@ test.describe("every page, both projects", () => {
           if (href !== null && (href === "#" || href === "")) { dead.push(`${label} (empty href)`); continue; }
           const before = await fingerprint(page);
           const calls = called.length;
-          const popup = context.pages().length;
+          const popup = popups;
           await el.click({ timeout: 4000 }).catch(e => dead.push(`${label} (not clickable: ${String(e).split("\n")[0]})`));
           await page.waitForTimeout(350);
           clicked++;
           const after = await fingerprint(page);
-          if (before === after && called.length === calls && context.pages().length === popup && !href?.startsWith("http")) dead.push(label);
+          if (before === after && called.length === calls && popups === popup && !/^(https?|mailto):/.test(href || "")) dead.push(label);
           if (await page.locator("[role=dialog]").count()) {
             await page.keyboard.press("Escape");
             await expect(page.locator("[role=dialog]"), `${label}: Escape closes the dialog`).toHaveCount(0);
@@ -156,7 +212,7 @@ test.describe("every page, both projects", () => {
       for (const pg of PAGES) {
         await page.goto(`/?snapshot#/p/${p.id}/${pg}`);
         await expect(page.locator("main h1").first()).toBeVisible({ timeout: 10_000 });
-        if (pg === "memory") continue;
+        if (SHARED.has(pg)) continue;
         const foreign = (await page.locator("main").innerText()).match(FOREIGN[p.device] || /$^/);
         expect(foreign?.[0], `snapshot ${p.name} / ${pg} shows another device's content`).toBeUndefined();
       }

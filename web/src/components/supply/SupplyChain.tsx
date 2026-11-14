@@ -1,9 +1,10 @@
 "use client";
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
+import { plural as n } from "@/lib/utils";
 import { PageHead, Section, Table } from "@/components/ui";
 import { FLAG_LABEL, RISK_LABEL, money, useLive, type Part, type PartFlag, type PageCtx, type RiskKind, type SupplyView } from "@/lib/supply";
-import { Items, Pending, Pill, SampleBox, StatCard, type Tone } from "./common";
+import { Dot, Items, Pending, Pill, SampleBox, StatCard, type Tone } from "./common";
 
 const CUSTOMS_TONE: Record<Part["customs"], Tone> = { Domestic: "idle", Cleared: "ok", "In transit": "run", Held: "bad", Delayed: "bad" };
 const FLAG_TONE: Record<PartFlag, Tone> = { single_source: "warn", long_lead: "warn", import_delay: "bad", supplier_cert: "warn" };
@@ -35,10 +36,10 @@ export function SupplyChain({ state, getJSON, live }: PageCtx) {
 
       <Section title="Parts and their chain" aside={
         <span className="flex flex-wrap gap-1.5">
-          <button className={chip(!flag)} onClick={() => setFlag("")}>All · {v.parts!.length}</button>
+          <button aria-pressed={!flag} className={chip(!flag)} onClick={() => setFlag("")}>All · {v.parts!.length}</button>
           {(Object.keys(FLAG_LABEL) as PartFlag[]).map(f => {
             const n = v.parts!.filter(x => x.flags.includes(f)).length;
-            return n ? <button key={f} className={chip(flag === f)} onClick={() => setFlag(flag === f ? "" : f)}>{FLAG_LABEL[f]} · {n}</button> : null;
+            return n ? <button key={f} aria-pressed={flag === f} className={chip(flag === f)} onClick={() => setFlag(flag === f ? "" : f)}>{FLAG_LABEL[f]} · {n}</button> : null;
           })}
         </span>}>
         <Table head={["Part", "Supplier", "Raw materials → origin", "Origin · HS code", "Lead time", "Customs", "Risk", "Could affect"]}
@@ -54,14 +55,16 @@ export function SupplyChain({ state, getJSON, live }: PageCtx) {
               ))}
             </ul>,
             <span key="o" className="whitespace-nowrap text-[12.5px]">{x.origin} <span className="font-mono text-[11px] text-dim">· {x.hs}</span></span>,
-            <span key="l" className={`whitespace-nowrap tabular-nums ${x.flags.includes("long_lead") ? "text-warn" : ""}`}>{x.lead_days} days</span>,
+            <span key="l" className={`whitespace-nowrap tabular-nums ${x.flags.includes("long_lead") ? "text-warn" : ""}`}>{n(x.lead_days, "day")}</span>,
             <span key="c" title={x.customs_note}><Pill tone={CUSTOMS_TONE[x.customs]}>{x.customs}</Pill>{x.customs_note && <div className="mt-1 max-w-[180px] text-[11px] text-dim">{x.customs_note}</div>}</span>,
-            <span key="r" className="flex min-w-[110px] flex-wrap gap-1">{x.flags.length ? x.flags.map(f => <Pill key={f} tone={FLAG_TONE[f]}>{FLAG_LABEL[f]}</Pill>) : <Pill tone="ok">none</Pill>}</span>,
+            <ul key="r" className="min-w-[120px] space-y-0.5 text-[12px]">{x.flags.length
+              ? x.flags.map(f => <li key={f} className="flex items-center gap-1.5 whitespace-nowrap"><Dot tone={FLAG_TONE[f]} />{FLAG_LABEL[f]}</li>)
+              : <li className="flex items-center gap-1.5 text-mute"><Dot tone="ok" />none</li>}</ul>,
             <Items key="a" ids={x.affects} pid={p.id} />,
           ])} empty="No parts with this flag." />
       </Section>
 
-      <Section title="Imports: raw materials and components from outside the US" aside={`${imports.length} lines`}>
+      <Section title="Imports: raw materials and components from outside the US" aside={n(imports.length, "line")}>
         <Table head={["Import", "Level", "Origin", "HS code", "Customs / in part", "Supplier"]} rows={imports.map(m => [
           m.name, <span key="l" className="text-mute">{m.level}</span>, m.origin, <span key="h" className="font-mono text-[12px]">{m.hs}</span>,
           m.level === "Part" ? <Pill key="p" tone={CUSTOMS_TONE[m.part.customs]}>{m.part.customs}</Pill> : m.part.name,

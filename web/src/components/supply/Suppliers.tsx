@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { FilePlus2, Mail, Plus, Users } from "lucide-react";
 import { Badge, Button, Field, Modal, PageHead, Section, Table, inputCls } from "@/components/ui";
+import { plural } from "@/lib/utils";
 import { KIND_LABEL, RISK_LABEL, useLive, type Deliverable, type PageCtx, type Risk, type Supplier, type SupplierKind, type SupplyView } from "@/lib/supply";
 import { Dot, Items, Pending, Pill, SampleNote, Stat, StatRow, type Tone } from "./common";
 
@@ -156,7 +157,7 @@ function Workspace({ state, live, post, v, s, reload }: PageCtx & { v: SupplyVie
           </Section>
           <Section title="Parts from this supplier" aside={<a href={`#/p/${p.id}/supply-chain`} className="hover:text-ink">Supply chain</a>}>
             <Table head={["Part", "Origin", "Lead time", "Customs"]} empty="No parts in the BOM from this supplier yet."
-              rows={parts.map(x => [<span key="n">{x.name} <span className="font-mono text-[11px] text-dim">{x.pn}</span></span>, x.origin, `${x.lead_days} days`, x.customs])} />
+              rows={parts.map(x => [<span key="n">{x.name} <span className="font-mono text-[11px] text-dim">{x.pn}</span></span>, x.origin, plural(x.lead_days, "day"), x.customs])} />
           </Section>
         </div>
         <div>

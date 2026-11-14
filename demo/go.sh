@@ -40,7 +40,8 @@ fi
 if [ ! -f web/out/index.html ] || [ -n "$(find web/src web/public web/package.json -newer web/out/index.html -print -quit)" ]; then
   echo "building web UI..."
   # npm writes node_modules/.package-lock.json on install; an older one means new dependencies were pulled since.
-  if [ ! -x web/node_modules/.bin/next ] || [ ! web/node_modules/.package-lock.json -nt web/package-lock.json ]; then
+  # A symlinked node_modules is the install of another checkout: npm ci would empty it through the link.
+  if [ ! -x web/node_modules/.bin/next ] || { [ ! -L web/node_modules ] && [ ! web/node_modules/.package-lock.json -nt web/package-lock.json ]; }; then
     npm --prefix web ci --no-audit --no-fund --loglevel=error
   fi
   npm --prefix web run build >/dev/null

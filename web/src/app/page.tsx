@@ -54,7 +54,7 @@ export default function App() {
     <div className="flex min-h-screen">
       <Sidebar state={state} project={unknown ? undefined : route.project || undefined} page={route.page} me={me} setMe={switchMe} live={!!live} />
       <main className="min-w-0 flex-1 px-6 pb-24 pt-8 md:px-10">
-        <div className="mx-auto max-w-[1360px]">
+        <div key={route.project} className="mx-auto max-w-[1360px]">
         {live === false && (
           <div className="mb-6 flex items-center gap-2 rounded-lg border border-line bg-panel px-4 py-2.5 text-sm text-mute">
             <Info size={15} className="shrink-0 text-acc" />
