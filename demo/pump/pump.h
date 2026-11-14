@@ -4,7 +4,7 @@
 
 #define MAX_BOLUS_U       10.0  /* SR-1 mitigates H-1 overdose */
 #define MAX_BOLUS_RATE_UPH 10.0 /* extended bolus: per-hour delivery never exceeds one max bolus (SR-1, H-1) */
-#define MAX_EXTENDED_U    25.0  /* extended bolus total cap, adults only; SR-2 daily cap still applies */
+#define MAX_EXTENDED_U    15.0  /* extended bolus total cap, adults only; 24 U caused severe hypo in the world model; SR-2 still applies */
 #define MAX_DAILY_U       60.0  /* SR-2 mitigates H-2 cumulative overdose */
 #define MIN_BG_FOR_BOLUS  70    /* SR-3 mitigates H-3 hypoglycemia (mg/dL) */
 #define OCCLUSION_KPA     80.0  /* SR-4 mitigates H-4 missed delivery from blocked line */
