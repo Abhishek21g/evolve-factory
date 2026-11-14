@@ -4,6 +4,7 @@
   .venv/bin/python demo/record.py whatif            # latest what-if run  -> demo/replay/whatif.jsonl
   .venv/bin/python demo/record.py WO-101 ../other   # record from another checkout's feed and .runs/
   FACTORY_BASE=demo-base .venv/bin/python demo/record.py WO-302   # run built on another branch (diff against it)
+  REPLAY_DIR=demo/replay/aircraft .venv/bin/python demo/record.py WO-344   # another project's recording (store.DEVICES "replay")
 Only real runs go in: events are copied from the dashboard feed as they happened, with their real timestamps.
 """
 import json
@@ -12,7 +13,7 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "replay")
+OUT = os.path.join(os.path.dirname(HERE), os.environ.get("REPLAY_DIR", "demo/replay"))
 
 
 def main(target, root):
@@ -38,7 +39,7 @@ def main(target, root):
     with open(os.path.join(OUT, f"{kind}.jsonl"), "w") as f:
         for e in rec:
             f.write(json.dumps(e) + "\n")
-    print(f"recorded {len(rec)} events ({rec[-1]['t']:.0f}s real time) -> demo/replay/{kind}.jsonl")
+    print(f"recorded {len(rec)} events ({rec[-1]['t']:.0f}s real time) -> {os.path.relpath(OUT, os.path.dirname(HERE))}/{kind}.jsonl")
 
 
 if __name__ == "__main__":

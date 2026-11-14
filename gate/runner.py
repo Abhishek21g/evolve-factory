@@ -35,7 +35,8 @@ PROMPT = """You are implementing Software Factory Work Order {wo}.
 {text}
 
 Rules:
-- Code lives in demo/pump/. Run `make -C demo/pump test` before you finish.
+{rules}"""
+PUMP_RULES = """- Code lives in demo/pump/. Run `make -C demo/pump test` before you finish.
 - This is a safety-critical insulin pump. Limits in pump.h mitigate hazards listed in demo/pump/safety.json.
 - Do NOT edit demo/pump/safety.json, demo/pump/test_*.c or anything in gate/ or sim/. Those are protected evidence.
 - Every change is also run in a world model: 10 simulated patients (sim/world.py). It must not cause severe hypoglycemia.
@@ -128,6 +129,7 @@ def main(argv=None):
     a.add_argument("--text-file")
     a.add_argument("--base", default="main")
     a.add_argument("--checks", default=os.path.join(ROOT, "gate/checks.json"))
+    a.add_argument("--rules", help="coding-agent rules file (default: the insulin pump's)")
     a.add_argument("--retries", type=int, default=2)
     a.add_argument("--pr", action="store_true", help="push the branch and open a PR with gh")
     args = a.parse_args(argv)
@@ -142,6 +144,7 @@ def main(argv=None):
         text = sf_wo["title"] + ("\n\n" + sf_wo["text"].strip() if sf_wo["text"].strip() else "")
         print(f"[SF] fetched {args.wo} [{sf_wo['status']}]: {sf_wo['title']}", flush=True)
     checks = json.load(open(args.checks))
+    rules = open(args.rules).read().strip() if args.rules else PUMP_RULES
 
     # Always start from the remote base: a stale local main (e.g. after a history rewrite) breaks the PR later.
     base_ref = args.base
@@ -170,7 +173,7 @@ def main(argv=None):
     if p.returncode:  # e.g. the same WO number is checked out by another checkout of this repo
         return not_run(f"Could not create the agent worktree: {p.stderr.strip().splitlines()[-1][:160]}", p.stderr)
 
-    prompt = PROMPT.format(wo=args.wo, text=text)
+    prompt = PROMPT.format(wo=args.wo, text=text, rules=rules)
     gate_json = os.path.join(ROOT, ".runs", f"{args.wo}.gate.json")
     title = text.splitlines()[0]
     say("planner", "done", f'Picked up {args.wo} "{title}"; coder works in its own worktree', wo=args.wo, title=title)
@@ -192,7 +195,7 @@ def main(argv=None):
             say(coder, "blocked", f"Attempt {n}: agent made no changes", wo=args.wo)
             ok, report = False, f"## Checks: BLOCKED\n\nAgent made no code changes. Agent output:\n\n```\n{log[-1200:]}\n```\n"
             print(f"[{args.wo}] attempt {n}: no changes", flush=True)
-            prompt = PROMPT.format(wo=args.wo, text=text) + "\n\nYour previous attempt changed nothing. Edit the code."
+            prompt = PROMPT.format(wo=args.wo, text=text, rules=rules) + "\n\nYour previous attempt changed nothing. Edit the code."
             continue
         say(coder, "done", f"Attempt {n}: committed", wo=args.wo)
         say("gate", "working", "Running checks", wo=args.wo)
@@ -209,7 +212,7 @@ def main(argv=None):
         if ok:
             break
         # Each attempt is a fresh agent session: resend the Work Order and rules, not just the report.
-        prompt = PROMPT.format(wo=args.wo, text=text) + "\n\n" + RETRY.format(wo=args.wo, report=report)
+        prompt = PROMPT.format(wo=args.wo, text=text, rules=rules) + "\n\n" + RETRY.format(wo=args.wo, report=report)
 
     open(out, "w").write(report)
     print(f"\nreport: {out}\nworktree: {wt} (branch {branch})")

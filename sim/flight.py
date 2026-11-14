@@ -99,7 +99,8 @@ def gust(t, amp):
 def fly(fcc, alert, sc, cfg):
     """Fly one scenario on one config with the candidate's FCC in the loop. Returns the result row."""
     name, m, cma = cfg
-    v = sc.get("speed_kt", 200) * KT
+    vs = math.sqrt(2 * m * G / (RHO * S * cl(math.radians(STALL_DEG))))
+    v = max(sc.get("speed_kt", 200) * KT, 1.2 * vs)  # an airliner can't trim below 1.2x stall speed
     qbar = 0.5 * RHO * v * v
     a0 = (m * G / (qbar * S) - CL0) / CLA                 # level-flight trim AoA
     d0 = -cm_static(a0, cma) / CMD                       # elevator for zero pitching moment
@@ -183,7 +184,11 @@ def run(repo, base, scenarios=SCENARIOS):
         r["base_min"], r["base_trace"] = b["min"], b["trace"]
         r["new_hypo"] = r["hypo"] and not b["hypo"]
         r["preexisting"] = r["hypo"] and b["hypo"]
-    return {"kind": "aircraft", "verdict": "BLOCKED" if any(r["new_hypo"] for r in cand) else "PASS",
+    if base == "none":  # nothing to compare against: the answer is whether any flight leaves the envelope
+        verdict = "UNSAFE" if any(r["hypo"] for r in cand) else "SAFE"
+    else:
+        verdict = "BLOCKED" if any(r["new_hypo"] for r in cand) else "PASS"
+    return {"kind": "aircraft", "verdict": verdict,
             "threshold": STALL_DEG, "step_min": SAMPLE, "meal_at": scenarios[0].get("event_at", 5), "base": base,
             "axis": {"unit": "deg AoA", "min": -5, "max": 30, "band": [-2, 12], "threshold_label": "stall AoA",
                      "event_label": "event", "above": True, "time_unit": "s", "subject": "aircraft configs"},
@@ -236,7 +241,7 @@ def main(argv=None):
     except Exception:
         pass
     print(report(res))
-    return 0 if res["verdict"] == "PASS" else 1
+    return 0 if res["verdict"] in ("PASS", "SAFE") else 1
 
 
 if __name__ == "__main__":
