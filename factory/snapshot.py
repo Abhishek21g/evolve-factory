@@ -12,6 +12,8 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "factory"))
 import memory  # noqa: E402
+import monitors  # noqa: E402
+import record  # noqa: E402
 import store  # noqa: E402
 import worldmodel  # noqa: E402
 
@@ -37,4 +39,15 @@ for w in wos:
     loop = worldmodel.loop(w["id"]) if w.get("world") else None
     if loop:
         json.dump(loop, open(os.path.join(pub, f"worldmodel-{w['id']}.json"), "w"))
+for p in store._load()["projects"]:  # source of record and monitoring-agent runs, as last synced
+    rec = record.load(p["id"])
+    if rec:
+        json.dump(rec, open(os.path.join(pub, f"record-{p['id']}.json"), "w"))
+    mv = monitors.view(p["id"])
+    if any(m["runs"] for m in mv["monitors"]):
+        json.dump(mv, open(os.path.join(pub, f"monitors-{p['id']}.json"), "w"))
+        for r in (r for m in mv["monitors"] for r in m["runs"][:5]):
+            ev = monitors.evidence(r["id"])
+            if ev:
+                json.dump(ev, open(os.path.join(pub, f"monitor-{r['id']}.json"), "w"))
 print(f"snapshot: {len(states)} projects, {len(wos)} work orders, {len(evs)} events")
