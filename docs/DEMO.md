@@ -16,8 +16,10 @@ demo/go.sh check         # health check only, any time
    The work order on screen gets the next free number (WO-305, WO-306, ...); the PR it links is the recording's
    [PR #30](https://github.com/Abhishek21g/evolve-factory/pull/30), titled WO-304. Don't read WO numbers aloud.
 3. Backup if the laptop or server dies: **https://certus-factory.vercel.app** (read-only snapshot, first paint ~0.3 s,
-   no server needed). As of Nov 14 03:00 it still shows the older runs WO-101 (Approved) and WO-102 (Blocked), not
-   the WO-304 block beat; re-run `demo/deploy.sh` from a checkout that has played the replay to refresh it.
+   no server needed). The snapshot on `main` (Nov 14 03:42) holds the 25 U run as WO-345: badge **Approved**, its
+   Activity shows both BLOCKED attempts, **Code change** / **Evidence** / **Pull request** (PR #30) work, plus the
+   recorded what-if. It is the end state only; the blocks do not animate. The old WO-101/WO-102 runs are gone. If the
+   site still shows WO-101/WO-102, it has not been redeployed: run `demo/deploy.sh`.
 4. Rehearsing? Just re-run `demo/go.sh replay`: it adds a fresh draft work order each time.
 
 **Replay vs live.** `replay` plays a recorded real run with the gaps compressed, so nothing on stage can wait on an
@@ -76,7 +78,8 @@ appear as they land.
 
 Optional if ahead of time: click the Home suggestion chip `What if a child eats 80 g and the parent types the dose 10x?`
 (7 s, lands on World Model). If the hosted backup is all you have, walk the same pages on
-https://certus-factory.vercel.app (Run is disabled there; narrate the recorded run instead).
+https://certus-factory.vercel.app (Run is disabled there): open WO-345 from Recent work orders, narrate D2/D3 over
+its Activity entries, then do the D4 clicks as written; the what-if is already on World Model.
 
 ## Backup video shot list (record replay mode, 1440p, ~2:40)
 
