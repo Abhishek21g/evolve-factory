@@ -483,6 +483,7 @@ function WorkOrderView({ state, events, post, text, team, id, live }: Ctx & { id
                       <div className="line-clamp-2" title={e.analysis.risk}>Risk: {e.analysis.risk}</div>
                     </div>
                   ) : <div className={`text-[12px] leading-snug ${t === "bad" ? "text-bad" : "text-dim"}`}>{e?.msg || desc}</div>}
+                  {agent === "gate" && e && w.gate?.checker && <div className="mt-0.5 font-mono text-[10px] text-mute">{w.gate.checker.label}</div>}
                 </li>
               );
             })}

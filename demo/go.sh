@@ -63,6 +63,12 @@ EOF
 # 4. Pre-warm: Python imports (simglucose, pandas) and the pump's C build, so the first run starts hot
 "$PY" -c "import sys; sys.path.insert(0, 'sim'); import world" 2>/dev/null
 make -s -C demo/pump test >/dev/null
+# Rust verdict layer of the gate (~20 s cold, instant when unchanged); without cargo the Python reference decides
+if command -v cargo >/dev/null; then
+  (cd gate-rs && cargo build --release -q) || echo "warning: Rust gate build failed; the Python gate decides"
+else
+  echo "note: cargo not found; the Python gate decides (install Rust for the Rust gate)"
+fi
 
 # 5. (Re)start the factory server in the background, in the chosen mode
 pid=$(lsof -tiTCP:"$PORT" -sTCP:LISTEN || true)

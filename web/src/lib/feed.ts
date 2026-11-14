@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type GateRow = { id: string; text: string; why: string[]; result: string; hazards: { id: string; title?: string; severity?: string }[] };
+/** Who decided the verdict (gate/verdict.py): the Rust binary or the Python fallback, with the verdict digest. */
+export type Gate = { verdict: string; rows: GateRow[]; checker?: { engine: string; verdict: string; digest: string; label: string } };
 export type WorldRun = {
   scenario: string; patient: string; note: string; min: number; max: number; hypo: boolean;
   trace: number[]; base_trace: number[]; base_min: number; new_hypo: boolean; preexisting: boolean;
@@ -19,7 +21,7 @@ export type World = {
 export type Hit = { kind: string; title: string; text: string; score?: number };
 export type Ev = {
   run: string; t: number; agent: string; state: string; msg: string; wo?: string; title?: string;
-  gate?: { verdict: string; rows: GateRow[] }; world?: World; memory?: Hit[];
+  gate?: Gate; world?: World; memory?: Hit[];
   analysis?: { hazards?: string[]; requirements?: string[]; risk?: string; guidance?: string; new_hazard?: string };
   evidence?: { wo: string; decision: string; headline: string }; candidate?: string; pr?: string;
   replay?: { wo?: string | null; at: number };
