@@ -35,8 +35,7 @@ export function useLoop(getJSON: Props["getJSON"], wo: string | undefined, tick:
     if (!wo || checking) return;
     let stop = false;
     (async () => {
-      const l = live ? await getJSON<Loop>(`worldmodel?wo=${encodeURIComponent(wo)}`)  // the hosted snapshot has static files
-        : await fetch(`/worldmodel-${wo}.json`).then(r => (r.ok ? r.json() : null)).catch(() => null);
+      const l = await getJSON<Loop>(`worldmodel?wo=${encodeURIComponent(wo)}`);
       if (!stop) setLoop(l);
     })();
     return () => { stop = true; };

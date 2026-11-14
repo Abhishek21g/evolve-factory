@@ -1,58 +1,114 @@
-"""Export the current factory state as a read-only snapshot for the hosted UI (Vercel).
+"""Export a running factory server as the read-only snapshot the hosted UI (Vercel) shows.
 
-  .venv/bin/python factory/snapshot.py      # writes web/public/snapshot.json + evidence/diff files
+  python3 factory/snapshot.py [http://localhost:8787]
 
-One state per project (`states`), so the hosted UI shows each project its own work orders and runs;
-`state` (the first project's) keeps older UI builds working. Events carry their project.
+Asks the server every GET the UI makes (GETs only: the server's state is not touched) and writes the answers to web/public:
+  snapshot.json               every project's state, the all-projects state and the event feed (bundled: first paint)
+  snapshot/<key>.json|.txt    every other answer. With no server, web/src/lib/api.ts reads /snapshot/<key> instead of
+                              /api/<path>; key = the decoded path and query with anything but [A-Za-z0-9.-] as "_".
+  supply-<project>.json, tower-<project>.json, tower-all.json   the files the supply pages read (web/src/lib/supply.ts)
+Waits for running jobs and monitors to finish first, so the hosted site never shows one frozen mid-run.
+Absolute paths on the exporting machine become <repo>; status is marked offline (the hosted site cannot run anything).
 """
+import glob
 import json
 import os
+import re
+import shutil
 import sys
+import time
+import urllib.error
+import urllib.request
+from urllib.parse import quote, unquote
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(ROOT, "factory"))
-import memory  # noqa: E402
-import monitors  # noqa: E402
-import record  # noqa: E402
-import store  # noqa: E402
-import supply  # noqa: E402
-import worldmodel  # noqa: E402
+PUB = os.path.join(ROOT, "web", "public")
+OUT = os.path.join(PUB, "snapshot")
+URL = (sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8787").rstrip("/")
+LOCAL_PATH = re.compile(r"(/Users|/home)/[^/\"'\s]+/[^/\"'\s]+")
+OFFLINE = {"online": False, "busy": False, "job": None, "running": None, "project": None}
 
-pub = os.path.join(ROOT, "web", "public")
-status = {"online": False, "busy": False, "job": None, "running": None, "memory": "HydraDB" if os.environ.get("HYDRADB_API_KEY") else "local",
-          "composio": False, "software_factory": False}
-states = {}
-for p in store._load()["projects"]:
-    s = store.state(p["id"], None)
-    s["status"], s["memory"] = status, memory.items()
-    states[p["id"]] = s
-first = next(iter(states.values()), {**store.state("", None), "status": status})
-evs = store.events()
-json.dump({"state": first, "states": states, "events": evs}, open(os.path.join(pub, "snapshot.json"), "w"))
-wos = [w for s in states.values() for w in s.get("work_orders", [])]
+
+def get(path):
+    """The server's answer to GET /api/<path>: text, or None if it has nothing (404)."""
+    try:
+        with urllib.request.urlopen(f"{URL}/api/{path}", timeout=60) as r:
+            return LOCAL_PATH.sub("<repo>", r.read().decode())
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise
+
+
+def key(path):
+    return re.sub(r"[^A-Za-z0-9.-]", "_", unquote(path))
+
+
+def save(path, body, ext="json"):
+    if body is not None:
+        open(os.path.join(OUT, f"{key(path)}.{ext}"), "w").write(body if isinstance(body, str) else json.dumps(body))
+
+
+def idle(pids):
+    busy = json.loads(get("state"))["status"]["busy"]
+    return not busy and not any(m["running"] for p in pids for m in json.loads(get(f"monitors?project={p}"))["monitors"])
+
+
+projects = [p["id"] for p in json.loads(get("state"))["projects"]]
+for _ in range(60):
+    if idle(projects):
+        break
+    print("snapshot: waiting for a running job or monitor to finish...", flush=True)
+    time.sleep(3)
+else:
+    sys.exit("snapshot: the factory stayed busy for 3 minutes; try again when it is idle")
+
+shutil.rmtree(OUT, ignore_errors=True)
+os.makedirs(OUT)
+for f in glob.glob(os.path.join(PUB, "*.json")) + glob.glob(os.path.join(PUB, "*.md")) + glob.glob(os.path.join(PUB, "*.txt")):
+    if re.match(r"(evidence|diff|worldmodel|record|monitors?|supply|tower)-", os.path.basename(f)):  # older exports
+        os.remove(f)
+
+def state(pid):
+    s = json.loads(get(f"state?project={quote(pid, safe='')}"))
+    s["status"].update(OFFLINE)
+    return s
+
+
+states = {p: state(p) for p in projects}
+events = json.loads(get("events?since=0"))["events"]
+json.dump({"state": state(""), "states": states, "events": events}, open(os.path.join(PUB, "snapshot.json"), "w"))
+
+wos = [w for s in states.values() for w in s.get("work_orders") or []]
 for w in wos:
-    ev = os.path.join(ROOT, ".runs", f"{w['id']}.evidence.md")
-    if os.path.exists(ev):
-        open(os.path.join(pub, f"evidence-{w['id']}.md"), "w").write(open(ev).read())
-    d = store.diff(w["id"])
-    if d:
-        open(os.path.join(pub, f"diff-{w['id']}.txt"), "w").write(d)
-    loop = worldmodel.loop(w["id"]) if w.get("world") else None
-    if loop:
-        json.dump(loop, open(os.path.join(pub, f"worldmodel-{w['id']}.json"), "w"))
-for p in store._load()["projects"]:  # source of record and monitoring-agent runs, as last synced
-    rec = record.load(p["id"])
-    if rec:
-        json.dump(rec, open(os.path.join(pub, f"record-{p['id']}.json"), "w"))
-    mv = monitors.view(p["id"])
-    if any(m["runs"] for m in mv["monitors"]):
-        json.dump(mv, open(os.path.join(pub, f"monitors-{p['id']}.json"), "w"))
-        for r in (r for m in mv["monitors"] for r in m["runs"][:5]):
-            ev = monitors.evidence(r["id"])
-            if ev:
-                json.dump(ev, open(os.path.join(pub, f"monitor-{r['id']}.json"), "w"))
-for pid in states:  # suppliers, supply chain, finance and control tower per project
-    json.dump(supply.view(pid), open(os.path.join(pub, f"supply-{pid}.json"), "w"))
-    json.dump(supply.tower(pid), open(os.path.join(pub, f"tower-{pid}.json"), "w"))
-json.dump({"projects": supply.towers()}, open(os.path.join(pub, "tower-all.json"), "w"))
-print(f"snapshot: {len(states)} projects, {len(wos)} work orders, {len(evs)} events")
+    q = quote(w["id"], safe="")
+    save(f"evidence?wo={w['id']}", get(f"evidence?wo={q}"), "txt")
+    save(f"diff?wo={w['id']}", get(f"diff?wo={q}"), "txt")
+    save(f"worldmodel?wo={q}", get(f"worldmodel?wo={q}"))
+    save(f"callouts?wo={q}", get(f"callouts?wo={q}"))
+
+files = set()
+for p, s in states.items():
+    q = quote(p, safe="")
+    for path in (f"callouts?project={q}", f"incidents?project={q}", f"record?project={q}", f"memory?q=&project={q}"):
+        save(path, get(path))
+    mv = json.loads(get(f"monitors?project={q}"))
+    for m in mv["monitors"]:
+        m["next"] = None  # schedules do not run on a static host
+        for r in m["runs"]:
+            save(f"monitors/evidence?run={r['id']}", get(f"monitors/evidence?run={quote(r['id'], safe='')}"))
+    save(f"monitors?project={q}", mv)
+    json.dump(json.loads(get(f"supply?project={q}")), open(os.path.join(PUB, f"supply-{p}.json"), "w"))
+    json.dump(json.loads(get(f"supply/tower?project={q}")), open(os.path.join(PUB, f"tower-{p}.json"), "w"))
+    files |= set(re.findall(r'"path": "([^"]+)"', json.dumps(s.get("trace") or {})))
+json.dump(json.loads(get("supply/tower")), open(os.path.join(PUB, "tower-all.json"), "w"))
+save("memory?q=", get("memory?q="))
+integ = json.loads(get("integrations"))
+integ["composio"]["checked"] = None  # "checked 3 h ago" says nothing on a static host
+save("integrations", integ)
+for f in sorted(files):  # repo files the traceability viewer opens
+    path = f"trace/file?path={quote(f, safe='')}"
+    save(path, get(path))
+
+n = len(os.listdir(OUT))
+print(f"snapshot from {URL}: {len(states)} projects, {len(wos)} work orders, {len(events)} events, {n} files in web/public/snapshot")

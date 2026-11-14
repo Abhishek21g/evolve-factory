@@ -30,28 +30,25 @@ type Monitors = { monitors: Monitor[]; scheduler: "on" | "off" };
 type Evidence = { md: string; diagnoses?: Diag[]; tests?: { id: string; result: string; ms: number }[] };
 type Props = { state: State; live: boolean; checking?: boolean; getJSON: <T>(p: string) => Promise<T | null>; post: (p: string, b: object) => Promise<{ error?: string }> };
 
-const staticJSON = (file: string) => fetch(`/${file}`).then(r => (r.ok ? r.json() : null)).catch(() => null);
-
-/** Server data, or the snapshot copy (web/public) when there is no server; polled fast while something runs.
- *  Nothing loads until the server probe has finished, so a live server is never asked for the snapshot files. */
-function usePolled<T>(getJSON: Props["getJSON"], live: boolean, checking: boolean, path: string, file: string, fast: (t: T) => boolean) {
+/** Server data (or its snapshot copy when there is no server), polled while live: fast while something runs. */
+function usePolled<T>(getJSON: Props["getJSON"], live: boolean, checking: boolean, path: string, fast: (t: T) => boolean) {
   const [data, setData] = useState<T | null | undefined>(undefined);
   const [nonce, setNonce] = useState(0);
   const load = useCallback(async () => {
-    const d: T | null = live ? await getJSON<T>(path) : await staticJSON(file);
+    const d = await getJSON<T>(path);
     setData(d);
     return d;
-  }, [getJSON, live, path, file]);
+  }, [getJSON, path]);
   useEffect(() => {
     if (checking) return;
     let stop = false, timer: ReturnType<typeof setTimeout>;
     const tick = async () => {
       const d = await load();
-      if (!stop) timer = setTimeout(tick, d && fast(d) ? 1000 : 8000);
+      if (!stop && live) timer = setTimeout(tick, d && fast(d) ? 1000 : 8000);
     };
     tick();
     return () => { stop = true; clearTimeout(timer); };
-  }, [load, nonce, fast, checking]);
+  }, [load, nonce, fast, checking, live]);
   return [data, () => setNonce(n => n + 1)] as const;
 }
 
@@ -84,7 +81,7 @@ const short = (path: string) => path.split("/").slice(-1)[0];
 export function SourceOfRecord({ state, live, checking = false, getJSON, post }: Props) {
   const pid = state.project!.id;
   const fast = useCallback((r: Record_) => !!r.resyncing, []);
-  const [rec, reload] = usePolled<Record_>(getJSON, live, checking, `record?project=${pid}`, `record-${pid}.json`, fast);
+  const [rec, reload] = usePolled<Record_>(getJSON, live, checking, `record?project=${pid}`, fast);
   const [err, setErr] = useState("");
   const resync = async () => {
     setErr("");
@@ -219,7 +216,7 @@ export function Automations({ state, live, checking = false, getJSON, post }: Pr
   const pid = state.project!.id;
   const air = state.project!.device === "flight-controls";
   const fast = useCallback((m: Monitors) => m.monitors.some(x => x.running), []);
-  const [view, reload] = usePolled<Monitors>(getJSON, live, checking, `monitors?project=${pid}`, `monitors-${pid}.json`, fast);
+  const [view, reload] = usePolled<Monitors>(getJSON, live, checking, `monitors?project=${pid}`, fast);
   const [open, setOpen] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const run = async (id: string) => {
@@ -260,7 +257,7 @@ export function Automations({ state, live, checking = false, getJSON, post }: Pr
             </thead>
             <tbody className="divide-y divide-line">
               {runs.slice(0, 40).map(r => (
-                <RunRow key={r.id} r={r} name={r.name} pid={pid} air={air} open={open === r.id} toggle={() => setOpen(open === r.id ? null : r.id)} getJSON={getJSON} live={live} />
+                <RunRow key={r.id} r={r} name={r.name} pid={pid} air={air} open={open === r.id} toggle={() => setOpen(open === r.id ? null : r.id)} getJSON={getJSON} />
               ))}
             </tbody>
           </table>
@@ -271,12 +268,12 @@ export function Automations({ state, live, checking = false, getJSON, post }: Pr
   );
 }
 
-function RunRow({ r, name, pid, air, open, toggle, getJSON, live }: { r: Run; name: string; pid: string; air: boolean; open: boolean; toggle: () => void; getJSON: Props["getJSON"]; live: boolean }) {
+function RunRow({ r, name, pid, air, open, toggle, getJSON }: { r: Run; name: string; pid: string; air: boolean; open: boolean; toggle: () => void; getJSON: Props["getJSON"] }) {
   const [ev, setEv] = useState<Evidence | null | undefined>(undefined);
   useEffect(() => {
     if (!open || ev !== undefined || r.status === "running") return;
-    (async () => setEv(live ? await getJSON<Evidence>(`monitors/evidence?run=${encodeURIComponent(r.id)}`) : await staticJSON(`monitor-${r.id}.json`)))();
-  }, [open, ev, r.id, r.status, getJSON, live]);
+    (async () => setEv(await getJSON<Evidence>(`monitors/evidence?run=${encodeURIComponent(r.id)}`)))();
+  }, [open, ev, r.id, r.status, getJSON]);
   const bad = r.findings.filter(f => f.severity !== "info");
   return (
     <>
