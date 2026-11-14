@@ -268,10 +268,11 @@ def save(kind, text, wo=None):
 def replay(src, wo=None):
     """Play the real run recorded at <src>.jsonl (demo/record.py for the stage, save() for the cache) instead of
     calling agents, so a demo never waits on an LLM. Gaps are divided by REPLAY_SPEED and capped at
-    REPLAY_MAX_GAP seconds; a BLOCKED gate verdict stays on screen for REPLAY_HOLD seconds so it can be narrated.
+    REPLAY_MAX_GAP seconds; each BLOCKED gate verdict stays on screen so it can be narrated, for the next value of
+    REPLAY_HOLD (seconds, comma-separated, last one repeats).
     Messages, gate rows, simulations, evidence and PR link are the recorded ones."""
     speed, cap = float(os.environ.get("REPLAY_SPEED", "4")), float(os.environ.get("REPLAY_MAX_GAP", "4"))
-    hold = float(os.environ.get("REPLAY_HOLD", "30"))
+    holds = [float(h) for h in os.environ.get("REPLAY_HOLD", "30,15").split(",")]
     rec = [json.loads(line) for line in open(src + ".jsonl") if line.strip()]
     old = rec[0].get("wo")
     sub = (lambda s: s.replace(old, wo)) if old and wo else (lambda s: s)  # noqa: E731
@@ -294,7 +295,7 @@ def replay(src, wo=None):
                 kw["evidence"] = {**kw["evidence"], "wo": wo}
         emit.emit(e["agent"], e["state"], sub(e["msg"]), **kw)
         if e["agent"] == "gate" and e["state"] == "blocked":
-            time.sleep(hold)
+            time.sleep(holds.pop(0) if len(holds) > 1 else holds[0])
     return 0 if not wo or rec[-1]["state"] == "done" else 1
 
 
