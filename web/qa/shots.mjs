@@ -21,7 +21,7 @@ for (const [dev, tag] of [["insulin-pump", "pump"], ["flight-controls", "boeing"
   if (wos.length) shots.push([`${tag}-work-order`, `#/p/${p}/work-orders/${wos[wos.length - 1].id}`]);
 }
 for (const [name, hash] of shots) {
-  await page.goto(`${base}/${hash}`);
+  await page.goto(`${base}/?demo${hash}`);  // ?demo: enter the demo workspace (sign-in page)
   await page.waitForTimeout(1800);
   await page.screenshot({ path: `${out}/${name}.png`, fullPage: name.includes("world-model") || name.includes("work-order") });
   if (name.endsWith("overview")) {

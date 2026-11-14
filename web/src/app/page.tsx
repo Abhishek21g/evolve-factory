@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import {
-  Activity, BookCheck, Bot, Check, ChevronsUpDown, Info, Orbit, Boxes, Brain, FlaskConical, Handshake, Home, ListChecks, Network, Package, Phone, Plus, Radar, Search, ShieldAlert, Timer, Users, Wallet,
+  Activity, BookCheck, Bot, Info, Orbit, Boxes, Brain, FlaskConical, Handshake, Home, ListChecks, Network, Package, Phone, Plus, Radar, Search, ShieldAlert, Timer, Users, Wallet,
 } from "lucide-react";
 import { useFactoryState, type MemoryView, type Member, type State } from "@/lib/api";
 import { go, type Ctx } from "@/lib/ctx";
@@ -12,12 +12,12 @@ import { WorkOrderView, WorkOrders } from "@/components/pages/WorkOrders";
 import { Traceability } from "@/components/trace/Traceability";
 import { AgentPage, AgentTeam } from "@/components/Agents";
 import { CertusMark } from "@/components/CertusMark";
+import { UserMenu } from "@/components/auth/UserMenu";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/kit/dropdown-menu";
 import { WorldLoopPage } from "@/components/WorldLoop";
 import { Automations, SourceOfRecord } from "@/components/Automations";
 import { Incidents } from "@/components/Hotline";
-import { Ago, Avatar, Badge, Button, Field, Modal, PageHead, Section, Table, Who, ago, inputCls } from "@/components/ui";
+import { Ago, Badge, Button, Field, Modal, PageHead, Section, Table, Who, ago, inputCls } from "@/components/ui";
 import { AllTowers, ControlTower } from "@/components/supply/ControlTower";
 import { Finance } from "@/components/supply/Finance";
 import { Suppliers } from "@/components/supply/Suppliers";
@@ -126,24 +126,7 @@ function Sidebar({ state, project, page, me, setMe, live }: { state: State; proj
           <span className={`size-2 rounded-full ${live ? "bg-ok shadow-[0_0_8px] shadow-ok/60" : "bg-dim"}`} />
           {live ? "Factory online" : "Read-only snapshot"} <span className="text-dim">· memory {state.status?.memory || "local"}</span>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger aria-label="Acting as" className="flex w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left hover:bg-white/[.04]">
-            <Avatar m={humans.find(h => h.id === me)} size={26} />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">{humans.find(h => h.id === me)?.name}</span>
-              <span className="block truncate text-xs text-dim">{humans.find(h => h.id === me)?.role}</span>
-            </span>
-            <ChevronsUpDown size={14} className="text-dim" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" className="w-56">
-            <DropdownMenuLabel className="text-xs text-dim">Acting as</DropdownMenuLabel>
-            {humans.map(h => (
-              <DropdownMenuItem key={h.id} onSelect={() => setMe(h.id)} className="gap-2.5">
-                <Avatar m={h} /> <span className="flex-1">{h.name}</span> {h.id === me && <Check size={14} />}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <UserMenu humans={humans} me={me} setMe={setMe} />
       </div>
     </aside>
   );
