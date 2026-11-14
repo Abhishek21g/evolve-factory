@@ -9,7 +9,7 @@ linked, or blocked if the gate never passes). Status updates never stop a run; f
 
 Agent command comes from $AGENT_CMD (default: claude -p ...). The prompt is passed on stdin.
 Safety spec is read from the main checkout (trusted), never from the agent's worktree.
-Exit code 0 = gate passed, 1 = still blocked after retries.
+Exit code 0 = gate passed, 1 = still blocked after retries, 3 = checks passed but the PR step failed.
 """
 import argparse
 import json
@@ -49,6 +49,25 @@ Make the smallest change that satisfies the Work Order AND every requirement abo
 
 def sh(cmd, cwd, check=True):
     return subprocess.run(cmd, cwd=cwd, check=check, capture_output=True, text=True)
+
+
+def publish(wt, branch, base, title, body):
+    """Push the branch and open (or update) its PR; return the PR url. Raises RuntimeError with git's/gh's own message."""
+    def run(cmd):
+        try:
+            p = subprocess.run(cmd, cwd=wt, capture_output=True, text=True)
+        except FileNotFoundError:
+            raise RuntimeError(f"{cmd[0]} not found: install it and put it on PATH") from None
+        if p.returncode:
+            raise RuntimeError(f"`{' '.join(cmd[:3])}` failed: {(p.stderr or p.stdout).strip()[-600:]}")
+        return p.stdout.strip()
+    # The runner recreates this branch every run, so replace any leftover remote copy (lease: only the tip we fetched).
+    run(["git", "push", "--force-with-lease", "-u", "origin", branch])
+    existing = run(["gh", "pr", "list", "--head", branch, "--state", "open", "--json", "url", "-q", ".[0].url"])
+    if existing:
+        run(["gh", "pr", "edit", existing, "--title", title, "--body", body])
+        return existing
+    return run(["gh", "pr", "create", "--base", base, "--head", branch, "--title", title, "--body", body]).splitlines()[-1]
 
 
 def say(agent, state, msg, **kw):
@@ -117,12 +136,20 @@ def main(argv=None):
         print(f"[SF] fetched {args.wo} [{sf_wo['status']}]: {sf_wo['title']}", flush=True)
     checks = json.load(open(args.checks))
 
+    # Always start from the remote base: a stale local main (e.g. after a history rewrite) breaks the PR later.
+    base_ref = args.base
+    if sh(["git", "fetch", "-q", "origin"], ROOT, check=False).returncode == 0 and \
+            sh(["git", "rev-parse", "--verify", "-q", f"origin/{args.base}"], ROOT, check=False).returncode == 0:
+        base_ref = f"origin/{args.base}"
+    else:
+        print(f"warning: could not fetch origin; using local {args.base}", file=sys.stderr)
+
     wt = os.path.join(ROOT, ".worktrees", args.wo)
     branch = f"wo/{args.wo}"
     if os.path.exists(wt):
         sh(["git", "worktree", "remove", "--force", wt], ROOT)
     sh(["git", "branch", "-D", branch], ROOT, check=False)
-    sh(["git", "worktree", "add", "-q", "-b", branch, wt, args.base], ROOT)
+    sh(["git", "worktree", "add", "-q", "-b", branch, wt, base_ref], ROOT)
 
     os.makedirs(os.path.join(ROOT, ".runs"), exist_ok=True)
     out = os.path.join(ROOT, ".runs", f"{args.wo}.md")
@@ -143,7 +170,7 @@ def main(argv=None):
             say(coder, "blocked", "Agent CLI not logged in", wo=args.wo)
             sys.exit(f"Agent CLI is not logged in. Run `claude` then /login, and retry.\n{log}")
         commit(wt, f"{args.wo}: {text.splitlines()[0][:60]} (attempt {attempt + 1})")
-        if sh(["git", "diff", "--quiet", f"{args.base}..HEAD"], wt, check=False).returncode == 0:
+        if sh(["git", "diff", "--quiet", f"{base_ref}..HEAD"], wt, check=False).returncode == 0:
             # An empty change must never pass the gate just because nothing was affected.
             say(coder, "blocked", f"Attempt {n}: agent made no changes", wo=args.wo)
             ok, report = False, f"## Checks: BLOCKED\n\nAgent made no code changes. Agent output:\n\n```\n{log[-1200:]}\n```\n"
@@ -154,7 +181,7 @@ def main(argv=None):
         say("gate", "working", "Running checks", wo=args.wo)
         if os.path.exists(gate_json):
             os.remove(gate_json)
-        ok, report = run_checks(checks, wt, args.base, args.wo, gate_json)
+        ok, report = run_checks(checks, wt, base_ref, args.wo, gate_json)
         extra = {}
         if os.path.exists(gate_json):
             extra["gate"] = json.load(open(gate_json))
@@ -169,14 +196,18 @@ def main(argv=None):
     open(out, "w").write(report)
     print(f"\nreport: {out}\nworktree: {wt} (branch {branch})")
     if ok and args.pr:
-        sh(["git", "push", "-u", "origin", branch], wt)
         title = f"{args.wo}: {text.splitlines()[0][:70]}"
-        pr = sh(["gh", "pr", "create", "--base", args.base, "--head", branch, "--title", title, "--body", report], wt)
-        pr_url = pr.stdout.strip().splitlines()[-1]
+        say("reviewer", "working", "Opening PR", wo=args.wo)
+        try:
+            pr_url = publish(wt, branch, args.base, title, report)
+        except RuntimeError as e:
+            print(f"[{args.wo}] PR step failed: {e}", file=sys.stderr)
+            say("reviewer", "blocked", f"PR step failed: {e}"[:200], wo=args.wo)
+            return 3
         print(f"PR opened: {pr_url}")
         sf_update(sf_wo, "link_pr", pr_url)
         sf_update(sf_wo, "set_status", "in_review")
-        say("reviewer", "done", f"PR opened for {args.wo}", wo=args.wo)
+        say("reviewer", "done", f"PR opened for {args.wo}", wo=args.wo, pr=pr_url)
     if not ok:
         sf_update(sf_wo, "set_status", "blocked")
     return 0 if ok else 1
