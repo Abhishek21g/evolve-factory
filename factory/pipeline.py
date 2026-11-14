@@ -19,9 +19,11 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "dashboard"))
 sys.path.insert(0, os.path.join(ROOT, "factory"))
+sys.path.insert(0, os.path.join(ROOT, "gate"))
 import emit  # noqa: E402
 import memory  # noqa: E402
 import store  # noqa: E402
+import verdict  # noqa: E402
 
 PY = os.path.join(ROOT, ".venv/bin/python")
 RUNS = os.path.join(ROOT, ".runs")
@@ -197,6 +199,7 @@ def evidence_pack(wo, intent, analysis, hits, passed, reason, dev, spec):
                 f"{len(old)} pre-existing")
     md = [f"# Safety evidence pack: {wo}", "", f"**Request:** {intent}", f"**Decision:** {'APPROVED' if passed else 'BLOCKED'} "
           "(deterministic: unit tests + world model; no LLM in the approval path)"]
+    md += [gate["checker"]["label"]] if gate.get("checker") else []
     md += [f"**Blocked because:** {reason}"] if reason else []
     md += [f"**Summary:** {headline}", "",
           "## 1. Hazard analysis (Safety Analyst)", f"- Hazards in scope: {', '.join(analysis.get('hazards', []))}",
@@ -397,12 +400,21 @@ def replay(src, wo=None):
             if os.path.exists(out(ext)):
                 os.remove(out(ext))
         json.dump(shown, open(out("commits.json"), "w"))
-    prev = 0.0
+    prev, world, checked = 0.0, None, None
     for e in rec:
         time.sleep(min(max(e["t"] - prev, 0) / speed, cap))
         prev = e["t"]
         kw = {k: v for k, v in e.items() if k not in ("run", "t", "agent", "state", "msg", "wo")}
         kw.setdefault("replay", {"wo": old, "at": int(float(rec[0]["run"]))})  # the UI says which real run this is
+        if e["agent"] == "gate" and e["state"] == "working":
+            world = None
+        world = kw.get("world") or world
+        if kw.get("gate") and "checker" not in kw["gate"]:
+            # Recorded before the verdict layer existed: re-verify the recorded evidence for display. The recorded
+            # state stays the verdict; gate/test_gate.py asserts the two agree on every recording.
+            rules = json.load(open(os.path.join(ROOT, project_device(wo)["repo"], "safety.json")))
+            kw["gate"] = {**kw["gate"], "checker": verdict.checker(verdict.decide(verdict.evidence(rules, [], kw["gate"]["rows"], world)))}
+        checked = (kw.get("gate") or {}).get("checker") or checked
         if wo:
             kw["wo"] = wo
             for key in ("gate", "world"):
@@ -417,7 +429,10 @@ def replay(src, wo=None):
             if e["agent"] == "evidence" and e["state"] == "done":
                 for ext in ("evidence.md", "diff.txt", "commits.json"):
                     if os.path.exists(f"{src}.{ext}"):
-                        open(out(ext), "w").write(sub(open(f"{src}.{ext}").read()))
+                        body = sub(open(f"{src}.{ext}").read())
+                        if ext == "evidence.md" and checked and "Deterministic gate:" not in body:
+                            body = re.sub(r"^(\*\*Decision:\*\*.*)$", lambda m: m.group(1) + "\n" + checked["label"], body, count=1, flags=re.M)
+                        open(out(ext), "w").write(body)
         msg = sub(e["msg"])
         if e["agent"] == "memory" and e["state"] == "done":  # the context layer answers live, not from the recording
             _, msg, kw["memory"] = recall(rec[0].get("title", ""))

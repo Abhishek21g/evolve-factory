@@ -47,6 +47,11 @@ The LLM steps plan, write code and suggest hazards. Only the exit codes of the p
 `gate/checks.json` for the pump, `gate/checks-aircraft.json` for flight controls. If an LLM or sponsor call fails, the
 run continues with a fallback and the UI says so.
 
+The final PASS/BLOCKED is decided by a small Rust binary (`gate-rs/`, `#![forbid(unsafe_code)]`, no panics, property
+tests). It takes the rule table, the check outcomes, the requirement test results and the world-model results, and
+returns every requirement with its hazard links plus a SHA-256 verdict digest. Without cargo, the identical Python
+reference in `gate/verdict.py` decides, and `gate/test_gate.py` checks that the two agree on every recorded run.
+
 ## Projects
 
 Pick a project with the project switcher in the sidebar.
@@ -128,7 +133,8 @@ The full script is in [docs/DEMO.md](docs/DEMO.md), and the spoken pitch is in [
 ## Run the pieces on their own
 
 ```bash
-.venv/bin/python gate/test_gate.py                            # gate self-test
+.venv/bin/python gate/test_gate.py                            # gate self-test, incl. Rust/Python verdict parity
+(cd gate-rs && cargo test --release)                          # Rust verdict layer: unit + property tests
 make -s -C demo/aircraft test                                 # aircraft requirement tests
 .venv/bin/python sim/world.py --repo . --base main            # pump world model on main, ~25 s
 .venv/bin/python sim/flight.py --repo . --base main           # flight world model on main, ~1 s
@@ -141,7 +147,7 @@ make -s -C demo/aircraft test                                 # aircraft require
 | Path | What's in it |
 |---|---|
 | `factory/` | `server.py` (API and static UI), `pipeline.py` (build / what-if / replay / pre-warm), `memory.py` (HydraDB + local fallback), `actions.py` (Composio), `store.py` (projects, work orders, audit trail), `seed_memory.jsonl` (example org memory written for the demo) |
-| `gate/` | `runner.py` (Claude Code in a worktree, retry on BLOCKED, PR), `gate.py` (diff to requirements to tests), `check_protected.py`, `checks.json` / `checks-aircraft.json`, `sf.py` (Software Factory REST client) |
+| `gate/` | `runner.py` (Claude Code in a worktree, retry on BLOCKED, PR), `gate.py` (diff to requirements to tests), `verdict.py` (verdict layer: Rust binary or Python reference), `check_protected.py`, `checks.json` / `checks-aircraft.json`, `sf.py` (Software Factory REST client) |
 | `sim/` | `world.py` + `shim.c` (pump in simglucose), `flight.py` + `fcc_shim.c` (flight model), `agent.py` (standalone Simulation Agent on the Anthropic API) |
 | `demo/pump/`, `demo/aircraft/` | The two codebases: C code, `safety.json` (hazards and requirements), requirement tests, obvious patches; `demo/aircraft/RULES.md` (coding-agent rules) |
 | `demo/` | `go.sh`, `health.py`, `replay/` (recorded runs per project), `record.py`, `deploy.sh` (Vercel) |
