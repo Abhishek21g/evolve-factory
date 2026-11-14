@@ -29,14 +29,17 @@ Only say what is in the "Built" column. Items marked *(if built by freeze)* get 
 | Claude + Codex in parallel | **Scripted lanes only** *(if built by freeze)* | Don't claim. |
 | SF Automation trigger (WO → Ready starts a run) | **Not built** *(if built by freeze)* | "Next: run as an SF Automation." |
 | HydraDB memory, Composio GitHub/Slack actions | **Live** when keys are set, also in replay: Context recalls from HydraDB (~0.5 s), Plan recalls a past lesson, each run saves a lesson; Composio files a real GitHub issue with the evidence pack ~4 s after the verdict (needs Connect GitHub once) | "Recalled from our org memory in HydraDB." Each rehearsal files a real issue: close them. |
-| Deterministic gate in Rust | **Built** (`gate-rs/`, `#![forbid(unsafe_code)]`, built by `demo/go.sh` when cargo is present; Python fallback otherwise). The Requirement tests step shows "Deterministic gate: Rust (forbid unsafe) · verdict digest ..." | "The verdict comes from a small Rust checker, no LLM in it." |
+| Deterministic gate in Rust | **Built** (`gate-rs/`, `#![forbid(unsafe_code)]`, built by `demo/go.sh` when cargo is present; Python fallback otherwise). Property tests: 40,000 generated cases. The Requirement tests step shows "Deterministic gate: Rust (forbid unsafe) · verdict digest ..." | "The verdict comes from a small Rust checker, tested against 40,000 generated cases." Never "proven" or "formally verified." |
 | Org memory (tickets, meetings, Slack, email) | **Example data** written for the demo (`factory/seed_memory.jsonl`) | "Example org memory." |
 | Pump code | **Demo controller** (~45 lines of C, "not a medical device") | "A small pump controller in C." Never say "real pump firmware." |
 | ISO 26262 | **Not in code** (IEC 62304 / ISO 14971 only) | CertusAI / roadmap only. |
 | Hosted backup site | **Public** at https://certus-factory.vercel.app: read-only snapshot of the 25 U run (WO-345, end state, older UI until `demo/deploy.sh` is re-run), Run disabled, first paint ~0.3 s | Backup only. Demo from `localhost:8787` (`demo/go.sh replay`). |
 | Tree-sitter call graph | **Not built** | Q&A: "next step." |
 | Supply pages (Control Tower, Suppliers, Supply Chain, Finance) | **Built** on **sample data** (fictional suppliers, prices, budget; the UI says so). Supplier deliverables become real trace links | "Sample suppliers." Never name them as partners. |
-| Safety hotline (Incidents), "Hear the pump" callouts | **Built**; alarms are derived from the simulation trace by code. Voice needs ElevenLabs: hotline not configured and callout clips not synthesized on the stage laptop as of Nov 14 05:45 | Don't click Play or the hotline on stage unless both were set up and tested. |
+| Safety hotline (Incidents), "Hear the pump / cockpit" callouts | **Built**; alarms and callouts are derived from the simulation trace by code, voiced by ElevenLabs. Clips and a real recorded hotline call (Boeing project) are committed (#86), so **Play** works with no key. On the stage server the hotline is live: **Call safety hotline** starts a real ElevenLabs agent session | Play the recorded call (Boeing → Incidents → Recorded sample call). Never press **Call safety hotline** on stage or in the video. |
+| Sign-in | **Built**: demo workspace, email sign-in with a signed session, audit trail entries. SSO / GitHub buttons only explain what an admin must configure | "Enter demo workspace." Don't click SSO. |
+| Certus Factory as an MCP server, Integrations page | **Built**: read-only tools `get_trace`, `get_verdict`, `list_gaps`, `recall_memory`, `list_projects`; stdio and HTTP `/mcp`. Composio catalog Connect links are real | "Any agent can ask the factory for a requirement's trace or a verdict over MCP." |
+| World model vs simulation | Simulation = the physics running the candidate's code. World model = diagnosis on top (requirement, hazard, causal chain, code lines) that goes back to the coder, then re-simulation. No LLM | Keep the two words apart. |
 | Connected card "8090 Software Factory · work orders via MCP" | UI label; the factory talks to SF over its REST API (row above) | Don't read the label aloud. |
 
 ---
@@ -114,7 +117,7 @@ About 440 spoken words. That's about 2:55 at 150 wpm, so there is little silence
 
 ## 3. Thirty-second elevator version (about 75 words)
 
-> Agents can change an insulin pump in seconds. Nobody can merge it without safety evidence. We built the Safety Gate for 8090's Software Factory: every agent change is mapped to the hazards it touches, then proven by the tests behind each safety requirement and by running the real code in simulated patients. Fail, it goes back to the agent. Pass, the PR ships with its evidence pack. No LLM decides. Tests and physics do.
+> Agents can change an insulin pump in seconds. Nobody can merge it without safety evidence. We built the Safety Gate for 8090's Software Factory: every agent change is mapped to the hazards it touches, then checked by the tests behind each safety requirement and by running the real code in simulated patients. Fail, it goes back to the agent. Pass, the PR ships with its evidence pack. No LLM decides. Tests and physics do.
 
 ---
 
@@ -172,9 +175,9 @@ Rule: one voice at a time. The person not speaking looks at the screen, not the 
 ### Pre-flight (T-15 min, every time)
 
 - `demo/go.sh replay` ends with **READY** (~2 s warm, ~30 s in a fresh worktree). It starts the server in replay mode, seeds a draft work order and warms everything. `demo/go.sh check` re-checks any time.
-- The stage demo is replay (no LLM on stage). Live (`demo/go.sh live`) needs `claude` logged in or `ANTHROPIC_API_KEY` in `.env`.
+- The stage demo is replay only: no live runs, no LLM calls on stage.
 - `python3 gate/sf.py health` returns OK if we show the SF beat. If not, cut the SF sentence.
-- Tabs open in this order: (1) Home `localhost:8787/#/p/insulin-pump-firmware/overview`, (2) hosted backup https://certus-factory.vercel.app, (3) backup video, (4) PR #30 page.
+- Tabs open in this order: (1) Home `localhost:8787/?demo#/p/insulin-pump-firmware/overview` (`?demo` skips the sign-in page), (2) hosted backup https://certus-factory.vercel.app, (3) backup video, (4) PR #30 page.
 - Type exactly `Raise the single-bolus limit to 25 U` in the Home composer (any text plays the same recording).
 - Font size up, notifications off, phone on silent, laptop on power.
 
@@ -182,7 +185,7 @@ Rule: one voice at a time. The person not speaking looks at the screen, not the 
 
 | Run | Goal | Pass criteria |
 |---|---|---|
-| **1. Full live, stopwatch** | Find real timings | Under 3:00. Write down every mark from the timing table |
+| **1. Full run, stopwatch** | Find real timings | Under 3:00. Write down every mark from the timing table |
 | **2. Forced failure** | Practice the switch | Partner kills the server at D2 without warning. Hosted backup tab is up in under 3 s, narration never stops, no apology |
 | **3. Final pace + Q&A** | Lock it | Under 2:50. Then 5 minutes of rapid-fire Q&A from section 5, partner picks at random, every answer under 15 s |
 
@@ -210,36 +213,32 @@ Never cut: the hook, BLOCKED on screen, green on screen, "No LLM decides approva
 
 ---
 
-## 7. Demo video script (about 2:35)
+## 7. Demo video script (about 2:50, replay only)
 
-One continuous screen recording of `localhost:8787` in **live** mode, plus a title card. Voice: Abhishek. Calm, slow.
-Timings below are from a rehearsal on a clean checkout of `main` (Nov 14).
+One continuous screen recording of `localhost:8787` running `demo/go.sh replay` (no live runs, no LLM calls), plus a
+title and an end card. Voice: Abhishek. Calm, slow. The clicks and the measured timings are in
+[DEMO.md](DEMO.md) ("Click path"); times below are from the same measurement (Enter at 0:22).
 
-**Setup (T-15 min).**
-1. `REPLAY_HOLD=20,12 demo/go.sh live` on a clean checkout of `main`, and wait for `READY` (about 35 s; the first
-   run also installs and builds the UI). The stage default of 30,15 is paced for talking live.
-2. `tail -f .runs/prewarm.log` until every line says `cached`, `recorded` or `ready`. Cold, that's about 40 s per
-   what-if and 5 min per build, so about 12 min; warm, it's instant.
-3. Home > Connected > **Connect GitHub** (Composio), once. Otherwise a red "Composio could not file the evidence" row
-   lands under the green verdict.
-4. Browser full screen at 125% zoom, on the pump project's Home: `http://localhost:8787/#/p/insulin-pump-firmware/overview`.
+**Honesty rules for the edit.** The 25 U work order replays the recorded real run WO-304; the UI says so in small
+grey text ("replayed from real run WO-304 · Nov 14, 2:45 AM"): leave it visible. Attempt 1's patch is scripted
+(`demo/obvious_patch.sh`): say "here's the obvious patch", never "the agent wrote this". Lower-third at 0:32:
+*"Recorded real run. Attempt 1 patch scripted; gate, world model and attempts 2-3 are real."* Supply and finance
+numbers are sample data; Boeing is not a customer ("Boeing asked CertusAI about DO-254" at most). The Rust gate is
+"tested against 40,000 generated cases", never "proven".
 
-**Honesty rules for the edit.** The 25 U work order replays the recorded real run WO-304. The UI says so in small
-grey text ("replayed from real run WO-304 · Nov 14, 2:45 AM"); leave it visible. Attempt 1's patch is scripted
-(`demo/obvious_patch.sh`): say "here's the obvious patch", never "the agent wrote this". Lower-third at 0:42:
-*"Recorded real run. Attempt 1 patch scripted; gate, world model and attempts 2-3 are real."*
+| Time | Screen | Say |
+|---|---|---|
+| 0:00-0:05 | Title card: "Certus Factory: agents write the change, deterministic checks decide if it ships" | (music only) |
+| 0:05-0:22 | Sign in → **Enter demo workspace** → **Insulin Pump Firmware** → Home; type `Raise the single-bolus limit to 25 U`, Enter at 0:22 | "This is a one-line change to an insulin pump: raise the max dose from 10 units to 25. An agent can write it in seconds. In medical devices, nobody may merge it without safety evidence." |
+| 0:22-0:32 | Work order opens; Context recalls from HydraDB; Hazard analysis "breaks SR-1" | "The factory recalls what the organization knows from HydraDB, and the Safety Analyst maps the request to hazards. It already sees it breaks SR-1." |
+| 0:32-1:10 | **BLOCKED**; scroll to "15 g snack, dose typed 10x" (4 / 10) and **SR-1 FAIL** | "Here's the obvious patch. The gate runs the test behind every requirement it touches: SR-1 fails. Then the simulation runs the real compiled C code in ten virtual patients. A dose typed ten times too big is now delivered. Four patients crash below 54. Blocked. The verdict comes from a small Rust checker, tested against 40,000 generated cases. No LLM decides." |
+| 1:10-1:34 | "Attempt 2: BLOCKED"; scroll up to "120 g meal, correct dose" (2 / 10), all 5 tests PASS | "The report goes back to Claude Code, in its own worktree. It keeps the 10 unit cap and spreads big meals over time. Every unit test passes, and the world model still catches two patients crashing hours later. Blocked again." |
+| 1:34-1:52 | **Approved**; **Code change** (`MAX_EXTENDED_U 15.0`), Esc; **Evidence**, Esc | "Capped at 15 units, everything passes: five requirement tests, zero new severe lows. It ships with its evidence pack: hazards, requirement to test, every simulated patient. No pass, no PR." |
+| 1:52-2:12 | **World model loop**; Play **Before** (No alarm, LOW GLUCOSE, URGENT LOW), Play **After** (BOLUS EXCEEDS LIMIT); loop strip | "This is the difference you can hear. Before: the pump takes the typo silently, and hours later, urgent low. After: it refuses the dose. The world model found the failure, diagnosed it down to SR-1 and the line of code, sent it to the coder, and re-ran it until it passed. Alarms come from the trace by code; the voices are ElevenLabs." |
+| 2:12-2:24 | **Traceability** → **Graph** → click **H-1** | "Every hazard traces to its requirement, the code, the test, the simulated patients and the work orders that touched it." |
+| 2:24-2:36 | **Boeing Flight Controls** → **Incidents** → **Recorded sample call** → **Play recorded call**, Stop after ~8 s | "Boeing asked CertusAI about DO-254, so the same factory runs flight controls. Safety reports come in by voice: a pilot calls our ElevenLabs hotline, and the report becomes a traced work order and a hazard link." |
+| 2:36-2:45 | **Control Tower** | "One view of software, safety, suppliers and spend. Supplier data here is sample data." |
+| 2:45-2:52 | User menu → **Integrations** → **Test connection** on Certus Factory as an MCP server | "And any agent, in Claude Code or Cursor, can ask the factory for a trace or a verdict over MCP." |
+| 2:52-2:55 | End card: "Approval is never an LLM decision." | "Agents write the change. Tests and physics decide if it ships. Certus Factory." |
 
-| Time | Beat | Screen and clicks (type exactly) | Say |
-|---|---|---|---|
-| 0:00-0:08 | Title | Card: "Certus Factory: a software factory that proves agent changes are safe" | (music only) |
-| 0:08-0:20 | Hook | Home: "Good morning, Abhishek.", composer, "Your agent team" | "This is a one-line change to an insulin pump: raise the max dose from 10 units to 25. Agents can write it in seconds. In medical devices, nobody may merge it without safety evidence." |
-| 0:20-0:33 | Memory | Sidebar **Memory**; header says "Backend: HydraDB". Type `typing errors overdose` in the search box, Enter. In under a second the top hit is "Clinical safety review, Oct 28", relevance 0.84 | "Our agents start from the organization's memory, in HydraDB: tickets, meetings, Slack, email. The clinical team already said typing errors are the top cause of overdoses." |
-| 0:33-0:42 | D1 | **Home**, composer on **Build**, type `Raise the single-bolus limit to 25 U`, Enter. The page opens the new work order; at 0:38 **Hazard analysis** says "... breaks SR-1" | "I give the factory the ticket. The Safety Analyst maps it to hazards and already sees it breaks SR-1." |
-| 0:42-1:10 | D2 BLOCKED | At 0:42: Requirement tests **SR-1 FAIL**; simulation "BLOCKED: 4 new severe-hypo runs"; scroll down one screen to the "15 g snack, dose typed 10x" card | "Here's the obvious patch. The Safety Gate runs the test behind every requirement it touches: SR-1 fails. Then the world model runs the real C code in simulated patients. A dose typed ten times too big is now delivered. Four patients crash. Blocked." |
-| 1:10-1:30 | D3 blocked again | At 1:10: "Attempt 2", all 5 tests PASS, simulation "BLOCKED: 2 new"; chart "120 g meal, correct dose". Activity now lists attempt 2's commit | "The report goes back to Claude Code in its own worktree. It keeps the 10 unit cap and spreads big meals over time. Every unit test passes, and the world model still catches two patients crashing hours later. Blocked again." |
-| 1:30-1:52 | D4 green | At 1:30: "Attempt 3", badge **Approved**, "PASS: 0 new". **Code change** (`MAX_EXTENDED_U 15.0`; `MAX_BOLUS_U` stays 10), Esc. **Evidence**, scroll to the world model table, Esc | "Capped at 15 units, everything passes: five requirement tests, zero new hypoglycemia. It ships with its evidence pack: hazards, requirement to test, every simulated patient." |
-| 1:52-2:00 | PR | **Pull request** opens PR #30 (title `WO-304`) | "No pass, no PR." |
-| 2:00-2:15 | What-if | **Home**, click the chip `What if a child eats 80 g and the parent types the dose 10x?` (it fills the composer), Enter. Simulations opens at once; the answer lands at about 2:07: "2 of 30 simulated runs reach severe hypoglycemia" | "Anyone can ask the world model in plain English. The pump rejects the typo. But one simulated child goes dangerously low even with the dose typed correctly. That's a finding for a human, on today's firmware." |
-| 2:15-2:35 | Close | Sidebar **Traceability** (opens on the Matrix), click **Graph**, click **H-1**: its chain lights up through SR-1, `MAX_BOLUS_U`, the SR-1 test, the work order, its simulations and evidence | "Hazard to requirement to code to test to simulated patient, for every change. No LLM decides approval: tests and physics do. Certus Factory, for Software Factory." |
-
-If over time, cut the what-if (2:00-2:15) first, then the Evidence scroll. Never cut BLOCKED, green, or the close.
+If over time, cut the Control Tower (2:36-2:45) first, then the Evidence click. Never cut BLOCKED, Approved, or the World model loop.
