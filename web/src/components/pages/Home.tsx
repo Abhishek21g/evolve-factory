@@ -82,7 +82,7 @@ export function HomePage({ state, post, team, me, live, base }: Ctx) {
               )) : <p className="px-4 py-6 text-center text-base text-dim">Nothing built for {p.name} yet. Describe a change above.</p>}
             </div>
           </Section>
-          <Section title="Connected">
+          <Section title="Connected" aside={<a href={`#/p/${p.id}/integrations`} className="hover:text-ink">Manage integrations</a>}>
             <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-panel text-base">
               {connected.map(([n, tone, what]) => (
                 <li key={n} className="flex items-center gap-2.5 px-4 py-2.5">
