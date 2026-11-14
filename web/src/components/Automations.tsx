@@ -229,7 +229,7 @@ export function Automations({ state, live, getJSON, post }: Props) {
   return (
     <>
       <PageHead title="Automations"
-        sub="Monitoring agents that watch main on a schedule and on demand: they re-run the simulations and requirement tests, resync the source of record, and fly adversarial world-model scenarios. They never block the factory: cached per code fingerprint, one run at a time, paused while a work order runs.">
+        sub="Monitoring agents that watch main on a schedule and on demand: they re-run the simulations and requirement tests, resync the source of record, and fly adversarial world-model scenarios. Deterministic, no LLM calls. They never block the factory: cached per code fingerprint, one run at a time, paused while a work order runs.">
         <span className="text-[12px] text-dim">scheduler {view.scheduler}</span>
       </PageHead>
       {err && <p className="mb-4 text-[12px] text-bad">{err}</p>}
