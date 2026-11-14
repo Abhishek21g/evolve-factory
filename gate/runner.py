@@ -9,7 +9,8 @@ linked, or blocked if the gate never passes). Status updates never stop a run; f
 
 Agent command comes from $AGENT_CMD (default: claude -p ...). The prompt is passed on stdin.
 Safety spec is read from the main checkout (trusted), never from the agent's worktree.
-Exit code 0 = gate passed, 1 = still blocked after retries, 3 = checks passed but the PR step failed.
+Exit code 0 = gate passed, 1 = still blocked after retries, 3 = checks passed but the PR step failed,
+4 = the agent itself could not run (not logged in, usage limit): nothing was built or checked, so no safety decision.
 """
 import argparse
 import json
@@ -24,6 +25,7 @@ import emit as feed  # noqa: E402  dashboard event feed
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sf  # noqa: E402  Software Factory client
 DEFAULT_AGENT = 'claude -p --permission-mode acceptEdits --allowedTools "Bash(make:*)"'
+AGENT_DOWN = 4
 # Checks come from gate/checks.json in the main checkout (trusted, agents can't edit it).
 # Each check is {"name", "cmd"}; cmd may use {root} {repo} {base} {wo} {json} (path for machine-readable output). Exit 0 = pass, else BLOCKED;
 # whatever it prints (markdown) goes in the report and is fed back to the agent.
@@ -154,13 +156,22 @@ def main(argv=None):
     if os.path.exists(wt):
         sh(["git", "worktree", "remove", "--force", wt], ROOT)
     sh(["git", "branch", "-D", branch], ROOT, check=False)
-    sh(["git", "worktree", "add", "-q", "-b", branch, wt, base_ref], ROOT)
-
     os.makedirs(os.path.join(ROOT, ".runs"), exist_ok=True)
     out = os.path.join(ROOT, ".runs", f"{args.wo}.md")
+    coder = os.environ.get("AGENT_NAME", "coder-claude")
+
+    def not_run(why, detail=""):
+        say(coder, "blocked", why, wo=args.wo)
+        open(out, "w").write(f"## Agent unavailable\n\n{why}\n\nNo code was written and no check ran.\n\n```\n{detail[-1200:]}\n```\n")
+        print(f"[{args.wo}] {why}", file=sys.stderr)
+        return AGENT_DOWN
+
+    p = sh(["git", "worktree", "add", "-q", "-b", branch, wt, base_ref], ROOT, check=False)
+    if p.returncode:  # e.g. the same WO number is checked out by another checkout of this repo
+        return not_run(f"Could not create the agent worktree: {p.stderr.strip().splitlines()[-1][:160]}", p.stderr)
+
     prompt = PROMPT.format(wo=args.wo, text=text)
     gate_json = os.path.join(ROOT, ".runs", f"{args.wo}.gate.json")
-    coder = os.environ.get("AGENT_NAME", "coder-claude")
     title = text.splitlines()[0]
     say("planner", "done", f'Picked up {args.wo} "{title}"; coder works in its own worktree', wo=args.wo, title=title)
     sf_update(sf_wo, "set_status", "in_progress")
@@ -171,12 +182,10 @@ def main(argv=None):
         say(coder, "working", f"Attempt {n}: implementing" if n == 1 else f"Attempt {n}: fixing what the gate blocked", wo=args.wo)
         log = run_agent(wt, prompt)
         open(os.path.join(ROOT, ".runs", f"{args.wo}.agent{n}.log"), "w").write(log)
-        if "Failed to authenticate" in log:
-            say(coder, "blocked", "Agent CLI not logged in", wo=args.wo)
-            sys.exit(f"Agent CLI is not logged in. Run `claude` then /login, and retry.\n{log}")
-        if "hit your" in log and "limit" in log:
-            say(coder, "blocked", "Agent CLI usage limit reached: " + log.strip()[-120:], wo=args.wo)
-            sys.exit(f"Agent CLI usage limit reached; use replay mode (demo/go.sh replay) or another AGENT_CMD.\n{log}")
+        down = ("Agent CLI is not logged in" if "Failed to authenticate" in log
+                else "Agent CLI usage limit reached" if "hit your" in log and "limit" in log else None)
+        if down:  # fix: `claude` then /login, ANTHROPIC_API_KEY in .env, or demo/go.sh replay
+            return not_run(f"{down} ({log.strip().splitlines()[-1][:100]})", log)
         commit(wt, f"{args.wo}: {text.splitlines()[0][:60]} (attempt {attempt + 1})")
         if sh(["git", "diff", "--quiet", f"{base_ref}..HEAD"], wt, check=False).returncode == 0:
             # An empty change must never pass the gate just because nothing was affected.

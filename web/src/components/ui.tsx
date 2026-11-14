@@ -7,6 +7,7 @@ const STATUS: Record<string, string> = {
   Approved: "text-ok bg-ok/10 border-ok/25",
   Blocked: "text-bad bg-bad/10 border-bad/30",
   Stopped: "text-warn bg-warn/10 border-warn/25",
+  "Not run": "text-warn bg-warn/10 border-warn/25",
   PASS: "text-ok bg-ok/10 border-ok/25",
   FAIL: "text-bad bg-bad/10 border-bad/30",
   BLOCKED: "text-bad bg-bad/10 border-bad/30",

@@ -103,14 +103,24 @@ def build(intent, wo=None):
             + "\n".join(f"- [{h['kind']}] {h['title']}: {h['text']}" for h in hits))
     tf = os.path.join(RUNS, f"{wo}.request.txt")
     open(tf, "w").write(text)
+    md = os.path.join(RUNS, f"{wo}.md")
+    if os.path.exists(md):
+        os.remove(md)
     pr = ["--pr"] if os.environ.get("FACTORY_PR") == "1" else []
     p = subprocess.run([PY, os.path.join(ROOT, "gate/runner.py"), "--wo", wo, "--text-file", tf, *pr],
                        cwd=ROOT, capture_output=True, text=True)
     open(os.path.join(RUNS, f"{wo}.runner.log"), "w").write(p.stdout + p.stderr)
-    passed = p.returncode == 0
+    report = open(md).read() if os.path.exists(md) else ""
+    if not report.startswith("## Checks:"):  # agent unavailable or runner crashed: nothing was checked, so nothing to judge
+        why = report.split("\n\n")[1] if report.count("\n\n") else (p.stderr.strip().splitlines() or ["runner failed"])[-1][:200]
+        ev("reviewer", "blocked", f"{wo} not run: {why}. No safety decision was made; run it again once fixed.",
+           wo=wo, not_run=True)
+        return 1
+    passed = p.returncode in (0, 3)  # 3: checks passed, only opening the PR failed
+    reason = "" if passed else block_reason(wo, report)
 
     ev("evidence", "working", "Generating safety evidence pack")
-    path, summary = evidence_pack(wo, intent, analysis, hits, passed)
+    path, summary = evidence_pack(wo, intent, analysis, hits, passed, reason)
     ev("evidence", "done", f"Evidence pack ready: {os.path.relpath(path, ROOT)}", wo=wo, evidence=summary)
 
     memory.remember([{"id": f"run-{wo}", "kind": "run", "title": f"{wo}: {intent}",
@@ -119,11 +129,27 @@ def build(intent, wo=None):
     if acted:
         ev("actions", "done", acted, wo=wo)
     ev("reviewer", "done" if passed else "blocked",
-       f"{wo} {'approved by deterministic checks: ready to merge with evidence' if passed else 'BLOCKED: not mergeable, evidence attached'}", wo=wo)
+       f"{wo} approved by deterministic checks: ready to merge with evidence" if passed
+       else f"{wo} BLOCKED: {reason}. Not mergeable; evidence attached", wo=wo)
     return 0 if passed else 1
 
 
-def evidence_pack(wo, intent, analysis, hits, passed):
+def block_reason(wo, report):
+    """Why the deterministic checks blocked the change, in one line a judge can read."""
+    gate = _load(f"{wo}.gate.json") or {"rows": []}
+    world = _load(f"{wo}.world.json") or {"results": []}
+    bits = [f"{r['id']} failed ({r['text']}; {', '.join(h['id'] for h in r['hazards'])})" for r in gate["rows"] if r["result"] != "PASS"]
+    new = [r for r in world.get("results", []) if r.get("new_hypo")]
+    if new:
+        bits.append(f"world model: {len(new)} simulated patients fell into severe hypoglycemia that main avoids")
+    if "protected-files: BLOCKED" in report:
+        bits.append("the change edited protected safety evidence")
+    if "Agent made no code changes" in report:
+        bits.append("the agent made no code changes")
+    return "; ".join(bits) or "a check failed (see the evidence pack)"
+
+
+def evidence_pack(wo, intent, analysis, hits, passed, reason=""):
     gate = _load(f"{wo}.gate.json") or {"rows": []}
     world = _load(f"{wo}.world.json") or {"results": []}
     rs = world.get("results", [])
@@ -133,7 +159,9 @@ def evidence_pack(wo, intent, analysis, hits, passed):
                 f"world model {world.get('verdict', 'n/a')}: {len(new)} new severe-hypo runs in {len(rs)} simulations, "
                 f"{len(old)} pre-existing")
     md = [f"# Safety evidence pack: {wo}", "", f"**Request:** {intent}", f"**Decision:** {'APPROVED' if passed else 'BLOCKED'} "
-          "(deterministic: unit tests + world model; no LLM in the approval path)", f"**Summary:** {headline}", "",
+          "(deterministic: unit tests + world model; no LLM in the approval path)"]
+    md += [f"**Blocked because:** {reason}"] if reason else []
+    md += [f"**Summary:** {headline}", "",
           "## 1. Hazard analysis (Safety Analyst)", f"- Hazards in scope: {', '.join(analysis.get('hazards', []))}",
           f"- Requirements in scope: {', '.join(analysis.get('requirements', []))}", f"- Risk: {analysis.get('risk', '')}",
           f"- Guidance given to coding agent: {analysis.get('guidance', '')}"]
