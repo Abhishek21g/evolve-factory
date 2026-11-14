@@ -18,12 +18,12 @@ Only say what is in the "Built" column. Items marked *(if built by freeze)* get 
 | World model: candidate `pump.c` compiled and put in the loop with 10 simulated T1D adults (simglucose, UVA/Padova), compared to `main` | **Built** (`sim/world.py`). 25 U patch: 3 new severe-hypo runs (min BG 0, 22, 44 mg/dL), about 1 min | "Three simulated patients crash below 54." |
 | Protected evidence: agents cannot edit `safety.json`, tests, `gate/`, `sim/` | **Built** (`gate/check_protected.py`, spec read from trusted checkout) | "The agent can't touch the tests or the hazard log." |
 | Real coding agent in its own git worktree, retry with the gate report on BLOCKED | **Built** (`gate/runner.py`, Claude Code headless). Real runs WO-13 and WO-101 passed on the **first** attempt | "Claude Code writes it in its own worktree." |
-| Blocked-then-fixed story (WO-12 control room) | **Patches are scripted**, verdicts are real (`dashboard/demo_run.py`) | "Here's the obvious patch," **not** "the agent wrote this." |
+| Blocked-then-fixed story (stage replay = recorded run WO-302, PR #25) | **Attempt 1 patch is scripted** (`demo/obvious_patch.sh`; real Claude Code refuses to write it). Gate and world-model verdicts are real; attempt 2 is real Claude Code; PR #25 is real (into `demo-base`, main before the extended bolus merged) | "Here's the obvious patch," **not** "the agent wrote this." |
 | Safety Analyst (LLM) maps request to hazards, gives guidance, proposes new hazards | **Built** (`factory/pipeline.py`, deterministic fallback) | "Proposed H-6 for human review." |
 | Evidence pack (hazards, requirement → test matrix, simulation table, context used; IEC 62304 / ISO 14971) | **Built**. Real one: `web/public/evidence-WO-101.md` | "Every change ships with its evidence pack." |
 | No LLM in the approval path | **Built** (tests + world model decide) | Say it. Judges will like it. |
 | Software Factory: fetch WO, set status In Progress → In Review / Blocked, link PR | **Built**, over the SF **External REST API** (`gate/sf.py`), not MCP. Only on `runner.py` path | "Pulled from Software Factory through its API." Never say "over MCP." |
-| Opens a PR with the checks report | **Built** in `runner.py --pr` (PRs #10, #12). The web UI "Run" path does **not** open a PR | "No pass, no PR." |
+| Opens a PR with the checks report | **Built** in `runner.py --pr` (PRs #10, #12) and in the web UI when the server runs with `FACTORY_PR=1` (PR #17 from WO-200). Replay shows the recorded run's **Pull request** button | "No pass, no PR." |
 | Blocks merge | No PR is opened and the WO goes to Blocked. **No GitHub required check / commit status** | "Nothing gets to review unless it passes." Don't say "GitHub blocks the merge." |
 | `safety-gate` commit status next to `drift-bot` | **Not built** *(if built by freeze)* | Q&A only: "next step." |
 | Claude + Codex in parallel | **Scripted lanes only** *(if built by freeze)* | Don't claim. |
@@ -32,7 +32,7 @@ Only say what is in the "Built" column. Items marked *(if built by freeze)* get 
 | Org memory (tickets, meetings, Slack, email) | **Example data** written for the demo (`factory/seed_memory.jsonl`) | "Example org memory." |
 | Pump code | **Demo controller** (~45 lines of C, "not a medical device") | "A small pump controller in C." Never say "real pump firmware." |
 | ISO 26262 | **Not in code** (IEC 62304 / ISO 14971 only) | CertusAI / roadmap only. |
-| Vercel replay site | Deployed but **behind Vercel Authentication** (302) | Demo from localhost unless protection is turned off. |
+| Hosted backup site | **Public** at https://certus-factory.vercel.app: read-only snapshot of a recorded run, Run disabled, first paint ~0.3 s | Backup only. Demo from `localhost:8787` (`demo/go.sh replay`). |
 | Tree-sitter call graph | **Not built** | Q&A: "next step." |
 
 ---
@@ -72,7 +72,7 @@ About 410 spoken words. That's about 2:45 at 150 wpm, leaving about 15 s of sile
 >
 > M: Every change ships with an evidence pack: hazards, requirement to test, every simulated patient, and the context the agent used. No pass, no PR. On pass, the PR goes up with the matrix and the Software Factory Work Order moves to In Review.
 
-*Last two sentences only if D4 shows the `runner.py --pr` path (PR page + SF board). The web UI "Run" button makes the evidence pack but opens no PR. Otherwise end on "the context the agent used."*
+*The stage replay shows the **Pull request** button (real PR #25), so "No pass, no PR" holds. Say the Software Factory "In Review" clause only if the SF board is on screen; otherwise stop after "the PR goes up with the matrix."*
 
 **[2:20] Why it matters. A.**
 
@@ -167,11 +167,11 @@ Bonus if asked "what did you build tonight vs before": everything in the repo wa
 
 ### Pre-flight (T-15 min, every time)
 
-- `claude` is logged in. The runner stops with "Agent CLI not logged in" otherwise.
-- `.venv` exists. Run the world model once to warm the compiler: `.venv/bin/python sim/world.py --repo . --base origin/main`.
+- `demo/go.sh replay` ends with **READY** (~3 s warm). It starts the server in replay mode, seeds a draft work order and warms everything. `demo/go.sh check` re-checks any time.
+- The stage demo is replay (no LLM on stage). Live (`demo/go.sh live`) needs `claude` logged in or `ANTHROPIC_API_KEY` in `.env`.
 - `python3 gate/sf.py health` returns OK if we show the SF beat. If not, cut the SF sentence.
-- Tabs open in this order: (1) live UI `localhost:8787`, (2) control room replay `localhost:8091/?replay&speed=2`, (3) backup video, (4) evidence pack `web/public/evidence-WO-101.md`, (5) PR page.
-- Vercel link is behind auth. Use localhost unless someone turned protection off.
+- Tabs open in this order: (1) Home `localhost:8787/#/p/insulin-pump-firmware/overview`, (2) hosted backup https://certus-factory.vercel.app, (3) backup video, (4) PR #25 page.
+- Type exactly `Raise the single-bolus limit to 25 U` in the Home composer (any text plays the same recording).
 - Font size up, notifications off, phone on silent, laptop on power.
 
 ### Three timed run-throughs
@@ -179,7 +179,7 @@ Bonus if asked "what did you build tonight vs before": everything in the repo wa
 | Run | Goal | Pass criteria |
 |---|---|---|
 | **1. Full live, stopwatch** | Find real timings | Under 3:00. Write down every mark from the timing table |
-| **2. Forced failure** | Practice the switch | Partner kills the server at D2 without warning. Replay tab is up in under 3 s, narration never stops, no apology |
+| **2. Forced failure** | Practice the switch | Partner kills the server at D2 without warning. Hosted backup tab is up in under 3 s, narration never stops, no apology |
 | **3. Final pace + Q&A** | Lock it | Under 2:50. Then 5 minutes of rapid-fire Q&A from section 5, partner picks at random, every answer under 15 s |
 
 After each run: one change only, then go again.
@@ -197,7 +197,7 @@ Never cut: the hook, BLOCKED on screen, green on screen, "No LLM decides approva
 ### Failure plan if the live demo stalls
 
 - **Trigger:** nothing visibly moves for 5 s, or any error on screen.
-- **Action:** Murali switches to tab 2 (replay) or tab 3 (video). No comment on the switch.
+- **Action:** Murali switches to tab 2 (hosted backup, same pages, read-only) or tab 3 (video). No comment on the switch.
 - **Line (only if someone asks):** "This is the same run, recorded earlier. The checks are deterministic, so it's identical." Then keep going from the same beat.
 - **Never:** apologize, debug on stage, retype a command, say "it worked earlier."
 - If the projector dies: Abhishek gives the 60-second version from memory, then goes straight to Q&A.
@@ -211,13 +211,13 @@ Record from the real run (gate and world model verdicts are real). Voice: Abhish
 | Time | Shot | Narration |
 |---|---|---|
 | 0:00–0:10 | `pump.h`, the `MAX_BOLUS_U 10.0` line highlighted, edited to `25.0` | "One line. Raise the insulin pump's max dose from 10 units to 25 so adults can cover a big meal." |
-| 0:10–0:20 | Work Order view: "Let adults take larger meal boluses" | "It starts as a Work Order. The factory picks it up and assigns a team of agents." |
+| 0:10–0:20 | Work Order view: "Raise the single-bolus limit to 25 U" | "It starts as a Work Order. The factory picks it up and assigns a team of agents." |
 | 0:20–0:32 | Safety Analyst lane: H-1, H-2, H-3, SR-1 to SR-3 | "The Safety Analyst maps it to hazards: overdose, daily overdose, low blood sugar." |
 | 0:32–0:45 | Gate matrix, SR-1 row red, **BLOCKED** | "The obvious patch goes to the Safety Gate. It runs the test behind every affected requirement. SR-1 fails. Blocked." |
 | 0:45–1:02 | World model chart: three traces dropping under the 54 line, grey main traces flat | "Then the world model. The actual C code runs in ten simulated diabetic patients. A dose typed ten times too big used to be rejected. Now it's delivered. Three patients crash. Blocked." |
-| 1:02–1:18 | Coder lane, then the real WO-101 diff: `request_extended_bolus`, rate limit comment | "Here's what Claude Code actually built. It keeps the 10 unit cap and delivers big meals slowly, never faster than 10 units an hour. It can't touch the tests." |
+| 1:02–1:18 | "Attempt 2: fixing what the gate blocked", then **Code change**: `request_extended_bolus`, rate limit comment | "Here's what Claude Code actually built. It keeps the 10 unit cap and delivers big meals slowly, never faster than 10 units an hour. It can't touch the tests." |
 | 1:18–1:32 | Gate all green, world model PASS, 0 new | "All five requirement tests pass. Zero new hypoglycemia across every simulated patient." |
 | 1:32–1:48 | Evidence pack scrolling: hazards, matrix, simulation table, proposed H-6 | "Every change ships with its evidence pack: hazards, requirement to test, every patient, and a new hazard proposed for a human." |
-| 1:48–2:00 | PR page with `WO-xx` and checks report; SF Work Order In Review (only if recorded live) | "No pass, no PR. Tests and physics decide, not an LLM. Safety Gate, for Software Factory." |
+| 1:48–2:00 | PR #25 page (`WO-302` title, checks report); SF Work Order In Review only if recorded live | "No pass, no PR. Tests and physics decide, not an LLM. Safety Gate, for Software Factory." |
 
 If the PR and SF In Review shots weren't captured from a real `runner.py --pr` run, end on the evidence pack and say: "Tests and physics decide, not an LLM. Safety Gate, for Software Factory." Don't show a PR we didn't open.

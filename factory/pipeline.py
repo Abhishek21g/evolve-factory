@@ -107,7 +107,8 @@ def build(intent, wo=None):
     if os.path.exists(md):
         os.remove(md)
     pr = ["--pr"] if os.environ.get("FACTORY_PR") == "1" else []
-    p = subprocess.run([PY, os.path.join(ROOT, "gate/runner.py"), "--wo", wo, "--text-file", tf, *pr],
+    base = ["--base", os.environ["FACTORY_BASE"]] if os.environ.get("FACTORY_BASE") else []  # branch to build on and PR into
+    p = subprocess.run([PY, os.path.join(ROOT, "gate/runner.py"), "--wo", wo, "--text-file", tf, *pr, *base],
                        cwd=ROOT, capture_output=True, text=True)
     open(os.path.join(RUNS, f"{wo}.runner.log"), "w").write(p.stdout + p.stderr)
     report = open(md).read() if os.path.exists(md) else ""
@@ -232,8 +233,10 @@ REPLAY = os.path.join(ROOT, "demo", "replay")
 def replay(kind, text, wo=None):
     """FACTORY_REPLAY=1: play the recorded real run demo/replay/<kind>.jsonl (made by demo/record.py) instead of
     calling agents, so a stage demo can never wait on an LLM. Gaps are divided by REPLAY_SPEED and capped at
-    REPLAY_MAX_GAP seconds; messages, gate rows, simulations, evidence and PR link are the recorded ones."""
+    REPLAY_MAX_GAP seconds; a BLOCKED gate verdict stays on screen for REPLAY_HOLD seconds so it can be narrated.
+    Messages, gate rows, simulations, evidence and PR link are the recorded ones."""
     speed, cap = float(os.environ.get("REPLAY_SPEED", "4")), float(os.environ.get("REPLAY_MAX_GAP", "4"))
+    hold = float(os.environ.get("REPLAY_HOLD", "30"))
     rec = [json.loads(line) for line in open(os.path.join(REPLAY, f"{kind}.jsonl")) if line.strip()]
     old = rec[0].get("wo")
     sub = (lambda s: s.replace(old, wo)) if old and wo else (lambda s: s)  # noqa: E731
@@ -256,6 +259,8 @@ def replay(kind, text, wo=None):
             if "evidence" in kw:
                 kw["evidence"] = {**kw["evidence"], "wo": wo}
         emit.emit(e["agent"], e["state"], sub(e["msg"]), **kw)
+        if e["agent"] == "gate" and e["state"] == "blocked":
+            time.sleep(hold)
     return 0 if not wo or rec[-1]["state"] == "done" else 1
 
 

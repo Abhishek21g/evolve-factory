@@ -208,7 +208,8 @@ def main(argv=None):
         print(f"[{args.wo}] attempt {attempt + 1}: {'PASS' if ok else 'BLOCKED'}", flush=True)
         if ok:
             break
-        prompt = RETRY.format(wo=args.wo, report=report)
+        # Each attempt is a fresh agent session: resend the Work Order and rules, not just the report.
+        prompt = PROMPT.format(wo=args.wo, text=text) + "\n\n" + RETRY.format(wo=args.wo, report=report)
 
     open(out, "w").write(report)
     print(f"\nreport: {out}\nworktree: {wt} (branch {branch})")
