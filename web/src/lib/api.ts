@@ -46,6 +46,8 @@ export const BASES = () => ["", ...(process.env.NEXT_PUBLIC_FACTORY_URL ? [proce
 /** factory/snapshot.py: one state per project (`states`), events stamped with their project. */
 const SNAP = snapshot as unknown as { state: State; states?: Record<string, State>; events: Ev[] };
 const snapState = (pid: string) => SNAP.states?.[pid] ?? (!pid || SNAP.state.project?.id === pid ? SNAP.state : null);
+/** factory/snapshot.py's copy of GET /api/<path>, read when there is no server. */
+const snapFile = (path: string, ext: "json" | "txt") => `/snapshot/${decodeURIComponent(path).replace(/[^A-Za-z0-9.-]/g, "_")}.${ext}`;
 
 /** Live factory state from the local server; falls back to a read-only snapshot (Vercel).
  *  The snapshot is bundled, so the first paint always shows the last-known state, never a loading screen.
@@ -55,6 +57,7 @@ export function useFactoryState(projectId: string) {
   const [allEvents, setEvents] = useState<Ev[]>(SNAP.events);
   const [live, setLive] = useState<boolean | null>(null);
   const base = useRef<string | null>(null);
+  const [probe] = useState(() => { let resolve = () => {}; const done = new Promise<void>(r => { resolve = r; }); return { done, resolve }; });
   const seen = useRef(0);
   const pid = useRef(projectId);
   pid.current = projectId;
@@ -80,6 +83,7 @@ export function useFactoryState(projectId: string) {
           } catch { /* next */ }
         }
       }
+      probe.resolve();
       if (base.current === null) { setLive(false); return; }
       setLive(true);
       while (!stop) {
@@ -96,7 +100,7 @@ export function useFactoryState(projectId: string) {
       }
     })();
     return () => { stop = true; };
-  }, [refresh]);
+  }, [refresh, probe]);
 
   useEffect(() => { refresh(); }, [projectId, refresh]);
 
@@ -110,21 +114,22 @@ export function useFactoryState(projectId: string) {
     return r.ok ? j : { error: j.error || "Request failed" };
   }, [refresh]);
 
+  /** GET /api/<path>, or its snapshot copy on the static site. Waits for the server probe, so a live server is
+   *  never answered from the snapshot. */
+  const fetchApi = useCallback(async (path: string, ext: "json" | "txt") => {
+    await probe.done;
+    return fetch(base.current === null ? snapFile(path, ext) : `${base.current}/api/${path}`, { cache: "no-store" }).catch(() => null);
+  }, [probe]);
+
   const text = useCallback(async (path: string) => {
-    if (base.current === null) {
-      const m = path.match(/(evidence|diff)\?wo=(.+)$/);
-      const r = m ? await fetch(`/${m[1]}-${m[2]}.${m[1] === "evidence" ? "md" : "txt"}`) : null;
-      return r && r.ok ? r.text() : "Not available in the read-only snapshot.";
-    }
-    const r = await fetch(`${base.current}/api/${path}`, { cache: "no-store" });
-    return r.ok ? r.text() : "Not found.";
-  }, []);
+    const r = await fetchApi(path, "txt");
+    return r && r.ok ? r.text() : "Not found.";
+  }, [fetchApi]);
 
   const getJSON = useCallback(async <T,>(path: string): Promise<T | null> => {
-    if (base.current === null) return null;
-    const r = await fetch(`${base.current}/api/${path}`, { cache: "no-store" });
-    return r.ok ? r.json() : null;
-  }, []);
+    const r = await fetchApi(path, "json");
+    return r && r.ok ? r.json().catch(() => null) : null;
+  }, [fetchApi]);
 
   // Live: this project's state once fetched (a project switch shows its snapshot, if any, for the ~20 ms until then).
   // Never another project's state: a page must not render one project's data under another's name.

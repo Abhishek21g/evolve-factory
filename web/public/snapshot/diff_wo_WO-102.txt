@@ -1,0 +1,216 @@
+ demo/pump/.gitignore           |  1 +
+ demo/pump/HAZARD_LOG_WO-102.md | 35 ++++++++++++++++++++++++
+ demo/pump/Makefile             | 10 +++++--
+ demo/pump/ext_check.c          | 62 ++++++++++++++++++++++++++++++++++++++++++
+ demo/pump/pump.c               | 30 ++++++++++++++++++++
+ demo/pump/pump.h               |  7 +++++
+ 6 files changed, 142 insertions(+), 3 deletions(-)
+
+diff --git a/demo/pump/.gitignore b/demo/pump/.gitignore
+index 85344be..60d9198 100644
+--- a/demo/pump/.gitignore
++++ b/demo/pump/.gitignore
+@@ -1 +1,2 @@
+ test_safety
++ext_check
+diff --git a/demo/pump/HAZARD_LOG_WO-102.md b/demo/pump/HAZARD_LOG_WO-102.md
+new file mode 100644
+index 0000000..0b7e07c
+--- /dev/null
++++ b/demo/pump/HAZARD_LOG_WO-102.md
+@@ -0,0 +1,35 @@
++# WO-102 hazard log update (ISO 14971), for Safety Analyst review
++
++`safety.json` is protected evidence, so this change does not edit it. The entries below are proposed for the Safety Analyst to add.
++
++## Decision
++
++The request was to raise `MAX_BOLUS_U` from 10 U to 25 U. That change is rejected because the Oct 28 clinical safety review prohibits raising the single-bolus cap. `MAX_BOLUS_U` stays at 10.0 and SR-1 is unchanged.
++
++The large-meal need is covered by an extended bolus. The code implements the interface declared in `pump.h`: `pump_set_adult`, `request_extended_bolus` and `extended_bolus_tick`.
++
++## Risk controls added
++
++| Control | Hazard | Where |
++|---|---|---|
++| The extended delivery rate is at most `MAX_EXT_RATE_U_H` (10 U/h). No hour delivers more than one max bolus, and each 1-minute portion is about 0.17 U or less. | H-1 | `request_extended_bolus` |
++| The extended total is at most `MAX_EXTENDED_U` (25 U) for adults. For other profiles it is at most `MAX_BOLUS_U` (10 U). | H-1 | `request_extended_bolus` |
++| Confirmation: an extended entry above 10 U is accepted only when `request_bolus` rejected the same amount just before. The user must enter the large dose twice. A mismatched amount is rejected. | H-1 (decimal slip) | `request_bolus`, `request_extended_bolus` |
++| Only one extended bolus can be active at a time. | H-1, H-2 | `request_extended_bolus` |
++| SR-2 applies at the request and at every tick. Delivery stops at 60 U per day. | H-2 | `request_extended_bolus`, `extended_bolus_tick` |
++| SR-3 applies at the request. If BG drops below 70 mg/dL during delivery, the remaining dose is cancelled. | H-3 | `request_extended_bolus`, `extended_bolus_tick` |
++
++## Proposed safety.json entries
++
++- **SR-7** (SR-6 is already proposed by the open carb-ratio finding): Extended bolus delivers at most 10 U per hour and at most 25 U in total (adult), and accepts an entry above 10 U only after the same amount is confirmed. Hazard: H-1. Symbols: `MAX_EXTENDED_U`, `MAX_EXT_RATE_U_H`, `request_extended_bolus`, `extended_bolus_tick`. Test: `make -s -C demo/pump ext_check && demo/pump/ext_check`.
++- Extend **SR-2** and **SR-3** symbols with `request_extended_bolus` and `extended_bolus_tick`.
++
++## Traceability
++
++- SR-1 to SR-5: `demo/pump/test_safety.c` (unchanged, all pass).
++- Extended bolus controls: `demo/pump/ext_check.c` (run by `make -C demo/pump test`).
++
++## Residual risk / open items
++
++- A decimal slip that the user confirms (enters twice) is still delivered, up to 25 U at 10 U/h. Each hour stays inside the existing single-bolus limit, and the BG < 70 suspend stops delivery. The open SR-6 proposal (single bolus capped relative to the carb ratio) would close this. That needs a separate Work Order.
++- UVA/Padova simulation evidence comes from the `world-model` gate check (`sim/world.py`, 10 adults, `large-meal` and `decimal-slip` scenarios). The gate attaches it to the PR.
+diff --git a/demo/pump/Makefile b/demo/pump/Makefile
+index afee324..e5fa4e7 100644
+--- a/demo/pump/Makefile
++++ b/demo/pump/Makefile
+@@ -1,8 +1,12 @@
+ test_safety: pump.c pump.h test_safety.c
+-	cc -Wall -Wextra -o test_safety pump.c test_safety.c
++	cc -Wall -Wextra -Wno-missing-field-initializers -o test_safety pump.c test_safety.c
+ 
+-test: test_safety
++ext_check: pump.c pump.h ext_check.c
++	cc -Wall -Wextra -o ext_check pump.c ext_check.c
++
++test: test_safety ext_check
+ 	./test_safety
++	./ext_check
+ 
+ clean:
+-	rm -f test_safety
++	rm -f test_safety ext_check
+diff --git a/demo/pump/ext_check.c b/demo/pump/ext_check.c
+new file mode 100644
+index 0000000..833777d
+--- /dev/null
++++ b/demo/pump/ext_check.c
+@@ -0,0 +1,62 @@
++/* WO-102 extended bolus checks (test_*.c is protected evidence, so these live here). Run: make test */
++#include <assert.h>
++#include <stdio.h>
++#include "pump.h"
++
++static double run(pump_state *s, int minutes, int bg) {
++    double before = s->delivered_today_u, max_min = 0;
++    for (int i = 0; i < minutes; i++) {
++        double b = s->delivered_today_u;
++        extended_bolus_tick(s, bg);
++        if (s->delivered_today_u - b > max_min) max_min = s->delivered_today_u - b;
++    }
++    assert(max_min * 60 <= MAX_BOLUS_U + 1e-9); /* no hour above 10 U */
++    return s->delivered_today_u - before;
++}
++
++int main(void) {
++    pump_state s = {0};
++    pump_set_adult(&s, 1);
++    /* SR-1 unchanged */
++    assert(request_bolus(&s, 24.0, 120) == REJECT_LIMIT);
++    /* confirmed large entry over 144 min = 10 U/h */
++    assert(request_extended_bolus(&s, 24.0, 144, 120) == OK);
++    assert(run(&s, 200, 120) > 23.999);
++
++    /* unconfirmed large entry (no prior rejected request_bolus of that amount) */
++    pump_state u = {0}; pump_set_adult(&u, 1);
++    assert(request_extended_bolus(&u, 24.0, 144, 120) == REJECT_LIMIT);
++    /* confirmation must match the amount */
++    request_bolus(&u, 24.0, 120);
++    assert(request_extended_bolus(&u, 20.0, 144, 120) == REJECT_LIMIT);
++    /* rate limit: 24 U over 60 min is 24 U/h */
++    request_bolus(&u, 24.0, 120);
++    assert(request_extended_bolus(&u, 24.0, 60, 120) == REJECT_LIMIT);
++    /* adult cap 25 U; non-adult cap 10 U */
++    request_bolus(&u, 30.0, 120);
++    assert(request_extended_bolus(&u, 30.0, 180, 120) == REJECT_LIMIT);
++    pump_state c = {0};
++    request_bolus(&c, 12.0, 120);
++    assert(request_extended_bolus(&c, 12.0, 72, 120) == REJECT_LIMIT);
++    assert(request_extended_bolus(&c, 6.0, 60, 120) == OK);
++
++    /* SR-3: rejected below 70 mg/dL, and low BG mid-delivery cancels the rest */
++    pump_state l = {0};
++    assert(request_extended_bolus(&l, 6.0, 60, 69) == REJECT_LOW_BG);
++    assert(request_extended_bolus(&l, 6.0, 60, 120) == OK);
++    run(&l, 10, 120);
++    assert(extended_bolus_tick(&l, 65) == REJECT_LOW_BG);
++    double d = l.delivered_today_u;
++    assert(run(&l, 60, 120) == 0 && l.delivered_today_u == d);
++
++    /* SR-2: daily cap at request and during delivery */
++    pump_state day = {.delivered_today_u = 55.0};
++    assert(request_extended_bolus(&day, 6.0, 60, 120) == REJECT_DAILY);
++    assert(request_extended_bolus(&day, 5.0, 60, 120) == OK);
++    assert(request_bolus(&day, 4.0, 120) == OK); /* 59 U */
++    run(&day, 60, 120);
++    assert(day.delivered_today_u <= MAX_DAILY_U);
++
++    puts("EXT PASS");
++    return 0;
++}
+diff --git a/demo/pump/pump.c b/demo/pump/pump.c
+index f5fb4d9..4269b96 100644
+--- a/demo/pump/pump.c
++++ b/demo/pump/pump.c
+@@ -1,6 +1,7 @@
+ #include "pump.h"
+ 
+ pump_status request_bolus(pump_state *s, double units, int bg_mg_dl) {
++    if (units > MAX_BOLUS_U) s->confirm_u = units; /* first entry of a large dose; see request_extended_bolus */
+     if (units <= 0 || units > MAX_BOLUS_U) return REJECT_LIMIT;
+     if (bg_mg_dl < MIN_BG_FOR_BOLUS) return REJECT_LOW_BG;
+     if (s->delivered_today_u + units > MAX_DAILY_U) return REJECT_DAILY;
+@@ -8,6 +9,35 @@ pump_status request_bolus(pump_state *s, double units, int bg_mg_dl) {
+     return OK;
+ }
+ 
++void pump_set_adult(pump_state *s, int adult) { s->adult = adult != 0; }
++
++/* Extended bolus: `units` spread evenly over `minutes`. SR-2 and SR-3 apply as in request_bolus.
++ * Rate <= MAX_EXT_RATE_U_H, so no hour delivers more than one max bolus. An entry above MAX_BOLUS_U
++ * is accepted only as a confirmation: the same amount must first have been rejected by request_bolus. */
++pump_status request_extended_bolus(pump_state *s, double units, int minutes, int bg_mg_dl) {
++    double cap = s->adult ? MAX_EXTENDED_U : MAX_BOLUS_U;
++    int confirmed = units <= MAX_BOLUS_U || units == s->confirm_u;
++    s->confirm_u = 0;
++    if (units <= 0 || units > cap || minutes <= 0 || !confirmed || s->ext_minutes_left > 0) return REJECT_LIMIT;
++    if (units * 60.0 > MAX_EXT_RATE_U_H * minutes + 1e-9) return REJECT_LIMIT;
++    if (bg_mg_dl < MIN_BG_FOR_BOLUS) return REJECT_LOW_BG;
++    if (s->delivered_today_u + units > MAX_DAILY_U) return REJECT_DAILY;
++    s->ext_per_min_u = units / minutes;
++    s->ext_minutes_left = minutes;
++    return OK;
++}
++
++/* Once per minute. Low BG or the daily cap cancels the rest of the extended bolus. */
++pump_status extended_bolus_tick(pump_state *s, int bg_mg_dl) {
++    if (s->ext_minutes_left <= 0) return OK;
++    pump_status st = bg_mg_dl < MIN_BG_FOR_BOLUS ? REJECT_LOW_BG
++                   : s->delivered_today_u + s->ext_per_min_u > MAX_DAILY_U ? REJECT_DAILY : OK;
++    if (st != OK) { s->ext_minutes_left = 0; return st; }
++    s->delivered_today_u += s->ext_per_min_u;
++    s->ext_minutes_left--;
++    return OK;
++}
++
+ pump_status check_occlusion(double line_pressure_kpa) {
+     return line_pressure_kpa >= OCCLUSION_KPA ? ALARM_OCCLUSION : OK;
+ }
+diff --git a/demo/pump/pump.h b/demo/pump/pump.h
+index 3f86c1b..867387e 100644
+--- a/demo/pump/pump.h
++++ b/demo/pump/pump.h
+@@ -7,12 +7,19 @@
+ #define MIN_BG_FOR_BOLUS  70    /* SR-3 mitigates H-3 hypoglycemia (mg/dL) */
+ #define OCCLUSION_KPA     80.0  /* SR-4 mitigates H-4 missed delivery from blocked line */
+ #define WATCHDOG_MS       2000  /* SR-5 mitigates H-5 runaway delivery on controller hang */
++/* WO-102 extended bolus. MAX_BOLUS_U stays 10 U (Oct 28 clinical safety review). */
++#define MAX_EXTENDED_U    25.0  /* adult extended total; non-adults stay at MAX_BOLUS_U (H-1) */
++#define MAX_EXT_RATE_U_H  MAX_BOLUS_U /* extended delivery never exceeds 10 U in any hour (H-1) */
+ 
+ typedef enum { OK = 0, REJECT_LIMIT, REJECT_DAILY, REJECT_LOW_BG, ALARM_OCCLUSION, ALARM_WATCHDOG } pump_status;
+ 
+ typedef struct {
+     double delivered_today_u;
+     long last_heartbeat_ms;
++    int adult;
++    double confirm_u;      /* last over-limit entry rejected by request_bolus; confirms a large extended entry */
++    double ext_per_min_u;  /* active extended bolus: dose per minute */
++    int ext_minutes_left;
+ } pump_state;
+ 
+ pump_status request_bolus(pump_state *s, double units, int bg_mg_dl);

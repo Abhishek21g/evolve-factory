@@ -219,4 +219,25 @@ test.describe("every page, both projects", () => {
     }
     expect(problems).toEqual([]);
   });
+
+  test("hosted snapshot: every exported work order is listed and opens with its evidence", async ({ page }) => {
+    const problems = watch(page);
+    const snap: { states: Record<string, { work_orders?: { id: string; evidence?: object | null }[] }> } = await (await page.request.get("/snapshot.json")).json();
+    for (const [pid, s] of Object.entries(snap.states)) {
+      const wos = s.work_orders || [];
+      await page.goto(`/?snapshot#/p/${pid}/work-orders`);
+      await expect(page.locator("main h1").first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.locator(`main a[href^="#/p/${pid}/work-orders/"]`), `snapshot ${pid}: work orders listed`).toHaveCount(wos.length);
+      for (const w of wos) {
+        await page.goto(`/?snapshot#/p/${pid}/work-orders/${w.id}`);
+        await expect(page.locator("main"), `snapshot ${pid} / ${w.id}`).toContainText(w.id);
+        await expect(page.locator("main")).not.toContainText(`Work order ${w.id} is not in`);
+        if (!w.evidence) continue;
+        await page.getByRole("button", { name: "Evidence", exact: true }).click();
+        await expect(page.getByRole("dialog"), `snapshot ${pid} / ${w.id} evidence`).toContainText(`Safety evidence pack: ${w.id}`);
+        await page.keyboard.press("Escape");
+      }
+    }
+    expect(problems).toEqual([]);
+  });
 });
