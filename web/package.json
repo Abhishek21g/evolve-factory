@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "qa": "playwright test",
+    "qa:e2e": "QA_E2E=1 playwright test qa/replay.spec.ts"
   },
   "dependencies": {
     "@elevenlabs/client": "^1.36.1",
