@@ -32,6 +32,9 @@ TEAM = [
     {"id": "reviewer", "name": "Reviewer", "role": "Merge decision from checks", "kind": "agent"},
     {"id": "actions", "name": "Composio", "role": "Files evidence on GitHub", "kind": "agent"},
 ]
+ROLES_BY_DEVICE = {  # agent roles that depend on the project's device (default: the pump's, in TEAM)
+    "flight-controls": {"safety": "Hazard analysis, ARP4761", "world": "Flight software in simulated aircraft"},
+}
 DEVICES = {  # repo: code + safety.json; checks: gate config; rules: coding-agent rules (default: the pump's, in runner.py)
     "insulin-pump": {"label": "Insulin pump", "world_model": "UVA/Padova type 1 diabetes simulator (simglucose), 30 virtual patients",
                      "repo": "demo/pump", "standard": "IEC 62304 Class C · ISO 14971", "checks": "gate/checks.json",
@@ -57,8 +60,9 @@ def _save(d):
     os.replace(tmp, PATH)
 
 
-def _audit(d, actor, action, obj, detail=""):
-    d["audit"].append({"ts": time.time(), "actor": actor, "action": action, "object": obj, "detail": detail})
+def _audit(d, actor, action, obj, detail="", project=None):
+    d["audit"].append({"ts": time.time(), "actor": actor, "action": action, "object": obj, "detail": detail,
+                       **({"project": project} if project else {})})
 
 
 def safety_spec(project):
@@ -78,9 +82,9 @@ def create_project(actor, name, device):
              "world_model": dev["world_model"], "created": time.time(), "owner": actor}
         d["projects"].append(p)
         spec = safety_spec(p)
-        _audit(d, actor, "created project", name, f"{dev['label']}, {dev['standard']}")
+        _audit(d, actor, "created project", name, f"{dev['label']}, {dev['standard']}", pid)
         _audit(d, "planner", "imported hazard log", name,
-               f"{len(spec['hazards'])} hazards and {len(spec['requirements'])} safety requirements from {dev['repo']}/safety.json")
+               f"{len(spec['hazards'])} hazards and {len(spec['requirements'])} safety requirements from {dev['repo']}/safety.json", pid)
         _save(d)
         return p
 
@@ -115,22 +119,48 @@ def create_wo(actor, project, title, description):
         wo = {"id": f"WO-{max(n + [100]) + 1}", "project": project, "title": title, "description": description,
               "created": time.time(), "requested_by": actor}
         d["work_orders"].append(wo)
-        _audit(d, actor, "created work order", wo["id"], title)
+        _audit(d, actor, "created work order", wo["id"], title, project)
         _save(d)
         return wo
 
 
-def log(actor, action, obj, detail=""):
+def log(actor, action, obj, detail="", project=None):
     with lock:
         d = _load()
-        _audit(d, actor, action, obj, detail)
+        _audit(d, actor, action, obj, detail, project)
         _save(d)
 
 
-def events():
+def events(project_id=None):
+    """The event feed, every event stamped with the project its run belongs to (only that project's if given)."""
     if not os.path.exists(FEED):
         return []
-    return [json.loads(l) for l in open(FEED) if l.strip()]
+    evs = [json.loads(l) for l in open(FEED) if l.strip()]
+    tag_projects(evs, _load())
+    return [e for e in evs if e["project"] == project_id] if project_id else evs
+
+
+def tag_projects(evs, d):
+    """A run belongs to one project. New events carry it (dashboard/emit.py stamps FACTORY_PROJECT); for older ones it
+    is the project of the run's work order, else of the device its world model simulated (aircraft runs say so)."""
+    by_wo = {w["id"]: w["project"] for w in d["work_orders"]}
+    by_dev = {}
+    for p in d["projects"]:
+        by_dev.setdefault(p["device"], p["id"])
+    fallback = by_dev.get("insulin-pump") or (d["projects"][0]["id"] if d["projects"] else "")
+    runs = {}
+    for e in evs:
+        r = runs.setdefault(e["run"], {})
+        if e.get("project"):
+            r.setdefault("tagged", e["project"])
+        if e.get("wo") in by_wo:
+            r.setdefault("wo", by_wo[e["wo"]])
+        w = e.get("world") or {}
+        if w.get("kind") == "aircraft" or any("speed_kt" in s for s in e.get("scenarios") or []):
+            r.setdefault("device", by_dev.get("flight-controls"))
+    for e in evs:
+        r = runs[e["run"]]
+        e["project"] = e.get("project") or r.get("tagged") or r.get("wo") or r.get("device") or fallback
 
 
 def wo_status(wo_id, evs, running):
@@ -168,14 +198,32 @@ def _load_run(name):
     return json.load(open(p)) if os.path.exists(p) else None
 
 
+def audit_project(a, d, evs):
+    """Project of a human audit entry (None: organization-wide, e.g. memory). Older entries predate the project field."""
+    if a.get("project"):
+        return a["project"]
+    w = next((w for w in d["work_orders"] if w["id"] == a["object"]), None)
+    if w:
+        return w["project"]
+    p = next((p for p in d["projects"] if p["name"] == a["object"]), None)
+    if p:
+        return p["id"]
+    if a["object"] == "world model":  # a what-if: the project of the run that asked the same question
+        return next((e["project"] for e in evs if e.get("title") == a["detail"]), None)
+    return None
+
+
 def state(project_id, running):
     d = _load()
-    evs = events()
     proj = next((p for p in d["projects"] if p["id"] == project_id), d["projects"][0] if d["projects"] else None)
-    out = {"team": TEAM, "devices": {k: v["label"] for k, v in DEVICES.items()}, "projects": d["projects"], "project": proj}
+    roles = ROLES_BY_DEVICE.get(proj["device"], {}) if proj else {}
+    out = {"team": [{**m, "role": roles.get(m["id"], m["role"])} for m in TEAM], "devices": {k: v["label"] for k, v in DEVICES.items()},
+           "projects": d["projects"], "project": proj}
     if not proj:
         out["audit"] = sorted(d["audit"], key=lambda a: -a["ts"])
         return out
+    all_evs = events()
+    evs = [e for e in all_evs if e["project"] == proj["id"]]
     spec = safety_spec(proj)
     wos = []
     for w in (w for w in d["work_orders"] if w["project"] == proj["id"]):
@@ -188,9 +236,9 @@ def state(project_id, running):
                     "commits": git_changes(w["id"]) if st != "Draft" else []})
     # audit: humans (store) + agents (event feed, one line per finished step) + code commits (git)
     t0 = {}
-    audit = list(d["audit"])
+    audit = [a for a in d["audit"] if audit_project(a, d, all_evs) in (proj["id"], None)]
     for e in evs:
-        if e["state"] in ("done", "pass", "blocked") and e.get("wo") in {w["id"] for w in wos} | {None}:
+        if e["state"] in ("done", "pass", "blocked"):
             base = t0.setdefault(e["run"], float(e["run"]))
             audit.append({"ts": base + e["t"], "actor": e["agent"], "action": e["state"], "object": e.get("wo") or "world model", "detail": e["msg"]})
     for w in wos:

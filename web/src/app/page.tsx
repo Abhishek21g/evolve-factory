@@ -32,21 +32,23 @@ export default function App() {
   useEffect(() => { try { setMe(localStorage.getItem("actor") || "abhishek"); } catch { /* private mode */ } }, []);
   const switchMe = (id: string) => { setMe(id); try { localStorage.setItem("actor", id); } catch { /* ignore */ } };
 
-  if (!state) return <div className="grid min-h-screen place-items-center text-[13px] text-dim">Connecting to the factory…</div>;
+  if (!state) return <div className="min-h-screen" />; // only until this project's state arrives (~20 ms on a live server)
   const team = Object.fromEntries(state.team.map(m => [m.id, m])) as Record<string, Member>;
-  const p = route.project ? state.project : null;
+  const p = route.project && state.project?.id === route.project ? state.project : null;
+  const unknown = route.project && !state.projects.some(x => x.id === route.project);
   const ctx = { state, events, live: !!live, post: (path: string, body: object) => post(path, body, me), text, getJSON, team, me, base };
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar state={state} project={p?.id} page={route.page} me={me} setMe={switchMe} live={!!live} />
+      <Sidebar state={state} project={unknown ? undefined : route.project || undefined} page={route.page} me={me} setMe={switchMe} live={!!live} />
       <main className="min-w-0 flex-1 px-5 pb-20 pt-6 md:px-10">
         {live === false && (
           <div className="mb-5 rounded-md border border-line bg-panel2 px-3 py-2 text-[12px] text-mute">
             Read-only snapshot of a real run. Clone the repo and run <code className="text-ink">factory/server.py</code> to create projects and run work orders.
           </div>
         )}
-        {!p ? <Projects {...ctx} /> :
+        {route.project && !p && !unknown ? null :
+          !p ? <Projects {...ctx} /> :
           route.page === "requirements" ? <Requirements {...ctx} /> :
           route.page === "work-orders" && route.item ? <WorkOrderView {...ctx} id={route.item} /> :
           route.page === "work-orders" ? <WorkOrders {...ctx} /> :
@@ -78,7 +80,7 @@ function Sidebar({ state, project, page, me, setMe, live }: { state: State; proj
       <a href="#/" className="flex items-center gap-2.5 border-b border-line px-4 py-3.5">
         <div className="grid h-6 w-6 place-items-center rounded bg-ink font-mono text-[12px] font-bold text-bg">C</div>
         <div className="min-w-0">
-          <div className="truncate text-[13px] font-semibold">{state.project && project ? state.project.name : "Certus Factory"}</div>
+          <div className="truncate text-[13px] font-semibold">{state.projects.find(x => x.id === project)?.name || "Certus Factory"}</div>
           <div className="truncate text-[11px] text-dim">{project ? "Certus Factory" : "Software factory for physical AI"}</div>
         </div>
       </a>
@@ -231,7 +233,7 @@ function HomePage({ state, post, team, me, live, base }: Ctx) {
           </div>
         </form>
         {err && <p className="mt-2 text-[12px] text-bad">{err}</p>}
-        {busy && <p className="mt-2 text-[12px] text-run">Agents are working on <a href={`#/p/${p.id}/${state.status?.running ? `work-orders/${state.status.running}` : "world-model"}`} className="underline">{state.status?.running || "a simulation"}</a>. <a href={`#/p/${p.id}/agents`} className="underline">Watch the team</a></p>}
+        {busy && <p className="mt-2 text-[12px] text-run">Agents are working on <a href={`#/p/${st?.project || p.id}/${st?.running ? `work-orders/${st.running}` : "world-model"}`} className="underline">{st?.running || "a simulation"}</a>{st?.project && st.project !== p.id ? ` in ${state.projects.find(x => x.id === st.project)?.name || st.project}` : ""}. <a href={`#/p/${st?.project || p.id}/agents`} className="underline">Watch the team</a></p>}
         <div className="mt-3 flex flex-wrap justify-center gap-1.5">
           {(SUGGEST_BY_DEVICE[p.device] || SUGGEST).map(([m, t]) => (
             <button key={t} onClick={() => { setMode(m); setText(t); }}
@@ -569,7 +571,7 @@ function WorldModel({ state, events, post, live, getJSON }: Ctx) {
   const latestEv = [...events].reverse().find(e => e.world?.question && (e.world.kind === "aircraft") === air);
   const latest = latestEv?.world;
   const plan = events.find(e => e.run === latestEv?.run && e.agent === "simulation" && e.state === "done");
-  const thinking = state.status?.job === "whatif";
+  const thinking = state.status?.job === "whatif" && state.status.project === p.id;
   const nowRun = [...events].reverse().find(e => e.agent === "simulation")?.run;
   const now = thinking ? [...events].reverse().find(e => e.run === nowRun && !e.wo) : undefined;
   const woSim = [...(state.work_orders || [])].reverse().find(w => w.world);
@@ -643,7 +645,7 @@ function AuditTrail({ state, team }: Ctx) {
   const rows = state.audit.filter(a => f === "all" || (team[a.actor]?.kind || "human") === f);
   return (
     <>
-      <PageHead title="Audit Trail" sub="Who did what, when: people, agents and code commits, in one record (IEC 62304 change control).">
+      <PageHead title="Audit Trail" sub={`Who did what, when: people, agents and code commits, in one record (${state.project!.standard.split(" · ")[0]} change control).`}>
         <div className="flex overflow-hidden rounded-md border border-line text-[12px]">
           {(["all", "human", "agent"] as const).map(k => (
             <button key={k} onClick={() => setF(k)} className={`px-3 py-1.5 capitalize ${f === k ? "bg-white/[.08] text-ink" : "text-mute hover:text-ink"}`}>{k === "all" ? "All" : k + "s"}</button>

@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Ev, Gate, World } from "./feed";
 import type { Trace } from "./trace";
 import snapshot from "../../public/snapshot.json";
@@ -32,20 +32,26 @@ export type State = {
   trace?: Trace;
   agents?: Record<string, AgentLive>; memory?: MemoryItem[];
   status?: {
-    online: boolean; busy: boolean; job: string | null; running: string | null; memory: string; composio: boolean; software_factory: boolean; replay?: boolean;
+    online: boolean; busy: boolean; job: string | null; running: string | null; project?: string | null; memory: string; composio: boolean; software_factory: boolean; replay?: boolean;
     hydradb?: "connected" | "connecting" | "falling back" | "missing key";
     composio_status?: "connected" | "not connected" | "checking" | "error" | "missing key";
   };
 };
 
-const BASES = () => ["", ...(process.env.NEXT_PUBLIC_FACTORY_URL ? [process.env.NEXT_PUBLIC_FACTORY_URL] : []), "http://localhost:8787"];
-const SNAP = snapshot as unknown as { state: State; events: Ev[] };
+/** Where the factory server may be: same origin, NEXT_PUBLIC_FACTORY_URL, or the default local port. A hosted page
+ *  probes localhost only when opened with ?live: otherwise the browser asks every visitor for local-network access. */
+const BASES = () => ["", ...(process.env.NEXT_PUBLIC_FACTORY_URL ? [process.env.NEXT_PUBLIC_FACTORY_URL] : []),
+  ...(["localhost", "127.0.0.1"].includes(location.hostname) || new URLSearchParams(location.search).has("live") ? ["http://localhost:8787"] : [])];
+/** factory/snapshot.py: one state per project (`states`), events stamped with their project. */
+const SNAP = snapshot as unknown as { state: State; states?: Record<string, State>; events: Ev[] };
+const snapState = (pid: string) => SNAP.states?.[pid] ?? (!pid || SNAP.state.project?.id === pid ? SNAP.state : null);
 
 /** Live factory state from the local server; falls back to a read-only snapshot (Vercel).
- *  The snapshot is bundled, so the first paint always shows the last-known state, never a loading screen. */
+ *  The snapshot is bundled, so the first paint always shows the last-known state, never a loading screen.
+ *  Everything returned belongs to `projectId`: state is kept per project and events are filtered by their project. */
 export function useFactoryState(projectId: string) {
-  const [state, setState] = useState<State | null>(SNAP.state);
-  const [events, setEvents] = useState<Ev[]>(SNAP.events);
+  const [states, setStates] = useState<Record<string, State>>({});
+  const [allEvents, setEvents] = useState<Ev[]>(SNAP.events);
   const [live, setLive] = useState<boolean | null>(null);
   const base = useRef<string | null>(null);
   const seen = useRef(0);
@@ -54,8 +60,12 @@ export function useFactoryState(projectId: string) {
 
   const refresh = useCallback(async () => {
     if (base.current === null) return;
-    const r = await fetch(`${base.current}/api/state?project=${encodeURIComponent(pid.current)}`, { cache: "no-store" });
-    if (r.ok) setState(await r.json());
+    const p = pid.current;
+    const r = await fetch(`${base.current}/api/state?project=${encodeURIComponent(p)}`, { cache: "no-store" });
+    if (r.ok) {
+      const s: State = await r.json();
+      setStates(prev => ({ ...prev, [p]: s }));
+    }
   }, []);
 
   useEffect(() => {
@@ -115,5 +125,9 @@ export function useFactoryState(projectId: string) {
     return r.ok ? r.json() : null;
   }, []);
 
+  // Live: this project's state once fetched (a project switch shows its snapshot, if any, for the ~20 ms until then).
+  // Never another project's state: a page must not render one project's data under another's name.
+  const state = (live ? states[projectId] : null) ?? snapState(projectId);
+  const events = useMemo(() => projectId ? allEvents.filter(e => e.project === projectId) : allEvents, [allEvents, projectId]);
   return { state, events, live, post, text, getJSON, base: base.current };
 }
