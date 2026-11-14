@@ -3,10 +3,10 @@ import type { ReactNode } from "react";
 import { ArrowRight, FlaskConical, GitPullRequest, Package, Wallet } from "lucide-react";
 import { Badge, PageHead } from "@/components/ui";
 import { RISK_LABEL, money, useLive, type PageCtx, type RiskKind, type Tower } from "@/lib/supply";
+import { plural as n } from "@/lib/utils";
 import { Bar, Items, Pending, Pill, type Tone } from "./common";
 
 const verdictTone = (v?: string | null): Tone => !v ? "idle" : ["PASS", "SAFE", "APPROVED"].includes(v) ? "ok" : "bad";
-const n = (k: number, one: string, many = `${one}s`) => `${k} ${k === 1 ? one : many}`;
 const and = (xs: string[]) => xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
 const pct = (a: number, b: number) => b ? Math.round((100 * a) / b) : 0;
 
@@ -121,7 +121,7 @@ export function ControlTower({ state, getJSON, live }: PageCtx) {
             <Num n={sf.untraced} label="untraced functions" tone={sf.untraced ? "warn" : "ok"} href={at("traceability")} />
           </div>
           <p className="text-sm text-mute">
-            {sf.sim ? <>Latest: {sf.sim.wo ? <a href={at(`work-orders/${sf.sim.wo}`)} className="text-ink hover:underline">{sf.sim.wo}</a> : <>what-if “{sf.sim.question}”</>} · {sf.sim.runs} runs · {sf.sim.new} new failure{sf.sim.new === 1 ? "" : "s"} caused by the change.</> : "No simulation yet."}
+            {sf.sim ? <>Latest: {sf.sim.wo ? <a href={at(`work-orders/${sf.sim.wo}`)} className="text-ink hover:underline">{sf.sim.wo}</a> : <>what-if “{sf.sim.question}”</>} · {n(sf.sim.runs, "run")} · {n(sf.sim.new, "new failure")} caused by the change.</> : "No simulation yet."}
             {" "}{n(t.hazards, "hazard")} and {n(t.requirements, "safety requirement")} under the deterministic gate.
           </p>
           {sf.gaps.length > 0 && <div className="flex flex-wrap items-center gap-1.5 text-xs text-dim">Gaps: <Items ids={sf.gaps.map(g => g.id)} pid={p.id} /></div>}
