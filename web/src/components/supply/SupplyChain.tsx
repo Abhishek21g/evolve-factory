@@ -3,7 +3,7 @@ import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { PageHead, Section, Table } from "@/components/ui";
 import { FLAG_LABEL, RISK_LABEL, money, useLive, type Part, type PartFlag, type PageCtx, type RiskKind, type SupplyView } from "@/lib/supply";
-import { Items, Pending, Pill, SampleNote, Stat, StatRow, type Tone } from "./common";
+import { Items, Pending, Pill, SampleBox, StatCard, type Tone } from "./common";
 
 const CUSTOMS_TONE: Record<Part["customs"], Tone> = { Domestic: "idle", Cleared: "ok", "In transit": "run", Held: "bad", Delayed: "bad" };
 const FLAG_TONE: Record<PartFlag, Tone> = { single_source: "warn", long_lead: "warn", import_delay: "bad", supplier_cert: "warn" };
@@ -24,14 +24,14 @@ export function SupplyChain({ state, getJSON, live }: PageCtx) {
   return (
     <>
       <PageHead title="Supply chain" sub={<>Parts, raw materials and imports for {p.name}: each part traces to its supplier, the raw materials inside it, where they come from, and the hazards and requirements it could affect.</>} />
-      <p className="mb-3 max-w-3xl text-base text-mute">
-        <span className="text-ink">Raw materials and imports live here.</span> Each part lists its raw materials with country of origin and HS tariff code, its customs status and lead time, and risk flags linked to the requirements and hazards they put at risk.
-      </p>
-      <SampleNote>{v.sample}</SampleNote>
-      <StatRow>
-        <Stat label={`parts in BOM · ${money(v.finance!.bom_unit)} per unit`} value={v.parts!.length} href={`#/p/${p.id}/finance`} />
-        {CHAIN_RISKS.map(k => <Stat key={k} label={RISK_LABEL[k].toLowerCase()} value={count(k)} tone={count(k) ? (k === "import_delay" || k === "expired_cert" ? "bad" : "warn") : "ok"} />)}
-      </StatRow>
+      <div className="mb-4 rounded-lg border border-line bg-panel px-4 py-3 text-sm">
+        <b>Where do raw materials and imports go?</b> <span className="text-mute">Here. Each part below lists its raw materials with their country of origin and HS tariff code, the part&apos;s customs status and lead time, and risk flags (single source, long lead, import delay, expiring supplier certificate) linked to the requirements and hazards they put at risk.</span>
+      </div>
+      <SampleBox>{v.sample}</SampleBox>
+      <div className="mb-8 grid gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+        <StatCard label="Parts in BOM" value={v.parts!.length} sub={`${money(v.finance!.bom_unit)} per unit`} href={`#/p/${p.id}/finance`} />
+        {CHAIN_RISKS.map(k => <StatCard key={k} label={RISK_LABEL[k]} value={count(k)} tone={count(k) ? (k === "import_delay" || k === "expired_cert" ? "bad" : "warn") : "ok"} />)}
+      </div>
 
       <Section title="Parts and their chain" aside={
         <span className="flex flex-wrap gap-1.5">

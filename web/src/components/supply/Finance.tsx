@@ -1,7 +1,7 @@
 "use client";
 import { Badge, PageHead, Section, Table } from "@/components/ui";
 import { money, useLive, type PageCtx, type SupplyView } from "@/lib/supply";
-import { Bar, Note, Pending, Pill, SampleNote, Stat, StatRow } from "./common";
+import { Bar, Note, Pending, Pill, SampleBox, StatCard } from "./common";
 
 export function Finance({ state, getJSON, live }: PageCtx) {
   const p = state.project!;
@@ -15,14 +15,14 @@ export function Finance({ state, getJSON, live }: PageCtx) {
   return (
     <>
       <PageHead title="Finance" sub={<>Budget vs actual for {p.name} · {f.period}. What the agent team costs per work order and per requirement it verifies, what suppliers cost, and the certification effort the factory saves.</>} />
-      <SampleNote>Budget, supplier spend and BOM prices are sample data. Agent and compute costs are <b className="text-ink">estimated</b>: coding attempts, analysis steps and simulations are counted from the real event feed and priced with the assumptions at the bottom of this page.</SampleNote>
-      <StatRow>
-        <Stat label="factory spend" value={money(f.factory_usd, true)} sub={`of ${money(facBudget)} · estimated`} />
-        <Stat label="per work order" value={money(f.cost_per_wo, true)} sub={`${f.completed} completed`} href={`#/p/${p.id}/work-orders`} />
-        <Stat label="per requirement verified" value={money(f.cost_per_req, true)} sub={`${f.verified} tests passed`} href={`#/p/${p.id}/traceability`} />
-        <Stat label="certification effort saved" value={`${f.saved.hours} h`} sub={`≈ ${money(f.saved.usd)} · assumption`} />
-        <Stat label="BOM per unit" value={money(f.bom_unit)} sub={`${f.bom.length} parts · sample`} href={`#/p/${p.id}/supply-chain`} />
-      </StatRow>
+      <SampleBox>Budget, supplier spend and BOM prices are sample data. Agent and compute costs are <b className="text-ink">estimated</b>: coding attempts, analysis steps and simulations are counted from the real event feed and priced with the assumptions at the bottom of this page.</SampleBox>
+      <div className="mb-8 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
+        <StatCard label="Factory spend (agents + compute)" value={money(f.factory_usd, true)} sub={`of ${money(facBudget)} budget · estimated`} />
+        <StatCard label="Cost per work order" value={money(f.cost_per_wo, true)} sub={`${f.completed} completed · estimated`} href={`#/p/${p.id}/work-orders`} />
+        <StatCard label="Cost per requirement verified" value={money(f.cost_per_req, true)} sub={`${f.verified} requirement tests passed`} href={`#/p/${p.id}/traceability`} />
+        <StatCard label="Certification effort saved" value={`${f.saved.hours} h`} tone="ok" sub={`≈ ${money(f.saved.usd)} · ${f.rates.hours_per_wo} h per work order (assumption)`} />
+        <StatCard label="BOM cost per unit" value={money(f.bom_unit)} sub={`${f.bom.length} parts · sample prices`} href={`#/p/${p.id}/supply-chain`} />
+      </div>
 
       <Section title="Budget vs actual">
         <Table head={["Category", "Budget", "Actual", "", "Basis"]} rows={f.lines.map(l => {
