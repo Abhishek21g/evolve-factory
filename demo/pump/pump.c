@@ -9,6 +9,8 @@ pump_status request_bolus(pump_state *s, double units, int bg_mg_dl) {
     return OK;
 }
 
+pump_status quick_bolus(pump_state *s, int bg_mg_dl) { return request_bolus(s, QUICK_BOLUS_U, bg_mg_dl); }
+
 void pump_set_adult(pump_state *s, int adult) { s->adult = adult != 0; }
 
 /* Extended bolus: `units` spread evenly over `minutes` (<= MAX_EXT_MINUTES). SR-2 and SR-3 apply as in

@@ -26,6 +26,9 @@ typedef struct {
 } pump_state;
 
 pump_status request_bolus(pump_state *s, double units, int bg_mg_dl);
+/* Preset 5 U meal bolus; goes through request_bolus so SR-1/2/3 all apply. */
+#define QUICK_BOLUS_U 5.0
+pump_status quick_bolus(pump_state *s, int bg_mg_dl);
 pump_status check_occlusion(double line_pressure_kpa);
 pump_status check_watchdog(const pump_state *s, long now_ms);
 
