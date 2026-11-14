@@ -36,7 +36,7 @@ let stopCurrent: (() => void) | null = null;
 const cache: Record<string, HTMLAudioElement> = {};
 const clip = (id: string) => (cache[id] ??= Object.assign(new Audio(`/audio/${id}.mp3`), { preload: "auto" }));
 
-const SPEED = 2; // demo pace: playhead and voice clips both run at 2x
+const SPEED = 1.5; // demo pace: playhead and voice clips both run at 1.5x
 
 const TONE: Record<Tone, string> = { ok: "#34d399", warn: "#fbbf24", bad: "#f87171" };
 const W = 560, H = 190, PL = 36, PR = 70, PT = 10, PB = 24, SH = 34;
