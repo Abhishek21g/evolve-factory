@@ -2,12 +2,15 @@
 
   .venv/bin/python factory/server.py          # http://localhost:8787
 
-GET  /api/status            what is configured (keys present, busy)
-GET  /api/events?since=N    dashboard events from line N
-POST /api/build  {"text"}   start a build pipeline (one at a time)
-POST /api/whatif {"text"}   ask the world model a plain-English question
-GET  /api/evidence?wo=WO-x  evidence pack markdown
-Everything else is served from web/out (the built UI). Keys are read from .env and never sent to the browser.
+GET  /api/state?project=ID         team, projects, hazards, requirements, work orders, audit trail, trace graph
+GET  /api/events?since=N           live agent events from line N
+GET  /api/evidence?wo=WO-x         evidence pack (markdown)      GET /api/diff?wo=WO-x   code change
+POST /api/projects   {name, device}                 create a project (imports its hazard log)
+POST /api/workorders {project, title, description}  create a work order
+POST /api/run        {wo}                           run a work order through the factory
+POST /api/whatif     {text}                         ask the world model a plain-English question
+POST actions carry the acting person in the X-Actor header (recorded in the audit trail).
+Everything else is served from web/out. Keys are read from .env and never sent to the browser.
 """
 import json
 import os
@@ -19,11 +22,15 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FEED = os.path.join(ROOT, "dashboard", "events.jsonl")
+sys.path.insert(0, os.path.join(ROOT, "factory"))
+import store  # noqa: E402
+
+FEED = store.FEED
 STATIC = os.path.join(ROOT, "web", "out")
 PY = os.path.join(ROOT, ".venv/bin/python")
 lock = threading.Lock()
-job = {"proc": None, "kind": None}
+job = {"proc": None, "kind": None, "wo": None}
+HUMANS = {m["id"] for m in store.TEAM if m["kind"] == "human"}
 
 
 def load_env():
@@ -39,15 +46,15 @@ def busy():
     return job["proc"] is not None and job["proc"].poll() is None
 
 
-def start(kind, text):
+def start(kind, *args, wo=None):
     with lock:
         if busy():
             return False
         env = {k: v for k, v in os.environ.items() if k not in ("RUN_ID", "RUN_T0")}  # fresh dashboard run
         log = open(os.path.join(ROOT, ".runs", "server-job.log"), "w")
-        job["proc"] = subprocess.Popen([PY, os.path.join(ROOT, "factory/pipeline.py"), kind, text], cwd=ROOT, env=env,
+        job["proc"] = subprocess.Popen([PY, os.path.join(ROOT, "factory/pipeline.py"), kind, *args], cwd=ROOT, env=env,
                                        stdout=log, stderr=subprocess.STDOUT)
-        job["kind"] = kind
+        job["kind"], job["wo"] = kind, wo
         return True
 
 
@@ -70,42 +77,66 @@ class H(SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Actor")
         self.send_header("Access-Control-Allow-Methods", "GET, POST")
         self.send_header("Access-Control-Allow-Private-Network", "true")
         self.end_headers()
 
     def do_GET(self):
         u = urlparse(self.path)
-        q = parse_qs(u.query)
-        if u.path == "/api/status":
-            return self.send(200, {"online": True, "busy": busy(), "job": job["kind"] if busy() else None,
-                                   "memory": "HydraDB" if os.environ.get("HYDRADB_API_KEY") else "local",
-                                   "composio": bool(os.environ.get("COMPOSIO_API_KEY")),
-                                   "software_factory": bool(os.environ.get("SF_API_KEY"))})
+        q = {k: v[0] for k, v in parse_qs(u.query).items()}
+        wo = re.sub(r"[^A-Za-z0-9-]", "", q.get("wo", ""))
+        if u.path == "/api/state":
+            s = store.state(q.get("project", ""), job["wo"] if busy() else None)
+            s["status"] = {"online": True, "busy": busy(), "job": job["kind"] if busy() else None, "running": job["wo"] if busy() else None,
+                           "memory": "HydraDB" if os.environ.get("HYDRADB_API_KEY") else "local",
+                           "composio": bool(os.environ.get("COMPOSIO_API_KEY")), "software_factory": bool(os.environ.get("SF_API_KEY"))}
+            return self.send(200, s)
         if u.path == "/api/events":
-            since = int(q.get("since", ["0"])[0])
+            since = int(q.get("since", "0"))
             lines = open(FEED).read().splitlines() if os.path.exists(FEED) else []
             return self.send(200, {"total": len(lines), "events": [json.loads(l) for l in lines[since:] if l.strip()]})
         if u.path == "/api/evidence":
-            wo = re.sub(r"[^A-Za-z0-9-]", "", q.get("wo", [""])[0])
             p = os.path.join(ROOT, ".runs", f"{wo}.evidence.md")
             return self.send(200, open(p).read(), "text/markdown") if os.path.exists(p) else self.send(404, {"error": "none"})
+        if u.path == "/api/diff":
+            return self.send(200, store.diff(wo) or "No code changes yet.", "text/plain")
         if u.path.startswith("/api/"):
             return self.send(404, {"error": "not found"})
         return super().do_GET()
 
     def do_POST(self):
         u = urlparse(self.path)
-        n = int(self.headers.get("Content-Length", 0))
+        actor = self.headers.get("X-Actor", "abhishek")
+        actor = actor if actor in HUMANS else "abhishek"
         try:
-            text = str(json.loads(self.rfile.read(n) or b"{}").get("text", "")).strip()[:500]
-        except ValueError:
-            return self.send(400, {"error": "bad json"})
-        kind = {"/api/build": "build", "/api/whatif": "whatif"}.get(u.path)
-        if not kind or not text:
-            return self.send(400, {"error": "need text"})
-        return self.send(202, {"started": kind}) if start(kind, text) else self.send(409, {"error": "factory busy"})
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+            clip = lambda k, n=300: str(body.get(k, "")).strip()[:n]  # noqa: E731
+            if u.path == "/api/projects":
+                if not clip("name", 80):
+                    return self.send(400, {"error": "name required"})
+                return self.send(201, store.create_project(actor, clip("name", 80), clip("device", 40)))
+            if u.path == "/api/workorders":
+                if not clip("title", 120):
+                    return self.send(400, {"error": "title required"})
+                return self.send(201, store.create_wo(actor, clip("project", 60), clip("title", 120), clip("description", 1000)))
+            if u.path == "/api/run":
+                w = next((w for w in store._load()["work_orders"] if w["id"] == clip("wo", 20)), None)
+                if not w:
+                    return self.send(404, {"error": "unknown work order"})
+                text = w["title"] + ("\n\n" + w["description"] if w["description"] else "")
+                if not start("build", text, w["id"], wo=w["id"]):
+                    return self.send(409, {"error": "factory busy"})
+                store.log(actor, "started run", w["id"], w["title"])
+                return self.send(202, {"started": w["id"]})
+            if u.path == "/api/whatif":
+                if not clip("text") or not start("whatif", clip("text")):
+                    return self.send(409, {"error": "factory busy or empty question"})
+                store.log(actor, "asked the world model", "world model", clip("text"))
+                return self.send(202, {"started": "whatif"})
+        except ValueError as e:
+            return self.send(400, {"error": str(e)})
+        return self.send(404, {"error": "not found"})
 
 
 if __name__ == "__main__":
