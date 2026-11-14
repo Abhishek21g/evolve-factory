@@ -30,10 +30,16 @@ TEAM = [
     {"id": "reviewer", "name": "Reviewer", "role": "Merge decision from checks", "kind": "agent"},
     {"id": "actions", "name": "Composio", "role": "Files evidence on GitHub", "kind": "agent"},
 ]
-DEVICES = {
+DEVICES = {  # repo: code + safety.json; checks: gate config; rules: coding-agent rules (default: the pump's, in runner.py)
     "insulin-pump": {"label": "Insulin pump", "world_model": "UVA/Padova type 1 diabetes simulator (simglucose), 30 virtual patients",
-                     "repo": "demo/pump", "standard": "IEC 62304 Class C · ISO 14971"},
+                     "repo": "demo/pump", "standard": "IEC 62304 Class C · ISO 14971", "checks": "gate/checks.json",
+                     "replay": "demo/replay"},
+    "flight-controls": {"label": "Flight controls (airliner)",
+                        "world_model": "Longitudinal flight model of a 737-class airliner, 6 weight/CG configs x 3 scenarios",
+                        "repo": "demo/aircraft", "standard": "DO-178C DAL A · ARP4754A · ARP4761 · 14 CFR 25.1309",
+                        "checks": "gate/checks-aircraft.json", "rules": "demo/aircraft/RULES.md", "replay": "demo/replay/aircraft"},
 }
+DEFAULT_PROJECTS = [("Boeing Flight Controls", "flight-controls")]  # added next to whatever go.sh seeded
 
 
 def _load():
@@ -75,6 +81,24 @@ def create_project(actor, name, device):
                f"{len(spec['hazards'])} hazards and {len(spec['requirements'])} safety requirements from {dev['repo']}/safety.json")
         _save(d)
         return p
+
+
+def ensure_projects(actor="abhishek"):
+    """Create the DEFAULT_PROJECTS that don't exist yet (only once some project exists, so go.sh's stays first)."""
+    d = _load()
+    if not d["projects"]:
+        return
+    for name, device in DEFAULT_PROJECTS:
+        if not any(p["device"] == device for p in d["projects"]):
+            create_project(actor, name, device)
+
+
+def device(project_id):
+    """Device config of a project (the first project's if unknown)."""
+    d = _load()
+    p = next((p for p in d["projects"] if p["id"] == project_id), d["projects"][0] if d["projects"] else None)
+    key = p["device"] if p else "insulin-pump"
+    return {**DEVICES[key], "id": key}
 
 
 def create_wo(actor, project, title, description):
@@ -173,7 +197,7 @@ def state(project_id, running):
                           "action": "committed code", "object": w["id"], "detail": f"{c['sha'][:7]} {c['subject']}"})
     out["agents"] = agent_roster(evs)
     out.update({"hazards": spec["hazards"], "requirements": spec["requirements"], "work_orders": wos,
-                "audit": sorted(audit, key=lambda a: -a["ts"])[:300], "trace": trace(spec, wos)})
+                "audit": sorted(audit, key=lambda a: -a["ts"])[:300], "trace": trace(spec, wos, proj["repo"])})
     return out
 
 
@@ -190,24 +214,24 @@ def agent_roster(evs):
     return out
 
 
-def trace(spec, wos):
+def trace(spec, wos, repo="demo/pump"):
     """Graph: hazard -> requirement -> code symbol / test -> work order -> verification."""
     nodes, edges = [], []
     add = lambda i, kind, label, sub="", tone="": nodes.append({"id": i, "kind": kind, "label": label, "sub": sub, "tone": tone})  # noqa: E731
     for h in spec["hazards"]:
-        add(h["id"], "hazard", h["id"], h["title"], "fail" if h.get("severity") == "S3" else "warn")
+        add(h["id"], "hazard", h["id"], h["title"], "fail" if h.get("severity") in ("S3", "Catastrophic", "Hazardous") else "warn")
     syms = {}
     for r in spec["requirements"]:
         add(r["id"], "requirement", r["id"], r["text"])
         for h in r["hazards"]:
             edges.append((h, r["id"]))
         tid = f"test:{r['id']}"
-        add(tid, "test", f"test {r['id']}", "test_safety.c", "ok")
+        add(tid, "test", f"test {r['id']}", "requirement test", "ok")
         edges.append((r["id"], tid))
         for s in r.get("symbols", [])[:2]:
             syms.setdefault(s, []).append(r["id"])
     for s, rs in syms.items():
-        add(f"code:{s}", "code", s, "pump.h / pump.c")
+        add(f"code:{s}", "code", s, repo)
         for r in rs:
             edges.append((r, f"code:{s}"))
     for w in wos:

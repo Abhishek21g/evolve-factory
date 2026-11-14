@@ -58,7 +58,13 @@ def next_wo():
     return f"WO-{max(n + [99]) + 1}"
 
 
-SAFETY_PROMPT = """You are the Safety Analyst (hazard analysis, ISO 14971 / IEC 62304) in a software factory for an insulin pump.
+def project_device(wo=None):
+    """Device config of the project this run is for: FACTORY_PROJECT (set by the server), else the work order's."""
+    pid = os.environ.get("FACTORY_PROJECT") or next((w["project"] for w in store._load()["work_orders"] if w["id"] == wo), "")
+    return store.device(pid)
+
+
+SAFETY_PROMPT = """You are the Safety Analyst (hazard analysis, {standard}) in a software factory for: {device}.
 Requested change: {intent}
 
 Hazard log and safety requirements (safety.json):
@@ -68,21 +74,29 @@ Organization memory that may matter:
 {mem}
 
 Return ONLY a JSON object:
-{{"requirements": ["SR-.."], "hazards": ["H-.."], "risk": "how this change could hurt a patient, at most 20 words",
+{{"requirements": ["SR-.."], "hazards": ["H-.."], "risk": "how this change could hurt someone, at most 20 words",
   "guidance": "how the coding agent should implement it safely, at most 25 words",
   "new_hazard": "a hazard not yet in the log that this change raises (at most 15 words), or empty string"}}
 Plain words, no preamble, no lists inside strings."""
 
 
-def safety_analysis(intent, spec, hits):
+FALLBACK = {  # deterministic hazard analysis when the LLM is unavailable: everything on the main safety path
+    "insulin-pump": {"requirements": ["SR-1", "SR-2", "SR-3"], "hazards": ["H-1", "H-2", "H-3"],
+                     "risk": "Changes to the bolus path can overdose the patient.",
+                     "guidance": "Do not raise any limit in pump.h; deliver large doses over time within existing limits."},
+    "flight-controls": {"requirements": ["SR-1", "SR-2", "SR-3"], "hazards": ["H-1", "H-2", "H-3"],
+                        "risk": "Changes to the AoA monitor can push the nose down on bad data or switch off stall protection.",
+                        "guidance": "Do not change any certified limit in fcc.h; add new behavior next to it."},
+}
+
+
+def safety_analysis(intent, spec, hits, dev):
     ev("safety", "working", "Hazard analysis: mapping the request to hazards and requirements")
     mem = "\n".join(f"- [{h['kind']}] {h['title']}: {h['text']}" for h in hits) or "(none)"
-    out, err = ask_json(SAFETY_PROMPT.format(intent=intent, spec=json.dumps(spec)[:6000], mem=mem))
-    if not out:  # deterministic fallback: everything on the bolus path
-        out = {"requirements": ["SR-1", "SR-2", "SR-3"], "hazards": ["H-1", "H-2", "H-3"],
-               "risk": "Changes to the bolus path can overdose the patient.",
-               "guidance": "Do not raise any limit in pump.h; deliver large doses over time within existing limits.",
-               "new_hazard": "", "fallback": f"LLM unavailable ({err[:80]}); used bolus-path default"}
+    out, err = ask_json(SAFETY_PROMPT.format(intent=intent, spec=json.dumps(spec)[:6000], mem=mem,
+                                             device=dev["label"], standard=dev["standard"]))
+    if not out:
+        out = {**FALLBACK[dev["id"]], "new_hazard": "", "fallback": f"LLM unavailable ({err[:80]}); used safety-path default"}
     ev("safety", "done", f"In scope: {', '.join(out.get('hazards', []))} ({', '.join(out.get('requirements', []))}). {out.get('risk', '')}",
        analysis=out)
     return out
@@ -103,8 +117,9 @@ def build(intent, wo=None):
     ev("planner", "working", f'New request from the operator: "{intent}"', wo=wo, title=intent)
     hits, msg, mem = recall(intent)
     ev("memory", "done", msg, wo=wo, memory=mem)
-    spec = json.load(open(os.path.join(ROOT, "demo/pump/safety.json")))
-    analysis = safety_analysis(intent, spec, hits)
+    dev = project_device(wo)
+    spec = json.load(open(os.path.join(ROOT, dev["repo"], "safety.json")))
+    analysis = safety_analysis(intent, spec, hits, dev)
     ev("planner", "done", f"Plan ready for {wo}; Claude Code works in its own git worktree", wo=wo, title=intent)
 
     text = (f"{intent}\n\nSafety Analyst guidance: {analysis.get('guidance', '')}\n\nRelevant organization memory:\n"
@@ -116,7 +131,9 @@ def build(intent, wo=None):
         os.remove(md)
     pr = ["--pr"] if os.environ.get("FACTORY_PR") == "1" else []
     base = ["--base", os.environ["FACTORY_BASE"]] if os.environ.get("FACTORY_BASE") else []  # branch to build on and PR into
-    p = subprocess.run([PY, os.path.join(ROOT, "gate/runner.py"), "--wo", wo, "--text-file", tf, *pr, *base],
+    rules = ["--rules", os.path.join(ROOT, dev["rules"])] if dev.get("rules") else []
+    p = subprocess.run([PY, os.path.join(ROOT, "gate/runner.py"), "--wo", wo, "--text-file", tf, *pr, *base, *rules,
+                        "--checks", os.path.join(ROOT, dev["checks"])],
                        cwd=ROOT, capture_output=True, text=True)
     open(os.path.join(RUNS, f"{wo}.runner.log"), "w").write(p.stdout + p.stderr)
     report = open(md).read() if os.path.exists(md) else ""
@@ -129,7 +146,7 @@ def build(intent, wo=None):
     reason = "" if passed else block_reason(wo, report)
 
     ev("evidence", "working", "Generating safety evidence pack")
-    path, summary = evidence_pack(wo, intent, analysis, hits, passed, reason)
+    path, summary = evidence_pack(wo, intent, analysis, hits, passed, reason, dev, spec)
     ev("evidence", "done", f"Evidence pack ready: {os.path.relpath(path, ROOT)}", wo=wo, evidence=summary)
 
     memory.remember([{"id": f"run-{wo}", "kind": "run", "title": f"{wo}: {intent}",
@@ -156,7 +173,9 @@ def block_reason(wo, report):
     world = _load(f"{wo}.world.json") or {"results": []}
     bits = [f"{r['id']} failed ({r['text']}; {', '.join(h['id'] for h in r['hazards'])})" for r in gate["rows"] if r["result"] != "PASS"]
     new = [r for r in world.get("results", []) if r.get("new_hypo")]
-    if new:
+    if new and world.get("kind") == "aircraft":
+        bits.append(f"world model: {len(new)} simulated flights left the safe envelope (stall or altitude loss) that main keeps inside")
+    elif new:
         bits.append(f"world model: {len(new)} simulated patients fell into severe hypoglycemia that main avoids")
     if "protected-files: BLOCKED" in report:
         bits.append("the change edited protected safety evidence")
@@ -165,14 +184,16 @@ def block_reason(wo, report):
     return "; ".join(bits) or "a check failed (see the evidence pack)"
 
 
-def evidence_pack(wo, intent, analysis, hits, passed, reason=""):
+def evidence_pack(wo, intent, analysis, hits, passed, reason, dev, spec):
     gate = _load(f"{wo}.gate.json") or {"rows": []}
     world = _load(f"{wo}.world.json") or {"results": []}
     rs = world.get("results", [])
     new = [r for r in rs if r.get("new_hypo")]
     old = [r for r in rs if r.get("preexisting")]
+    air = world.get("kind") == "aircraft" or dev["id"] == "flight-controls"
+    harm = "new envelope exceedances" if air else "new severe-hypo runs"
     headline = (f"{len(gate['rows'])} requirements tested, {sum(r['result'] == 'PASS' for r in gate['rows'])} passed; "
-                f"world model {world.get('verdict', 'n/a')}: {len(new)} new severe-hypo runs in {len(rs)} simulations, "
+                f"world model {world.get('verdict', 'n/a')}: {len(new)} {harm} in {len(rs)} simulations, "
                 f"{len(old)} pre-existing")
     md = [f"# Safety evidence pack: {wo}", "", f"**Request:** {intent}", f"**Decision:** {'APPROVED' if passed else 'BLOCKED'} "
           "(deterministic: unit tests + world model; no LLM in the approval path)"]
@@ -183,14 +204,26 @@ def evidence_pack(wo, intent, analysis, hits, passed, reason=""):
           f"- Guidance given to coding agent: {analysis.get('guidance', '')}"]
     if analysis.get("new_hazard"):
         md.append(f"- New hazard proposed for the log: {analysis['new_hazard']}")
-    md += ["", "## 2. Traceability (requirement to test)", "", "| Requirement | Hazards | Test | Result |", "|---|---|---|---|"]
-    md += [f"| {r['id']}: {r['text']} | {', '.join(h['id'] for h in r['hazards'])} | `{r['test']}` | {r['result']} |" for r in gate["rows"]]
-    md += ["", "## 3. World model verification (simulated patients, UVA/Padova via simglucose)", "",
-           "| Scenario | Patient | Pump decision | Min BG | Min BG on main | Result |", "|---|---|---|---|---|---|"]
-    md += [f"| {r['scenario']} | {r['patient']} | {r['note']} | {r['min']} | {r['base_min']} | "
-           f"{'NEW severe hypo' if r['new_hypo'] else 'pre-existing' if r['preexisting'] else 'ok'} |" for r in rs]
+    if air:
+        req = {r["id"]: r for r in spec["requirements"]}
+        md += ["", "## 2. Traceability (hazard to requirement to test, DO-178C trace data)", "",
+               "| Requirement | Hazards | DAL | DO-178C objectives | Test | Result |", "|---|---|---|---|---|---|"]
+        md += [f"| {r['id']}: {r['text']} | {', '.join(h['id'] for h in r['hazards'])} | {req.get(r['id'], {}).get('dal', '')} | "
+               f"{'; '.join(req.get(r['id'], {}).get('objectives', []))} | `{r['test']}` | {r['result']} |" for r in gate["rows"]]
+        md += ["", "## 3. World model verification (simulated 737-class aircraft, longitudinal flight model)", "",
+               "| Scenario | Config | Outcome | Peak AoA | Peak AoA on main | Alt loss ft | Result |", "|---|---|---|---|---|---|---|"]
+        md += [f"| {r['scenario']} | {r['patient']} | {r['note']} | {r['peak_aoa']} | {r['base_min']} | {r['alt_loss_ft']} | "
+               f"{'NEW exceedance' if r['new_hypo'] else 'pre-existing' if r['preexisting'] else 'inside envelope'} |" for r in rs]
+        md += ["", "Not claimed: MC/DC structural coverage (DO-178C A-7), DO-330 qualification of this gate, independence of verification."]
+    else:
+        md += ["", "## 2. Traceability (requirement to test)", "", "| Requirement | Hazards | Test | Result |", "|---|---|---|---|"]
+        md += [f"| {r['id']}: {r['text']} | {', '.join(h['id'] for h in r['hazards'])} | `{r['test']}` | {r['result']} |" for r in gate["rows"]]
+        md += ["", "## 3. World model verification (simulated patients, UVA/Padova via simglucose)", "",
+               "| Scenario | Patient | Pump decision | Min BG | Min BG on main | Result |", "|---|---|---|---|---|---|"]
+        md += [f"| {r['scenario']} | {r['patient']} | {r['note']} | {r['min']} | {r['base_min']} | "
+               f"{'NEW severe hypo' if r['new_hypo'] else 'pre-existing' if r['preexisting'] else 'ok'} |" for r in rs]
     md += ["", "## 4. Organization context used", ""] + [f"- [{h['kind']}] {h['title']}" for h in hits]
-    md += ["", f"_Generated by Certus Factory, {time.strftime('%Y-%m-%d %H:%M %Z')}. Standards: IEC 62304, ISO 14971._"]
+    md += ["", f"_Generated by Certus Factory, {time.strftime('%Y-%m-%d %H:%M %Z')}. Standards: {dev['standard'].replace(' · ', ', ')}._"]
     path = os.path.join(RUNS, f"{wo}.evidence.md")
     open(path, "w").write("\n".join(md) + "\n")
     return path, {"wo": wo, "decision": "APPROVED" if passed else "BLOCKED", "headline": headline,
@@ -217,6 +250,8 @@ Labels under 8 words. Do not predict results: the simulation answers."""
 
 
 def whatif(question):
+    if project_device()["id"] == "flight-controls":
+        return flight_whatif(question)
     ev("simulation", "working", f'Simulation Agent: turning "{question}" into world-model scenarios', title=question)
     out, err = ask_json(WHATIF_PROMPT.format(q=question))
     scs = (out or {}).get("scenarios") or []
@@ -244,7 +279,57 @@ def whatif(question):
     return 0
 
 
-REPLAY = os.path.join(ROOT, "demo", "replay")
+FLIGHT_WHATIF_PROMPT = """You are the Simulation Agent of a software factory for airliner flight controls (AoA stall
+protection). Turn the operator's question into world-model scenarios for a 737-class longitudinal flight model (6 weight/CG
+configs each). Each scenario: `speed_kt` start speed; `pull` the AoA in degrees the pilot's column pull aims for
+(0 = holds level trim, 16 = deliberate stall approach); `idle` thrust to idle; `split` the AoA vane split from
+sideslip in degrees; `stuck` the reading in degrees a failed left AoA vane sticks at (null = healthy); `gust` vertical
+gust amplitude m/s (7 = moderate turbulence).
+
+Question: {q}
+
+Return ONLY JSON: {{"scenarios": [{{"id": "short-kebab-id", "label": "short description", "speed_kt": 140-320,
+"pull": 0-20, "idle": true|false, "split": 0-20, "stuck": null or -10-40, "gust": 0-15}}], "explain": "one sentence"}}
+Use 1 to 3 scenarios."""
+
+
+def flight_scenario(i, s, label):
+    """Clamp a what-if scenario to the flight model's valid range (never trust model output)."""
+    num = lambda k, lo, hi, d: max(lo, min(hi, float(s.get(k) if s.get(k) is not None else d)))  # noqa: E731
+    pull = num("pull", 0, 20, 0)
+    return {"id": re.sub(r"[^a-z0-9-]", "", str(s.get("id", f"what-if-{i + 1}")).lower())[:30] or f"what-if-{i + 1}",
+            "label": str(s.get("label") or label)[:80], "speed_kt": num("speed_kt", 140, 320, 200), "pull": pull,
+            "idle": bool(s.get("idle")), "split": num("split", 0, 20, 0),
+            "stuck": None if s.get("stuck") is None else num("stuck", -10, 40, 22), "gust": num("gust", 0, 15, 0),
+            "event_at": 5, "seconds": 60, "max_alt_loss_ft": None if pull else 300}
+
+
+def flight_whatif(question):
+    ev("simulation", "working", f'Simulation Agent: turning "{question}" into flight scenarios', title=question)
+    out, err = ask_json(FLIGHT_WHATIF_PROMPT.format(q=question))
+    clean = [flight_scenario(i, s, question) for i, s in enumerate(((out or {}).get("scenarios") or [])[:3])]
+    if not clean:
+        q, nums = question.lower(), [float(n) for n in re.findall(r"\d+(?:\.\d+)?", question)]
+        n = nums[0] if nums else None
+        if re.search(r"fail|stuck|jam|frozen", q):
+            s = {"stuck": n if n is not None else 22, "speed_kt": 220}
+        elif re.search(r"turbulen|gust", q):
+            s = {"gust": n if n is not None else 10, "speed_kt": 250}
+        else:
+            s = {"pull": 16, "idle": True, "split": n if n is not None and re.search(r"disagree|split|sideslip|differ", q) else 0}
+        clean = [flight_scenario(0, {"id": "what-if", **s}, question)]
+        ev("simulation", "done", f"LLM unavailable, parsed the question directly ({err[:60] if err else ''})", scenarios=clean)
+    else:
+        ev("simulation", "done", (out or {}).get("explain", "Scenarios ready"), scenarios=clean)
+    sf = os.path.join(RUNS, f"whatif-{int(time.time())}.json")
+    os.makedirs(RUNS, exist_ok=True)
+    json.dump(clean, open(sf, "w"))
+    ev("world", "working", f"Flying {len(clean) * 6} simulated aircraft on the current flight control software")
+    subprocess.run([PY, os.path.join(ROOT, "sim/flight.py"), "--repo", ROOT, "--base", "none", "--scenarios", sf,
+                    "--question", question], cwd=ROOT, capture_output=True)
+    return 0
+
+
 CACHE = os.path.join(RUNS, "cache")
 
 
@@ -252,21 +337,22 @@ def _title(text):
     return " ".join(text.splitlines()[0].lower().split()) if text.strip() else ""
 
 
-def _cached(kind, text):
-    """Cache path for this request on the current pump code: builds start from origin/<base>, what-ifs simulate this
-    checkout. A pump change gives a new key, so a cached run is never older than the firmware it describes."""
+def _cached(kind, text, wo=None):
+    """Cache path for this request on the project's current code: builds start from origin/<base>, what-ifs simulate
+    this checkout. A code change gives a new key, so a cached run is never older than the software it describes."""
     rev = f"origin/{os.environ.get('FACTORY_BASE') or 'main'}" if kind == "build" else "HEAD"
-    pump = subprocess.run(["git", "-C", ROOT, "rev-parse", f"{rev}:demo/pump"], capture_output=True, text=True).stdout.strip()
-    return os.path.join(CACHE, f"{kind}-{hashlib.sha1((_title(text) + pump).encode()).hexdigest()[:12]}")
+    code = subprocess.run(["git", "-C", ROOT, "rev-parse", f"{rev}:{project_device(wo)['repo']}"],
+                          capture_output=True, text=True).stdout.strip()
+    return os.path.join(CACHE, f"{kind}-{hashlib.sha1((_title(text) + code).encode()).hexdigest()[:12]}")
 
 
-def recorded(kind, text):
+def recorded(kind, text, wo=None):
     """A real earlier run of the same request (same title): this machine's cache first, then the stage recording.
     Live mode replays it in seconds instead of waiting minutes on agents; new requests still run for real."""
-    p = _cached(kind, text)
+    p = _cached(kind, text, wo)
     if os.path.exists(p + ".jsonl"):
         return p
-    stage = os.path.join(REPLAY, kind)
+    stage = os.path.join(ROOT, project_device(wo)["replay"], kind)
     first = json.loads(open(stage + ".jsonl").readline()) if os.path.exists(stage + ".jsonl") else {}
     return stage if _title(first.get("title", "")) == _title(text) else None
 
@@ -279,7 +365,7 @@ def save(kind, text, wo=None, p=None):
     if not done:
         return
     os.makedirs(CACHE, exist_ok=True)
-    p = p or _cached(kind, text)
+    p = p or _cached(kind, text, wo)
     if wo:
         open(p + ".diff.txt", "w").write(store.diff(wo))
         json.dump(store.git_changes(wo), open(p + ".commits.json", "w"))
@@ -361,11 +447,11 @@ if __name__ == "__main__":
     if sys.argv[1] == "prewarm":
         sys.exit(prewarm())
     kind, text, wo = sys.argv[1], sys.argv[2], (sys.argv[3:4] or [None])[0]
-    src = os.path.join(REPLAY, kind) if os.environ.get("FACTORY_REPLAY") == "1" else \
-        None if os.environ.get("FACTORY_CACHE") == "0" else recorded(kind, text)
+    src = os.path.join(ROOT, project_device(wo)["replay"], kind) if os.environ.get("FACTORY_REPLAY") == "1" else \
+        None if os.environ.get("FACTORY_CACHE") == "0" else recorded(kind, text, wo)
     if src:
         sys.exit(replay(src, wo))
-    key = _cached(kind, text)  # before the run: the runner's fetch may move origin/main
+    key = _cached(kind, text, wo)  # before the run: the runner's fetch may move origin/main
     rc = build(text, wo) if kind == "build" else whatif(text)
     save(kind, text, wo, key)
     sys.exit(rc)
