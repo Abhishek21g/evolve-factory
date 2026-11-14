@@ -20,6 +20,8 @@ header h1 { font-size: 15px; font-weight: 600; margin: 0; }
 .verdict.blocked { background: #3a1414; border-color: var(--red); color: var(--red); }
 .verdict.pass { background: #0f2e22; border-color: var(--green); color: var(--green); }
 .mode { font-size: 12px; color: var(--mute); }
+#player button { font: inherit; font-size: 12px; background: #222; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+#player button:hover { border-color: var(--blue); }
 main { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; padding: 16px 24px; }
 @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 16px; } header { padding: 16px; } }
 h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); margin: 0 0 10px; font-weight: 600; }
@@ -80,6 +82,11 @@ svg .ax { fill: var(--mute); font-size: 9px; }
   <h1>Safety Gate Control Room</h1>
   <div class="wo" id="wo">Waiting for a Work Order…</div>
   <span class="mode" id="mode"></span>
+  <span id="player" hidden>
+    <button id="play" title="Space">Pause</button>
+    <button id="next" title="Right arrow">Next step</button>
+    <span class="mode" id="stepno"></span>
+  </span>
   <div class="verdict" id="verdict">IDLE</div>
 </header>
 <main>
@@ -206,16 +213,33 @@ async function live() {
   return true;
 }
 
+// Replay controls: Space = pause/play, Right arrow = next step. Add ?step to start paused (presenter mode).
+let paused = new URLSearchParams(location.search).has("step"), resume = null;
+function next() { if (resume) { const r = resume; resume = null; r(); } }
+function toggle() { paused = !paused; $("play").textContent = paused ? "Play" : "Pause"; if (!paused) next(); }
+addEventListener("keydown", e => {
+  if (e.code === "Space") { e.preventDefault(); toggle(); }
+  if (e.code === "ArrowRight") { e.preventDefault(); next(); }
+});
+
 async function replay(file) {
   $("mode").textContent = "replay of recorded run";
+  $("player").hidden = false;
+  $("play").textContent = paused ? "Play" : "Pause";
+  $("play").onclick = toggle;
+  $("next").onclick = next;
   const evs = parse(await (await fetch(file)).text());
   const speed = Number(new URLSearchParams(location.search).get("speed") || 1);
   for (;;) {
     run = null;
     for (let i = 0; i < evs.length; i++) {
       apply(evs[i]);
+      $("stepno").textContent = `step ${i + 1}/${evs.length}`;
       const gap = i + 1 < evs.length ? evs[i + 1].t - evs[i].t : 6;
-      await new Promise(res => setTimeout(res, Math.max(gap, 0.9) * 1000 / speed));
+      await new Promise(r => {
+        resume = r;
+        if (!paused) setTimeout(() => { if (resume === r && !paused) next(); }, Math.max(gap, 0.9) * 1000 / speed);
+      });
     }
   }
 }
