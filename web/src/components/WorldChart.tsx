@@ -2,8 +2,8 @@
 import { useState } from "react";
 import type { Scenario, World, WorldRun } from "@/lib/feed";
 
-const W = 640, H = 260, PL = 44, PR = 84, PT = 10, PB = 30, IH = 70;
-const COL = { harm: "#f87171", pre: "#fbbf24", hyper: "#fb923c", ok: "#34d399", base: "#6b7280", grid: "#1a1d22", axis: "#5b616a", text: "#8a9099" };
+const W = 760, H = 310, PL = 56, PR = 116, PT = 16, PB = 42, IH = 88;
+const COL = { harm: "#f87171", pre: "#fbbf24", hyper: "#fb923c", ok: "#34d399", base: "#6b7280", grid: "#232328", axis: "#71717a", text: "#a1a1aa" };
 const HYPER_LONG = 120; // minutes above the hyper line that count as a hyperglycemia event
 
 type St = "harm" | "pre" | "hyper" | "ok";
@@ -68,13 +68,25 @@ export function WorldChart({ world }: { world: World }) {
   const scenarios = [...new Set(world.results.map(r => r.scenario))];
   const meta = Object.fromEntries((world.scenarios || []).map(s => [s.id, s]));
   const subjects = new Set(world.results.map(r => r.patient)).size;
+  const v = simVerdict(world);
+  const harm = world.results.filter(r => status(r, world) === "harm").length;
+  const hyper = world.results.filter(r => status(r, world) === "hyper").length;
+  const n = world.results.length;
+  const headline = harm ? `${harm} of ${n} simulated runs ${whatif ? "hit" : "newly hit"} ${harmText(world, ax)}`
+    : hyper ? `No severe hypo, but ${hyper} of ${n} runs stay above ${hyperLine(world)} mg/dL for 2 h+`
+    : whatif ? `None of ${n} simulated runs hit ${harmText(world, ax)}` : `No run newly hits ${harmText(world, ax)} compared with ${world.base}`;
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-mute">
-        <VerdictChip v={simVerdict(world)} />
-        <span>{world.results.length} simulated runs · {subjects} {ax.subject} · {scenarios.length} scenario{scenarios.length > 1 ? "s" : ""}</span>
-        {ax.glucose && <span className="text-dim">simglucose (UVA/Padova T1D) · real pump.c in the loop · 1-min steps</span>}
-        <span className="text-dim">{whatif ? "unsafe if any run hits " : `candidate vs ${world.base} · blocks if any run newly hits `}{harmText(world, ax)}</span>
+      <div className={`flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border px-4 py-3 ${TONE[v.tone]}`}>
+        <span className="text-lg font-bold tracking-wide">{v.label}</span>
+        <div className="min-w-0 flex-1">
+          <p className="text-md font-medium text-ink">{headline}</p>
+          <p className="text-sm text-mute">
+            {n} runs · {subjects} {ax.subject} · {scenarios.length} scenario{scenarios.length > 1 ? "s" : ""}
+            {ax.glucose ? " · simglucose (UVA/Padova T1D) with the real pump.c in the loop" : ""}
+            {whatif ? "" : ` · candidate vs ${world.base}, blocks on any new harm`}
+          </p>
+        </div>
       </div>
       <Legend world={world} ax={ax} />
       {scenarios.map(sc => <ScenarioSim key={sc} world={world} ax={ax} sc={sc} meta={meta[sc]} />)}
@@ -91,7 +103,7 @@ function Legend({ world, ax }: { world: World; ax: Ax }) {
     ...(whatif ? [] : [[COL.base, `same run on ${world.base} (before)`, true] as [string, string, boolean]]),
   ];
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-mute">
+    <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-mute">
       {items.map(([c, l, dash]) => (
         <span key={l} className="inline-flex items-center gap-1.5">
           <svg width="18" height="6"><line x1="0" x2="18" y1="3" y2="3" stroke={c} strokeWidth="2" strokeDasharray={dash ? "3 3" : undefined} /></svg>{l}
@@ -146,40 +158,40 @@ function ScenarioSim({ world, ax, sc, meta }: { world: World; ax: Ax; sc: string
   ];
 
   return (
-    <figure className="@container rounded-lg border border-line bg-bg/60 p-3">
-      <figcaption className="mb-2 flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+    <figure className="@container rounded-xl border border-line bg-panel p-4">
+      <figcaption className="mb-3 flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
         <div className="min-w-0">
-          <div className="text-base font-medium">{meta?.label || sc}</div>
-          <div className="text-xs text-dim">{rs.length} {meta?.cohort ? `virtual ${meta.cohort}s` : ax.subject} · {describe(meta)}{describe(meta) ? " · " : ""}{fmtT(total, ax)} simulated</div>
+          <div className="text-md font-semibold">{meta?.label || sc}</div>
+          <div className="mt-0.5 text-sm text-mute">{rs.length} {meta?.cohort ? `virtual ${meta.cohort === "child" ? "children" : `${meta.cohort}s`}` : ax.subject} · {describe(meta)}{describe(meta) ? " · " : ""}{fmtT(total, ax)} simulated</div>
         </div>
         <VerdictChip v={v} />
       </figcaption>
-      <div className="grid gap-4 @4xl:grid-cols-[minmax(0,640px)_minmax(0,1fr)]">
+      <div className="grid gap-5 @4xl:grid-cols-[minmax(0,1fr)_280px]">
         <svg viewBox={`0 0 ${W} ${H + (ins ? IH : 0)}`} className="block h-auto w-full" role="img" aria-label={`Simulation, ${meta?.label || sc}`}>
           <rect x={PL} y={y(ax.band[1])} width={W - PL - PR} height={y(ax.band[0]) - y(ax.band[1])} fill="#34d39914" />
           {yTicks.map(g => (
             <g key={g}>
               <line x1={PL} x2={W - PR} y1={y(g)} y2={y(g)} stroke={COL.grid} />
-              <text x={PL - 6} y={y(g) + 3} textAnchor="end" fontSize="10" fill={COL.axis}>{g}</text>
+              <text x={PL - 6} y={y(g) + 3} textAnchor="end" fontSize="14" fill={COL.axis}>{g}</text>
             </g>
           ))}
           {lines.map(([g, c, l]) => (
             <g key={l}>
               <line x1={PL} x2={W - PR} y1={y(g)} y2={y(g)} stroke={c} strokeDasharray={g === 70 || g === 180 ? "1 3" : "4 3"} opacity=".75" />
-              <text x={W - PR + 4} y={y(g) + (ax.glucose && g === world.threshold ? 10 : ax.glucose && g === 70 ? -2 : 3)} fontSize="9.5" fill={c}>{l}</text>
+              <text x={W - PR + 4} y={y(g) + (ax.glucose && g === world.threshold ? 10 : ax.glucose && g === 70 ? -2 : 3)} fontSize="13" fill={c}>{l}</text>
             </g>
           ))}
           {tTicks.map(t => (
             <g key={t}>
               <line x1={x(t * tUnit)} x2={x(t * tUnit)} y1={H - PB} y2={H - PB + 4} stroke={COL.axis} />
-              <text x={x(t * tUnit)} y={H - PB + 14} textAnchor="middle" fontSize="10" fill={COL.axis}>{t}</text>
+              <text x={x(t * tUnit)} y={H - PB + 19} textAnchor="middle" fontSize="14" fill={COL.axis}>{t}</text>
             </g>
           ))}
           <line x1={PL} x2={W - PR} y1={H - PB} y2={H - PB} stroke={COL.axis} />
-          <text x={(PL + W - PR) / 2} y={H - 3} textAnchor="middle" fontSize="10" fill={COL.text}>time ({ax.time === "min" ? "hours" : ax.time})</text>
-          <text transform={`translate(11 ${(PT + H - PB) / 2}) rotate(-90)`} textAnchor="middle" fontSize="10" fill={COL.text}>{ax.glucose ? "blood glucose (mg/dL)" : ax.unit}</text>
+          <text x={(PL + W - PR) / 2} y={H - 2} textAnchor="middle" fontSize="13.5" fill={COL.text}>time ({ax.time === "min" ? "hours" : ax.time})</text>
+          <text transform={`translate(13 ${(PT + H - PB) / 2}) rotate(-90)`} textAnchor="middle" fontSize="13.5" fill={COL.text}>{ax.glucose ? "blood glucose (mg/dL)" : ax.unit}</text>
           <line x1={x(eventAt)} x2={x(eventAt)} y1={PT} y2={H - PB} stroke="#a5f3fc" strokeDasharray="2 3" opacity=".5" />
-          <text x={x(eventAt) + 4} y={PT + 9} fontSize="9.5" fill="#a5f3fc" opacity=".8">{ax.event}</text>
+          <text x={x(eventAt) + 4} y={PT + 12} fontSize="13" fill="#a5f3fc" opacity=".8">{ax.event}</text>
           {!whatif && rs.map(r => (
             <polyline key={"b" + r.patient} points={pts(r.base_trace)} fill="none" stroke={COL.base} strokeWidth="1" strokeDasharray="3 3"
               opacity={hi && hi !== r.patient ? 0.08 : 0.55} />
@@ -202,25 +214,25 @@ function ScenarioSim({ world, ax, sc, meta }: { world: World; ax: Ax; sc: string
           })}
           {ins && (
             <g transform={`translate(0 ${H})`}>
-              <text x={PL} y={12} fontSize="10" fill={COL.text}>insulin delivered by pump.c, U per 5 min ({sel ? sel.patient : "cohort mean"}; basal not shown)</text>
+              <text x={PL} y={16} fontSize="13" fill={COL.text}>insulin delivered by pump.c, U per 5 min ({sel ? sel.patient : "cohort mean"}; basal not shown)</text>
               <line x1={PL} x2={W - PR} y1={IH - 8} y2={IH - 8} stroke={COL.axis} />
-              <text x={PL - 6} y={22} textAnchor="end" fontSize="9" fill={COL.axis}>{insMax.toFixed(1)}</text>
-              <text x={PL - 6} y={IH - 8} textAnchor="end" fontSize="9" fill={COL.axis}>0</text>
+              <text x={PL - 6} y={28} textAnchor="end" fontSize="11" fill={COL.axis}>{insMax.toFixed(1)}</text>
+              <text x={PL - 6} y={IH - 8} textAnchor="end" fontSize="11" fill={COL.axis}>0</text>
               {ins.map((u, i) => u > 0 && (
-                <rect key={i} x={PL + i * bw} y={IH - 8 - (u / insMax) * (IH - 28)} width={Math.max(1, bw - 0.5)} height={(u / insMax) * (IH - 28)} fill="#60a5fa" opacity=".8" />
+                <rect key={i} x={PL + i * bw} y={IH - 8 - (u / insMax) * (IH - 34)} width={Math.max(1, bw - 0.5)} height={(u / insMax) * (IH - 34)} fill="#60a5fa" opacity=".8" />
               ))}
             </g>
           )}
         </svg>
         <div className="min-w-0 space-y-3">
-          <dl className="grid gap-x-6 gap-y-1.5 text-sm @lg:grid-cols-2 @4xl:grid-cols-1">
+          <dl className="grid gap-x-6 gap-y-2 text-sm @lg:grid-cols-2 @4xl:grid-cols-1">
             {stats.map(([k, val, cls]) => (
               <div key={k} className="flex justify-between gap-3 border-b border-line/60 pb-1.5">
                 <dt className="text-dim">{k}</dt><dd className={`text-right font-mono ${cls || "text-ink"}`}>{val}</dd>
               </div>
             ))}
           </dl>
-          <div className="rounded-md bg-white/[.03] p-2 text-xs leading-relaxed text-mute">
+          <div className="rounded-md bg-white/[.03] p-3 text-sm leading-relaxed text-mute">
             {sel ? <><b className="font-mono text-ink">{sel.patient}</b><br />{sel.note}
               {ax.glucose && <><br />min {sel.min} mg/dL{sel.nadir_at != null ? ` at ${fmtT(sel.nadir_at, ax)}` : ""} · max {sel.max}{sel.tir != null ? ` · in range ${sel.tir}%` : ""}</>}
               {!whatif ? <><br />on {world.base}: {ax.glucose ? `min ${sel.base_min} mg/dL` : `${sel.base_min} ${ax.unit}`}</> : null}</>
@@ -237,8 +249,8 @@ const RESULT: Record<St, [string, string]> = {
   harm: ["text-bad", "severe hypo"], pre: ["text-warn", "pre-existing hypo"], hyper: ["text-[#fb923c]", "hyperglycemia"], ok: ["text-ok", "ok"],
 };
 type TableProps = { rows: WorldRun[]; st: Record<string, St>; world: World; hi: string | null; setHi: (p: string | null) => void };
-const th = "whitespace-nowrap py-1 pr-3 font-medium";
-const td = "whitespace-nowrap py-1 pr-3 font-mono";
+const th = "whitespace-nowrap px-3 py-2 font-medium";
+const td = "whitespace-nowrap px-3 py-2 font-mono";
 
 function PatientTable({ rows, st, world, hi, setHi }: TableProps) {
   const whatif = isWhatIf(world);
@@ -247,9 +259,9 @@ function PatientTable({ rows, st, world, hi, setHi }: TableProps) {
   const cmpU = !whatif && rows.some(r => baseU(r) != null);
   const ax = axisOf(world);
   return (
-    <div className="mt-2 overflow-x-auto">
-      <table className="w-full text-left text-xs">
-        <thead className="text-dim">
+    <div className="scroll-thin mt-4 overflow-x-auto rounded-lg border border-line">
+      <table className="w-full text-left text-sm">
+        <thead className="bg-white/[.02] text-mute">
           <tr>{["Patient", "Pump decision", cmpU ? "Insulin (U) main → new" : "Insulin (U)", whatif ? "Min BG" : "Min BG main → new", "Max BG", "In range", "> 250", "Result"].map(h => <th key={h} className={th}>{h}</th>)}</tr>
         </thead>
         <tbody>
@@ -260,13 +272,13 @@ function PatientTable({ rows, st, world, hi, setHi }: TableProps) {
               <tr key={r.patient} onMouseEnter={() => setHi(r.patient)} onMouseLeave={() => setHi(null)}
                 className={`cursor-default border-t border-line ${hi === r.patient ? "bg-white/[.04]" : ""}`}>
                 <td className={td}>{r.patient}</td>
-                <td className="py-1 pr-3 text-mute">{r.note}</td>
+                <td className="px-3 py-2 text-mute">{r.note}</td>
                 <td className={td}>{cmpU ? `${fmtU(baseU(r))} → ${fmtU(units(r))}` : fmtU(units(r))}</td>
                 <td className={`${td} ${r.hypo ? "text-bad" : ""}`}>{whatif ? r.min : `${r.base_min} → ${r.min}`}</td>
                 <td className={`${td} ${r.max > hyperLine(world) ? "text-[#fb923c]" : ""}`}>{r.max}</td>
                 <td className={td}>{r.tir != null ? `${r.tir}%` : "—"}</td>
                 <td className={td}>{hm ? fmtT(hm, ax) : "—"}</td>
-                <td className={`whitespace-nowrap py-1 font-medium ${cls}`}>{label}{st[r.patient] === "harm" && !whatif ? " (new)" : ""}</td>
+                <td className={`whitespace-nowrap px-3 py-2 font-medium ${cls}`}>{label}{st[r.patient] === "harm" && !whatif ? " (new)" : ""}</td>
               </tr>
             );
           })}
@@ -280,9 +292,9 @@ function RunTable({ rows, st, world, ax, hi, setHi }: TableProps & { ax: Ax }) {
   const whatif = isWhatIf(world);
   const label: Record<St, [string, string]> = { harm: ["text-bad", whatif ? "exceeded" : "exceeded (new)"], pre: ["text-warn", "pre-existing"], hyper: ["", ""], ok: ["text-ok", "inside"] };
   return (
-    <div className="mt-2 overflow-x-auto">
-      <table className="w-full text-left text-xs">
-        <thead className="text-dim">
+    <div className="scroll-thin mt-4 overflow-x-auto rounded-lg border border-line">
+      <table className="w-full text-left text-sm">
+        <thead className="bg-white/[.02] text-mute">
           <tr>{["Run", "Outcome", whatif ? `Peak (${ax.unit})` : `Peak (${ax.unit}) ${world.base} → new`, "Result"].map(h => <th key={h} className={th}>{h}</th>)}</tr>
         </thead>
         <tbody>
@@ -290,9 +302,9 @@ function RunTable({ rows, st, world, ax, hi, setHi }: TableProps & { ax: Ax }) {
             <tr key={r.patient} onMouseEnter={() => setHi(r.patient)} onMouseLeave={() => setHi(null)}
               className={`cursor-default border-t border-line ${hi === r.patient ? "bg-white/[.04]" : ""}`}>
               <td className={td}>{r.patient}</td>
-              <td className="py-1 pr-3 text-mute">{r.note}</td>
+              <td className="px-3 py-2 text-mute">{r.note}</td>
               <td className={`${td} ${r.hypo ? "text-bad" : ""}`}>{whatif ? r.max : `${r.base_min} → ${r.max}`}</td>
-              <td className={`whitespace-nowrap py-1 font-medium ${label[st[r.patient]][0]}`}>{label[st[r.patient]][1]}</td>
+              <td className={`whitespace-nowrap px-3 py-2 font-medium ${label[st[r.patient]][0]}`}>{label[st[r.patient]][1]}</td>
             </tr>
           ))}
         </tbody>
