@@ -1,101 +1,133 @@
 # Certus Factory
 
-**A software factory for physical AI.** Tell it what you want in plain English. Agents recall the organization's
-memory, analyze hazards, write the code, and every change is verified by deterministic tests and a world model
-(the real firmware running in simulated patients) before it can merge. Each change ships with a safety evidence pack.
+**A software factory for safety-critical code.** You say what you want in plain English. An agent team recalls the
+organization's memory, maps the request to hazards, and has Claude Code write the change in its own git worktree.
+Then deterministic checks decide whether it ships: the unit test behind every safety requirement the diff touches
+(e.g. SR-1 "single bolus never exceeds 10 U", hazard H-1 overdose), and a world model that runs the candidate's real
+C code in simulated type 1 diabetic patients (simglucose). If a check fails, the report goes back to the agent. If
+everything passes, the change ships with a safety evidence pack and a PR. Approval is never an LLM decision. The
+demo codebase is a small insulin-pump controller in C (not a medical device). The project is modelled on 8090's
+Software Factory and adds CertusAI-style safety traceability.
 
-```bash
-python3 -m venv .venv && .venv/bin/pip install -r sim/requirements.txt -r factory/requirements.txt
-cd web && npm install && npm run build && cd ..
-.venv/bin/python factory/server.py          # open http://localhost:8787
+Built at EVOLVE, the 8090 AI Hackathon (Nov 13–14, 2026). Devpost write-up: [docs/DEVPOST.md](docs/DEVPOST.md).
+Hosted read-only backup: https://certus-factory.vercel.app
+
+## Architecture
+
+```mermaid
+flowchart LR
+  H["Home: What should we work on?"] -->|Build| WO["Work order WO-n"]
+  H -->|Simulate| SIM["Simulation Agent (Claude)"]
+  WO --> MEM["Context layer: org memory (HydraDB or local)"]
+  MEM --> SA["Safety Analyst (Claude): hazards + requirements"]
+  SA --> CC["Claude Code in its own git worktree"]
+  CC --> GATE{"Deterministic gate"}
+  GATE --- PF["Protected files"]
+  GATE --- RT["Requirement tests SR-1..SR-5"]
+  GATE --- WM["World model: candidate pump.c in 10 simulated patients"]
+  GATE -->|"blocked: report"| CC
+  GATE -->|pass| EV["Evidence pack + PR"]
+  EV --> ACT["Composio: GitHub issue / Slack (if configured)"]
+  SIM --> WM
+  SF["8090 Software Factory (REST API)"] <-->|"gate/runner.py --wo"| WO
 ```
 
-- **Build it**: request, then shared memory (HydraDB), Safety Analyst (hazards), coding agent (Claude Code) in a git worktree, deterministic gate, world model, evidence pack, Composio actions.
-- **Simulate**: ask a what-if question; the Simulation Agent turns it into scenarios and the world model answers on the current firmware.
-- Stage demo: `demo/go.sh replay` (or `live`) gets everything ready and prints READY; script in [docs/DEMO.md](docs/DEMO.md).
-  Replay mode (`FACTORY_REPLAY=1`) plays a recorded real run from `demo/replay/` so nothing on stage waits on an LLM.
-  Hosted read-only UI: https://certus-factory.vercel.app (`demo/deploy.sh`).
-- Approval is never an LLM decision: tests plus the world model decide.
-- Optional keys in `.env` (gitignored): `HYDRADB_API_KEY`, `COMPOSIO_API_KEY`, `SF_API_KEY`. Without them it runs with local fallbacks.
-- `web/` is a static Next.js app. Served locally by `factory/server.py`; on Vercel it plays a recorded run (replay mode).
-- `factory/seed_memory.jsonl` is example organization knowledge (tickets, meeting notes, chats, emails) written for this demo.
+The LLM steps plan, write code and suggest hazards. Only the exit codes of the checks in `gate/checks.json` decide
+approval. If an LLM call fails, the run continues with a deterministic fallback and the UI says so.
 
-# evolve-factory
+## Quickstart
 
-Team entry for EVOLVE: 8090 AI Hackathon (Redwood City, Nov 13–14, 2026).
+**Prerequisites:**
 
-Theme: build your own Software Factory. Plan, research and ideas: [docs/PLAN.md](docs/PLAN.md).
-
-Team: Abhishek Enaguthi (@Abhishek21g), Muralikrishna Inti (@Muralikinti).
-
-## Dashboard (agent control room)
+- macOS or Linux with Python 3.10+, Node 18.18+ and npm, `make`, a C compiler, and `git`.
+- For live mode: the `claude` CLI logged in, or `ANTHROPIC_API_KEY` set.
+- To open PRs: the `gh` CLI.
 
 ```bash
-python3 -m http.server 8091 -d dashboard   # open http://localhost:8091
-python3 dashboard/demo_run.py              # in another terminal: plays WO-12 live
+git clone https://github.com/Abhishek21g/evolve-factory && cd evolve-factory
+demo/go.sh replay      # first run ~1.5 min (venv, npm ci, UI build), then ~3 s; ends with READY
 ```
 
-- One lane per agent (Planner, Safety Analyst, Claude, Codex, Safety Gate, Reviewer), traceability matrix, event log.
-- Agents report via `dashboard/emit.py` (Python import or shell: `python3 dashboard/emit.py gate working "msg"`). The runner should call it.
-- `gate/runner.py` already reports to the feed (planner, coder, gate, reviewer events, plus the gate matrix). Set `AGENT_NAME=coder-codex` to label a Codex run; set `EVENTS=path` to write the feed elsewhere.
-- `gate/gate.py --json out.json` gives the matrix data; pass it as `gate=` on the gate event.
-- No live feed (or `?replay`) plays the recorded run `dashboard/demo-run.jsonl`. That is the stage fallback and what a static Vercel deploy shows. `&speed=2` speeds it up.
-- `demo_run.py`: agent patches are scripted for now; gate verdicts are real (each candidate is checked in a throwaway worktree).
-## World model (simulated patients)
+Open http://localhost:8787/#/p/insulin-pump-firmware/overview, type `Raise the single-bolus limit to 25 U`, and press Enter.
 
-Every candidate change is also run in a world model before it can merge: the candidate's real `demo/pump/pump.c`
-is compiled and put in the loop with 10 simulated adults with type 1 diabetes (simglucose, the open-source
-UVA/Padova simulator). Two fixed scenarios: a large meal, and a 10x dose-entry typo, each observed for 12 hours so
-late lows from an extended bolus (nadir up to ~11 h after the meal) are not missed. The check is deterministic
-and judges the change against `main`: it blocks if the change makes any simulated patient fall below 54 mg/dL
-who did not before, and reports risk that already exists on `main` separately.
+- `demo/go.sh replay` plays a recorded real run (WO-304), so nothing waits on an LLM. It needs no keys.
+- `demo/go.sh live` runs real agents. A work order takes about 2.5–3.5 minutes, and a what-if about 45 s.
+- `demo/go.sh check` runs the health check only.
+
+`go.sh` creates `.venv`, builds `web/`, seeds the demo project and a draft work order, pre-warms the simulator and
+the C build, starts `factory/server.py`, and prints READY or exactly what's broken. Re-running it is safe.
+
+You can override these settings with environment variables:
+
+- `PORT` (default 8787).
+- `FACTORY_PR=1`: live runs open a GitHub PR.
+- `REPLAY_SPEED`, `REPLAY_HOLD`: replay pacing (see [docs/DEMO.md](docs/DEMO.md)).
+
+**Keys (optional).** Put them in `.env` at the repo root; it's gitignored. Without keys, the factory runs on local fallbacks.
+
+| Name | Used for |
+|---|---|
+| `ANTHROPIC_API_KEY` | Live mode: Claude Code, Safety Analyst, Simulation Agent (otherwise the logged-in `claude` CLI) |
+| `HYDRADB_API_KEY` | Org memory in HydraDB (otherwise a local JSONL store) |
+| `COMPOSIO_API_KEY`, `COMPOSIO_GITHUB_AUTH_CONFIG`, `COMPOSIO_SLACK_AUTH_CONFIG`, `SLACK_CHANNEL` | GitHub issue and Slack update after each run; connect once with `.venv/bin/python factory/actions.py connect` |
+| `SF_API_KEY` | 8090 Software Factory External API (`sofa-ext-...`); check with `python3 gate/sf.py health` |
+
+## Demo flow (3 minutes)
+
+The full script is in [docs/DEMO.md](docs/DEMO.md), and the spoken pitch is in [docs/PITCH.md](docs/PITCH.md).
+
+1. **Home.** Type the request with **Build** selected. A work order opens, and the hazard analysis maps it to H-1, H-2 and H-3. It flags that the request directly violates SR-1.
+2. **Blocked.** Attempt 1 is the obvious one-line patch `MAX_BOLUS_U 10 -> 25`. It's scripted by `demo/obvious_patch.sh`, because Claude Code wouldn't write it. SR-1 fails, and the world model shows 4 simulated patients falling below 54 mg/dL after a 10x dose typo.
+3. **Blocked again.** Attempt 2 is real Claude Code's extended bolus at 10 U/h. All 5 requirement tests pass, but 2 patients crash hours after a large meal.
+4. **Green.** Attempt 3 is real Claude Code capping the extended total. 5/5 tests pass and there are 0 new severe lows; 2 pre-existing lows on `main` are flagged as a new hazard. Open **Evidence** and **Pull request** ([#30](https://github.com/Abhishek21g/evolve-factory/pull/30)).
+5. **Optional.** Switch to **Simulate** and ask "What if a child eats 80 g and the parent types the dose 10x?". You can also browse **Agents**, **Memory**, **Traceability** and **Audit trail**.
+
+## Run the pieces on their own
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -r sim/requirements.txt
-.venv/bin/python sim/world.py --repo . --base main      # ~20 s (patients run in parallel)
+.venv/bin/python gate/test_gate.py                     # gate self-test
+.venv/bin/python sim/world.py --repo . --base main     # world model on main, ~25 s
+.venv/bin/python factory/memory.py bolus limit         # org memory recall
+.venv/bin/python factory/pipeline.py whatif "What if an adult eats 150 g of carbs?"   # needs Claude; else a parsed fallback
 ```
 
-It runs as the `world-model` check in `gate/checks.json`, and draws blood-sugar traces on the dashboard.
+## Repo layout
 
-**Ask it in plain English (Simulation Agent).** Claude (Anthropic API, tool use) plans scenarios and drives the
-world model through deterministic tools (`run_scenario`, `compare_to_main`, `list_patients`, `get_safety_requirements`):
-meal size and time, dose typos or exact doses, skipped meals, starting BG, post-exercise insulin sensitivity, adult /
-adolescent / child cohorts, on any pump build (`worktree`, `main`, a branch, or a worktree path). Every number in the
-answer comes from a simulation; Claude never approves a change. Needs `ANTHROPIC_API_KEY` (env or `.env`).
-
-```bash
-.venv/bin/python sim/agent.py "What happens if an adult enters 10x their meal dose by mistake?"   # ~30-60 s
-.venv/bin/python sim/agent.py "Is branch wo/WO-13 safer than main for a 150 g dinner after exercise?"
-```
-
-Progress goes to the dashboard feed (`simulation` and `world` agents); the full result (scenarios, per-patient
-traces, answer, tool calls) is written to `.runs/whatif-<ts>.json`. From Python: `agent.ask(question, repo, ref)`.
-Max 8 tool calls per question; simulations run in parallel and are cached in `.runs/sim-cache/`.
+| Path | What's in it |
+|---|---|
+| `factory/` | `server.py` (API and static UI), `pipeline.py` (build / what-if / replay), `memory.py` (HydraDB or local), `actions.py` (Composio), `store.py` (projects, work orders, audit trail), `seed_memory.jsonl` (example org memory written for the demo) |
+| `gate/` | `runner.py` (Claude Code in a worktree, retry on BLOCKED, PR), `gate.py` (diff to requirements to tests), `check_protected.py`, `checks.json`, `sf.py` (Software Factory REST client) |
+| `sim/` | `world.py` (world model: candidate `pump.c` in simglucose patients), `shim.c`, `agent.py` (standalone Simulation Agent on the Anthropic API) |
+| `demo/pump/` | Demo pump controller in C, `safety.json` (hazards H-1..H-5, requirements SR-1..SR-5), requirement tests |
+| `demo/` | `go.sh`, `health.py`, `replay/` (recorded run), `record.py`, `deploy.sh` (Vercel), `obvious_patch.sh` |
+| `web/` | Static Next.js UI: Home, Agents, Memory, Work Orders, Requirements, World Model, Traceability, Audit trail |
+| `dashboard/` | Earlier agent control room and the shared event feed (`emit.py`) |
+| `docs/` | `PLAN.md`, `DEMO.md`, `PITCH.md`, `DEVPOST.md`, `SAFETY_GATE.md`, `RESEARCH.md` |
 
 ## Tools, libraries and licenses
 
-Keep this list current; judges require it.
-
 | Tool / library | Use | License |
 |---|---|---|
-| Python 3 standard library | gate, dashboard scripts | PSF |
-| git | diffs, worktrees | GPL-2.0 (tool only, not bundled) |
-| make, C compiler (clang/gcc) | build demo pump tests | tool only, not bundled |
-| 8090 Software Factory (MCP) | Work Orders, requirements | 8090 service (event access) |
-| Claude Code (Anthropic) | coding agent, used to build this project | Anthropic commercial terms |
-| Codex CLI (OpenAI) | coding agent | Apache-2.0 CLI |
-| Cursor | IDE | proprietary |
-| simglucose 0.2.11 (UVA/Padova T1D simulator) | world model, simulated patients | MIT |
-| numpy, pandas, scipy (simglucose deps) | simulation | BSD-3-Clause |
+| Python 3 standard library | server, gate, pipeline | PSF |
+| git, make, C compiler (clang/gcc) | worktrees, diffs, building the pump code | tools only, not bundled |
+| Claude Code (Anthropic) | coding agent in the loop; also used to build this project | Anthropic commercial terms |
 | Anthropic Python SDK (anthropic 2.8.0) + Claude API | Simulation Agent (`sim/agent.py`) | MIT SDK; API under Anthropic commercial terms |
+| 8090 Software Factory (External REST API) | work orders, status, PR link (`gate/sf.py`) | 8090 service (event access) |
+| simglucose 0.2.11 (UVA/Padova T1D simulator) | world model | MIT |
+| numpy, pandas, scipy (simglucose deps) | simulation | BSD-3-Clause |
 | Next.js 15, React 19, Tailwind CSS 4 | web UI | MIT |
-| HydraDB (hydradb-sdk) | shared memory / context layer | proprietary SDK, hosted service (sponsor) |
-| Composio (composio 0.32) | agent actions in GitHub / Slack | Apache-2.0 (sponsor) |
-| Vercel | hosting the UI | service (sponsor) |
+| HydraDB (hydradb-sdk) | org memory / context layer | proprietary SDK, hosted service (sponsor) |
+| Composio (composio 0.32) | GitHub / Slack actions | Apache-2.0 (sponsor) |
+| Vercel | hosting the read-only UI | service (sponsor) |
+| GitHub CLI (`gh`) | opening PRs | MIT, tool only |
+| Cursor, Codex CLI | IDE and coding agents used while building | proprietary / Apache-2.0 |
 
 ## Built before the event
 
-Nothing. All code and commits in this repo were made during EVOLVE (hacking started Fri Nov 13, 7:10 PM PT). Ideas were planned beforehand, which the rules allow. CertusAI (our separate startup) code is not used.
+Nothing. All code and commits in this repo were made during EVOLVE (hacking started Fri Nov 13, 7:10 PM PT). Ideas
+were planned beforehand, which the rules allow. No code from CertusAI (our separate startup) is used.
+
+Team: Abhishek Enaguthi ([@Abhishek21g](https://github.com/Abhishek21g)), Muralikrishna Inti ([@Muralikinti](https://github.com/Muralikinti)).
 
 ## License
 
