@@ -1,0 +1,71 @@
+ demo/pump/pump.c | 27 +++++++++++++++++++++++++++
+ demo/pump/pump.h |  8 ++++++--
+ 2 files changed, 33 insertions(+), 2 deletions(-)
+
+diff --git a/demo/pump/pump.c b/demo/pump/pump.c
+index f5fb4d9..89146e3 100644
+--- a/demo/pump/pump.c
++++ b/demo/pump/pump.c
+@@ -15,3 +15,30 @@ pump_status check_occlusion(double line_pressure_kpa) {
+ pump_status check_watchdog(const pump_state *s, long now_ms) {
+     return now_ms - s->last_heartbeat_ms > WATCHDOG_MS ? ALARM_WATCHDOG : OK;
+ }
++
++void pump_set_adult(pump_state *s, int adult) { s->adult = adult; }
++
++/* WO-305: large meals for adults are spread over time. The 10 U single-bolus cap (SR-1) is unchanged;
++ * per-hour delivery stays <= MAX_BOLUS_RATE_UPH, SR-2 daily cap and SR-3 low-BG lockout still apply. */
++pump_status request_extended_bolus(pump_state *s, double units, int minutes, int bg_mg_dl) {
++    if (!s->adult || s->ext_remaining_u > 0) return REJECT_LIMIT;
++    if (units <= 0 || units > MAX_EXTENDED_U || minutes < 60) return REJECT_LIMIT;
++    if (units * 60.0 > MAX_BOLUS_RATE_UPH * minutes + 1e-9) return REJECT_LIMIT;
++    if (bg_mg_dl < MIN_BG_FOR_BOLUS) return REJECT_LOW_BG;
++    if (s->delivered_today_u + units > MAX_DAILY_U) return REJECT_DAILY;
++    s->ext_remaining_u = units;
++    s->ext_rate_u_min = units / minutes;
++    return OK;
++}
++
++/* Once per minute. Low BG cancels the rest (SR-3); never passes the daily cap (SR-2). */
++pump_status extended_bolus_tick(pump_state *s, int bg_mg_dl) {
++    if (s->ext_remaining_u <= 0) return OK;
++    if (bg_mg_dl < MIN_BG_FOR_BOLUS) { s->ext_remaining_u = 0; return REJECT_LOW_BG; }
++    double dose = s->ext_rate_u_min < s->ext_remaining_u ? s->ext_rate_u_min : s->ext_remaining_u;
++    if (s->delivered_today_u + dose > MAX_DAILY_U) { s->ext_remaining_u = 0; return REJECT_DAILY; }
++    s->delivered_today_u += dose;
++    s->ext_remaining_u -= dose;
++    if (s->ext_remaining_u < 1e-9) s->ext_remaining_u = 0;
++    return OK;
++}
+diff --git a/demo/pump/pump.h b/demo/pump/pump.h
+index 3f86c1b..b546a0c 100644
+--- a/demo/pump/pump.h
++++ b/demo/pump/pump.h
+@@ -3,6 +3,8 @@
+ #define PUMP_H
+ 
+ #define MAX_BOLUS_U       10.0  /* SR-1 mitigates H-1 overdose */
++#define MAX_BOLUS_RATE_UPH 10.0 /* extended bolus: per-hour delivery never exceeds one max bolus (SR-1, H-1) */
++#define MAX_EXTENDED_U    15.0  /* extended bolus total cap, adults only; 24 U caused severe hypo in the world model; SR-2 still applies */
+ #define MAX_DAILY_U       60.0  /* SR-2 mitigates H-2 cumulative overdose */
+ #define MIN_BG_FOR_BOLUS  70    /* SR-3 mitigates H-3 hypoglycemia (mg/dL) */
+ #define OCCLUSION_KPA     80.0  /* SR-4 mitigates H-4 missed delivery from blocked line */
+@@ -13,14 +15,16 @@ typedef enum { OK = 0, REJECT_LIMIT, REJECT_DAILY, REJECT_LOW_BG, ALARM_OCCLUSIO
+ typedef struct {
+     double delivered_today_u;
+     long last_heartbeat_ms;
++    int adult;               /* extended bolus allowed only for adult profile */
++    double ext_remaining_u;  /* extended bolus still to deliver */
++    double ext_rate_u_min;   /* extended bolus delivery per minute */
+ } pump_state;
+ 
+ pump_status request_bolus(pump_state *s, double units, int bg_mg_dl);
+ pump_status check_occlusion(double line_pressure_kpa);
+ pump_status check_watchdog(const pump_state *s, long now_ms);
+ 
+-/* Optional extended bolus interface. Not implemented on main. A Work Order that adds extended delivery
+- * must implement exactly these signatures: the world model (sim/world.py) drives them once per minute
++/* Extended bolus interface (WO-305). The world model (sim/world.py) drives it once per minute
+  * and doses each simulated patient with whatever the code adds to delivered_today_u. */
+ void pump_set_adult(pump_state *s, int adult);
+ pump_status request_extended_bolus(pump_state *s, double units, int minutes, int bg_mg_dl);
