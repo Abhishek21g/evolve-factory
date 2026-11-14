@@ -1,12 +1,16 @@
-"""Self-check: python3 gate/test_gate.py  (builds a throwaway git repo, runs the gate twice)."""
+"""Self-check: python3 gate/test_gate.py  (builds throwaway git repos, runs the gate and the flight world model)."""
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(ROOT, "sim"))
 import gate  # noqa: E402
+import flight  # noqa: E402
 
 SRC = "#define MAX_BOLUS_U {}\nint cap(int u){{ return u > MAX_BOLUS_U ? MAX_BOLUS_U : u; }}\n"
 TEST = 'grep -q "MAX_BOLUS_U 10$" bolus.c'  # stands in for a real unit test: max must stay 10 U
@@ -39,5 +43,22 @@ with tempfile.TemporaryDirectory() as d:
     open(f"{d}/bolus.c", "w").write(SRC.format(25))
     sh(d, "git", "commit", "-qam", "bump")
     assert gate.main(["--repo", d, "--safety", f"{d}/safety.json", "--base", "main"]) == 1
+
+# Flight controls: the obvious AoA-alert patch (disagree monitor 5.5 -> 5 deg) fails SR-3 and stalls simulated aircraft.
+with tempfile.TemporaryDirectory() as d:
+    sh(d, "git", "init", "-q", "-b", "main")
+    sh(d, "git", "config", "user.email", "t@t")
+    sh(d, "git", "config", "user.name", "t")
+    shutil.copytree(os.path.join(ROOT, "demo/aircraft"), f"{d}/demo/aircraft", ignore=shutil.ignore_patterns("test_fcc"))
+    sh(d, "git", "add", "-A"); sh(d, "git", "commit", "-qm", "base")
+    spec = os.path.join(ROOT, "demo/aircraft/safety.json")
+    assert flight.run(d, "main")["verdict"] == "PASS"
+    sh(d, "git", "checkout", "-qb", "obvious")
+    subprocess.run(["sh", os.path.join(ROOT, "demo/aircraft/obvious_patch.sh")], cwd=d, input="Work Order WO-1",
+                   capture_output=True, text=True, check=True, env={**os.environ, "EVENTS": os.devnull})
+    sh(d, "git", "commit", "-qam", "obvious")
+    assert gate.main(["--repo", d, "--safety", spec, "--base", "main"]) == 1
+    res = flight.run(d, "main")
+    assert res["verdict"] == "BLOCKED" and sum(r["new_hypo"] for r in res["results"]) == 6, res["verdict"]
 
 print("ok")

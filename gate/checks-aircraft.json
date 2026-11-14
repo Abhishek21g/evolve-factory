@@ -1,0 +1,5 @@
+[
+  {"name": "protected-files", "cmd": "python3 {root}/gate/check_protected.py --repo {repo} --base {base}"},
+  {"name": "safety-gate", "cmd": "python3 {root}/gate/gate.py --repo {repo} --safety {root}/demo/aircraft/safety.json --base {base} --json {json}"},
+  {"name": "world-model", "cmd": "{root}/.venv/bin/python {root}/sim/flight.py --repo {repo} --base {base} --wo {wo} --json {root}/.runs/{wo}.world.json"}
+]
