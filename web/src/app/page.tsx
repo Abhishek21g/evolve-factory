@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity, Boxes, ChevronDown, FileCheck2, FlaskConical, GitBranch, Home, ListChecks, Network, Plus, Play, ShieldAlert, Users,
+  Activity, ArrowUp, Bot, Boxes, Brain, ChevronDown, FileCheck2, FlaskConical, GitBranch, Home, ListChecks, Network, Plus, Play, Search, ShieldAlert, Users,
 } from "lucide-react";
-import { useFactoryState, type Member, type State, type WorkOrder } from "@/lib/api";
+import { useFactoryState, type MemoryItem, type Member, type State, type WorkOrder } from "@/lib/api";
 import type { Ev } from "@/lib/feed";
 import { WorldChart } from "@/components/WorldChart";
 import { TraceGraph } from "@/components/TraceGraph";
@@ -24,7 +24,7 @@ const go = (h: string) => { location.hash = h; };
 
 export default function App() {
   const route = useRoute();
-  const { state, events, live, post, text } = useFactoryState(route.project);
+  const { state, events, live, post, text, getJSON } = useFactoryState(route.project);
   const [me, setMe] = useState("abhishek");
   useEffect(() => { try { setMe(localStorage.getItem("actor") || "abhishek"); } catch { /* private mode */ } }, []);
   const switchMe = (id: string) => { setMe(id); try { localStorage.setItem("actor", id); } catch { /* ignore */ } };
@@ -32,7 +32,7 @@ export default function App() {
   if (!state) return <div className="grid min-h-screen place-items-center text-[13px] text-dim">Connecting to the factory…</div>;
   const team = Object.fromEntries(state.team.map(m => [m.id, m])) as Record<string, Member>;
   const p = route.project ? state.project : null;
-  const ctx = { state, events, live: !!live, post: (path: string, body: object) => post(path, body, me), text, team, me };
+  const ctx = { state, events, live: !!live, post: (path: string, body: object) => post(path, body, me), text, getJSON, team, me };
 
   return (
     <div className="flex min-h-screen">
@@ -50,19 +50,22 @@ export default function App() {
           route.page === "world-model" ? <WorldModel {...ctx} /> :
           route.page === "traceability" ? <Traceability {...ctx} /> :
           route.page === "audit" ? <AuditTrail {...ctx} /> :
-          route.page === "team" ? <Team {...ctx} /> : <Overview {...ctx} />}
+          route.page === "team" ? <Team {...ctx} /> :
+          route.page === "agents" ? <Agents {...ctx} /> :
+          route.page === "memory" ? <Memory {...ctx} /> : <HomePage {...ctx} />}
       </main>
     </div>
   );
 }
 
-type Ctx = { state: State; events: Ev[]; live: boolean; post: (p: string, b: object) => Promise<{ error?: string; id?: string }>; text: (p: string) => Promise<string>; team: Record<string, Member>; me: string };
+type Ctx = { state: State; events: Ev[]; live: boolean; post: (p: string, b: object) => Promise<{ error?: string; id?: string; started?: string }>; text: (p: string) => Promise<string>; getJSON: <T>(p: string) => Promise<T | null>; team: Record<string, Member>; me: string };
 
 /* ---------- sidebar ---------- */
 function Sidebar({ state, project, page, me, setMe, live }: { state: State; project?: string; page: string; me: string; setMe: (id: string) => void; live: boolean }) {
   const nav = [
-    ["overview", "Overview", Home], ["requirements", "Requirements", ShieldAlert], ["work-orders", "Work Orders", ListChecks],
-    ["world-model", "World Model", FlaskConical], ["traceability", "Traceability", Network], ["audit", "Audit Trail", Activity], ["team", "Team", Users],
+    ["overview", "Home", Home], ["agents", "Agents", Bot], ["memory", "Memory", Brain], null,
+    ["requirements", "Requirements", ShieldAlert], ["work-orders", "Work Orders", ListChecks], ["world-model", "World Model", FlaskConical],
+    ["traceability", "Traceability", Network], null, ["audit", "Audit Trail", Activity], ["team", "Team", Users],
   ] as const;
   const humans = state.team.filter(m => m.kind === "human");
   return (
@@ -80,11 +83,11 @@ function Sidebar({ state, project, page, me, setMe, live }: { state: State; proj
           <Boxes size={15} /> Projects
         </a>
         {project && <div className="my-2 border-t border-line" />}
-        {project && nav.map(([k, l, Icon]) => (
+        {project && nav.map((n, i) => !n ? <div key={i} className="my-2 border-t border-line" /> : (([k, l, Icon]) => (
           <a key={k} href={`#/p/${project}/${k}`} className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 ${page === k ? "bg-white/[.06] text-ink" : "text-mute hover:bg-white/[.04] hover:text-ink"}`}>
             <Icon size={15} /> {l}
           </a>
-        ))}
+        ))(n))}
       </nav>
       <div className="space-y-3 border-t border-line p-3 text-[12px]">
         <div className="flex items-center gap-2 text-dim">
@@ -152,35 +155,227 @@ function NewProject({ state, post, onClose }: { state: State; post: Ctx["post"];
   );
 }
 
-/* ---------- overview ---------- */
-function Overview({ state, team }: Ctx) {
+/* ---------- home: agent-first, like Software Factory ---------- */
+const AGENT_ICON: Record<string, string> = {
+  planner: "◇", memory: "◎", safety: "△", "coder-claude": "</>", "coder-codex": "</>", gate: "✓", world: "∿", simulation: "?", evidence: "▤", reviewer: "⚖", actions: "↗",
+};
+const SUGGEST = [
+  ["build", "Let adults take larger meal boluses"],
+  ["build", "Add an alarm when the extended bolus is interrupted"],
+  ["simulate", "What if a child eats 80 g and the parent types the dose 10x?"],
+  ["simulate", "What if an adult eats 150 g of carbs?"],
+] as const;
+
+function HomePage({ state, post, team, me, live }: Ctx) {
   const p = state.project!;
-  const wos = state.work_orders || [];
-  const sims = wos.reduce((n, w) => n + (w.world?.results.length || 0), 0);
-  const stats = [
-    ["Hazards", state.hazards?.length], ["Safety requirements", state.requirements?.length], ["Work orders", wos.length],
-    ["Approved", wos.filter(w => w.status === "Approved").length], ["Patient simulations", sims],
+  const [text, setText] = useState("");
+  const [mode, setMode] = useState<"build" | "simulate">("build");
+  const [err, setErr] = useState("");
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const agents = state.team.filter(m => m.kind === "agent" && m.id !== "coder-codex");
+  const live_ = state.agents || {};
+  const busy = state.status?.busy;
+  const wos = [...(state.work_orders || [])].reverse().slice(0, 5);
+  const submit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!text.trim()) return;
+    const r = await post("ask", { text, skill: mode, project: p.id });
+    if (r.error) return setErr(r.error);
+    setErr(""); setText("");
+    go(r.id ? `/p/${p.id}/work-orders/${r.id}` : `/p/${p.id}/world-model`);
+  };
+  const connected: [string, boolean, string][] = [
+    ["Claude Code", true, "coding agent"], ["8090 Software Factory", !!state.status?.software_factory, "work orders via MCP"],
+    ["HydraDB", state.status?.memory === "HydraDB", "shared memory"], ["Composio", !!state.status?.composio, "GitHub + Slack actions"],
+    ["Vercel", true, "hosting"],
   ];
   return (
     <>
-      <PageHead title={p.name} sub={<>{state.devices[p.device]} · {p.standard} · repo <code className="text-ink">{p.repo}</code></>}>
-        <Button primary onClick={() => go(`/p/${p.id}/work-orders`)}><Plus size={14} /> Work order</Button>
+      <div className="mx-auto mt-6 max-w-2xl md:mt-12">
+        <h1 className="mb-1 text-center text-[26px] font-semibold tracking-tight">{greet}, {team[me]?.name.split(" ")[0]}.</h1>
+        <p className="mb-6 text-center text-[13px] text-dim">{p.name} · your agent team is ready</p>
+        <form onSubmit={submit} className="rounded-xl border border-line bg-panel focus-within:border-white/20">
+          <textarea value={text} onChange={e => setText(e.target.value)} rows={2} aria-label="What should the factory work on?"
+            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
+            placeholder={mode === "build" ? "What should the factory build? Agents plan, code, test and simulate it." : "Ask the world model a what-if question."}
+            className="block w-full resize-none bg-transparent px-4 pt-3.5 text-[14px] outline-none placeholder:text-dim" />
+          <div className="flex items-center gap-2 px-3 pb-3 pt-1">
+            <div className="flex overflow-hidden rounded-md border border-line text-[12px]">
+              {(["build", "simulate"] as const).map(m => (
+                <button type="button" key={m} onClick={() => setMode(m)}
+                  className={`px-2.5 py-1 ${mode === m ? "bg-white/[.08] text-ink" : "text-mute hover:text-ink"}`}>{m === "build" ? "Build" : "Simulate"}</button>
+              ))}
+            </div>
+            <span className="text-[11px] text-dim">{mode === "build" ? "creates a work order and runs the agent team" : "Simulation Agent + world model"}</span>
+            <button type="submit" disabled={!live || busy || !text.trim()} aria-label="Send"
+              className="ml-auto grid h-7 w-7 place-items-center rounded-full bg-ink text-bg disabled:opacity-30"><ArrowUp size={15} /></button>
+          </div>
+        </form>
+        {err && <p className="mt-2 text-[12px] text-bad">{err}</p>}
+        {busy && <p className="mt-2 text-[12px] text-run">Agents are working on {state.status?.running || "a simulation"}…</p>}
+        <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+          {SUGGEST.map(([m, t]) => (
+            <button key={t} onClick={() => { setMode(m); setText(t); }}
+              className="rounded-full border border-line px-2.5 py-1 text-[12px] text-mute hover:border-white/20 hover:text-ink">{t}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mx-auto mt-14 max-w-5xl">
+        <Section title="Your agent team" aside={<a href={`#/p/${p.id}/agents`} className="hover:text-ink">All agents</a>}>
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+            {agents.map(a => {
+              const l = live_[a.id];
+              const st = l?.state || "idle";
+              const t = st === "working" ? "run" : st === "blocked" ? "bad" : l?.done ? "ok" : "idle";
+              return (
+                <div key={a.id} className={`rounded-lg border bg-panel p-3 ${t === "run" ? "border-run/40" : "border-line"}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="grid h-6 w-6 place-items-center rounded-md bg-white/[.05] font-mono text-[11px] text-acc">{AGENT_ICON[a.id] || "◇"}</span>
+                    <span className="truncate text-[13px] font-medium">{a.name}</span>
+                    <span className={`ml-auto h-1.5 w-1.5 shrink-0 rounded-full ${t === "run" ? "pulse bg-run" : t === "bad" ? "bg-bad" : t === "ok" ? "bg-ok" : "bg-[#2a2f36]"}`} />
+                  </div>
+                  <p className="mt-2 line-clamp-2 min-h-[2.6em] text-[12px] leading-snug text-mute">{st === "working" ? l?.msg : l?.msg || a.role}</p>
+                  <div className="mt-1.5 text-[11px] text-dim">{l ? `${l.done} steps done${l.wo ? ` · ${l.wo}` : ""}` : a.role}</div>
+                </div>
+              );
+            })}
+          </div>
+        </Section>
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+          <Section title="Recent work orders" aside={<a href={`#/p/${p.id}/work-orders`} className="hover:text-ink">View all</a>}>
+            <div className="divide-y divide-line rounded-lg border border-line">
+              {wos.length ? wos.map(w => (
+                <a key={w.id} href={`#/p/${p.id}/work-orders/${w.id}`} className="flex items-center gap-3 px-3 py-2.5 text-[13px] hover:bg-white/[.02]">
+                  <span className="font-mono text-[12px] text-dim">{w.id}</span>
+                  <span className="min-w-0 flex-1 truncate">{w.title}</span>
+                  <Badge>{w.status}</Badge>
+                </a>
+              )) : <p className="px-3 py-5 text-center text-[13px] text-dim">Ask the factory to build something above.</p>}
+            </div>
+          </Section>
+          <Section title="Connected">
+            <ul className="space-y-2 text-[13px]">
+              {connected.map(([n, on, what]) => (
+                <li key={n} className="flex items-center gap-2.5">
+                  <span className={`h-1.5 w-1.5 rounded-full ${on ? "bg-ok" : "bg-[#2a2f36]"}`} />
+                  <span className={on ? "" : "text-mute"}>{n}</span>
+                  <span className="ml-auto text-[12px] text-dim">{on ? what : "add key to connect"}</span>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ---------- agents ---------- */
+function Agents({ state, events, team }: Ctx) {
+  const live_ = state.agents || {};
+  const agents = state.team.filter(m => m.kind === "agent");
+  const [sel, setSel] = useState(agents[0]?.id);
+  const steps = [...events].reverse().filter(e => e.agent === sel || (sel === "coder-claude" && e.agent === "coder-claude")).slice(0, 25);
+  return (
+    <>
+      <PageHead title="Agents" sub="The team that does the work. Each agent has one job; people approve, agents execute, and every step is recorded." />
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+        <ul className="space-y-1">
+          {agents.map(a => {
+            const l = live_[a.id];
+            return (
+              <li key={a.id}>
+                <button onClick={() => setSel(a.id)} className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left ${sel === a.id ? "bg-white/[.06]" : "hover:bg-white/[.03]"}`}>
+                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-white/[.05] font-mono text-[11px] text-acc">{AGENT_ICON[a.id] || "◇"}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[13px] font-medium">{a.name}</span>
+                    <span className="block truncate text-[11px] text-dim">{a.role}</span>
+                  </span>
+                  <span className="ml-auto shrink-0 text-[11px] text-dim">{l?.state === "working" ? <span className="text-run">working</span> : l ? `${l.done} done` : "idle"}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <Section title={`${team[sel || ""]?.name || ""} · activity`}>
+          {steps.length ? (
+            <ol className="space-y-3 border-l border-line pl-4">
+              {steps.map((e, i) => (
+                <li key={i} className="relative text-[13px]">
+                  <span className={`absolute -left-[21px] top-1.5 h-2 w-2 rounded-full ${e.state === "blocked" ? "bg-bad" : e.state === "working" ? "bg-run" : "bg-ok"}`} />
+                  <div className="text-[11px] text-dim">{e.wo || "world model"} · {ago(Number(e.run) + e.t)}</div>
+                  <div className={e.state === "blocked" ? "text-bad" : ""}>{e.msg}</div>
+                </li>
+              ))}
+            </ol>
+          ) : <Empty>This agent has not worked yet. Ask the factory to build something on Home.</Empty>}
+        </Section>
+      </div>
+    </>
+  );
+}
+
+/* ---------- memory (context layer) ---------- */
+function Memory({ state, post, getJSON, live }: Ctx) {
+  const [data, setData] = useState<{ backend: string; items: MemoryItem[]; hits: MemoryItem[] } | null>(null);
+  const [q, setQ] = useState("");
+  const [adding, setAdding] = useState(false);
+  const load = async (query = "") => setData((await getJSON(`memory?q=${encodeURIComponent(query)}`)) ||
+    { backend: state.status?.memory || "local", items: state.memory || [], hits: [] });
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const items = data?.hits.length ? data.hits : data?.items || [];
+  return (
+    <>
+      <PageHead title="Memory" sub={<>The organization&apos;s context layer: tickets, meeting notes, chats, emails, code notes and past runs. Agents recall it before every change. Backend: <b className="text-ink">{data?.backend === "HydraDB" ? "HydraDB" : "local (add HYDRADB_API_KEY for HydraDB)"}</b></>}>
+        <Button primary onClick={() => setAdding(true)} disabled={!live}><Plus size={14} /> Add memory</Button>
       </PageHead>
-      <div className="mb-8 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line md:grid-cols-5">
-        {stats.map(([l, v]) => (
-          <div key={String(l)} className="bg-bg px-4 py-3">
-            <div className="text-[22px] font-semibold tabular-nums">{v ?? 0}</div>
-            <div className="text-[12px] text-mute">{l}</div>
+      <form onSubmit={e => { e.preventDefault(); load(q); }} className="mb-6 flex gap-2">
+        <div className="relative flex-1">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-dim" />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Ask what the agents would recall, e.g. bigger meal boluses for adults"
+            className={inputCls + " pl-8"} aria-label="Search memory" />
+        </div>
+        <Button type="submit" disabled={!live}>Recall</Button>
+      </form>
+      {data?.hits.length ? <p className="-mt-3 mb-3 text-[12px] text-dim">Top {data.hits.length} items the agents would read for this request.</p> : null}
+      <div className="divide-y divide-line rounded-lg border border-line">
+        {items.map(m => (
+          <div key={m.id} className="px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className="rounded bg-white/[.05] px-1.5 py-0.5 font-mono text-[10px] uppercase text-mute">{m.kind.replace("_", " ")}</span>
+              <span className="text-[13px] font-medium">{m.title}</span>
+              {m.score !== undefined && <span className="ml-auto font-mono text-[11px] text-dim">relevance {m.score}</span>}
+            </div>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-mute">{m.text}</p>
           </div>
         ))}
+        {!items.length && <p className="px-4 py-6 text-center text-[13px] text-dim">Nothing remembered yet.</p>}
       </div>
-      <Section title="Work orders" aside={<a href={`#/p/${p.id}/work-orders`} className="hover:text-ink">View all</a>}>
-        <WOTable wos={wos.slice(-5).reverse()} team={team} pid={p.id} />
-      </Section>
-      <Section title="Recent activity" aside={<a href={`#/p/${p.id}/audit`} className="hover:text-ink">Audit trail</a>}>
-        <AuditTable rows={state.audit.slice(0, 8)} team={team} />
-      </Section>
+      {adding && <AddMemory post={post} onClose={() => { setAdding(false); load(); }} />}
     </>
+  );
+}
+
+function AddMemory({ post, onClose }: { post: Ctx["post"]; onClose: () => void }) {
+  const [kind, setKind] = useState("meeting");
+  const [title, setTitle] = useState("");
+  const [text, setText] = useState("");
+  const submit = async (e: React.FormEvent) => { e.preventDefault(); await post("memory", { kind, title, text }); onClose(); };
+  return (
+    <Modal title="Add to memory" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-4">
+        <Field label="Type">
+          <select className={inputCls} value={kind} onChange={e => setKind(e.target.value)}>
+            {["meeting", "chat", "email", "work_order", "code", "safety_finding"].map(k => <option key={k} value={k}>{k.replace("_", " ")}</option>)}
+          </select>
+        </Field>
+        <Field label="Title"><input className={inputCls} value={title} onChange={e => setTitle(e.target.value)} placeholder="Design review, Nov 14" /></Field>
+        <Field label="Content"><textarea rows={5} className={inputCls} value={text} onChange={e => setText(e.target.value)} placeholder="Paste meeting notes, a Slack thread or an email." /></Field>
+        <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button primary type="submit">Save</Button></div>
+      </form>
+    </Modal>
   );
 }
 

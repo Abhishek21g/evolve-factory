@@ -69,6 +69,11 @@ def seed():
     return 0
 
 
+def items():
+    """Everything the factory remembers (newest first)."""
+    return list(reversed(_local_items()))
+
+
 def recall(query, k=5):
     if _key():
         try:
