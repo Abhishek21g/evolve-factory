@@ -92,9 +92,14 @@ FALLBACK = {  # deterministic hazard analysis when the LLM is unavailable: every
 }
 
 
-def safety_analysis(intent, spec, hits, dev):
-    ev("safety", "working", "Hazard analysis: mapping the request to hazards and requirements")
-    mem = "\n".join(f"- [{h['kind']}] {h['title']}: {h['text']}" for h in hits) or "(none)"
+def safety_msg(lessons):
+    return "Hazard analysis: mapping the request to hazards and requirements" + (
+        f", checking {len(lessons)} past verdict{'s' if len(lessons) > 1 else ''} from {lessons[0]['source']}" if lessons else "")
+
+
+def safety_analysis(intent, spec, hits, dev, lessons):
+    ev("safety", "working", safety_msg(lessons), lessons=lessons)
+    mem = "\n".join(f"- [{h['kind']}] {h['title']}: {h['text']}" for h in hits + lessons) or "(none)"
     out, err = ask_json(SAFETY_PROMPT.format(intent=intent, spec=json.dumps(spec)[:6000], mem=mem,
                                              device=dev["label"], standard=dev["standard"]))
     if not out:
@@ -104,10 +109,45 @@ def safety_analysis(intent, spec, hits, dev):
     return out
 
 
-def recall(intent):
-    hits = memory.recall(intent, k=5)
-    return (hits, f"Recalled {len(hits)} items from {memory.backend()} (tickets, meetings, chats, emails, code)",
-            [{k: h.get(k) for k in ("kind", "title", "text", "score")} for h in hits])
+def _where(info):
+    return f"HydraDB · {info['ms']} ms" if info["backend"] == "HydraDB" else "local memory (HydraDB unreachable)"
+
+
+def _slim(h, info):
+    return {**{k: h.get(k) for k in ("kind", "title", "text", "score", "collection", "synthetic")},
+            "source": f"{'HydraDB' if info['backend'] == 'HydraDB' else 'local'} · {h.get('collection')}"}
+
+
+def recall(intent, dev):
+    hits, info = memory.search(intent, k=6, project=dev["id"])
+    return (hits, f"Recalled {len(hits)} items from {_where(info)}: org memory and {dev['label'].lower()} regulatory knowledge",
+            [_slim(h, info) for h in hits], info)
+
+
+def past_runs(intent, dev):
+    """Similar finished work orders from HydraDB's factory_lessons: the latest run of each request, best match first."""
+    hits, info = memory.search(intent, k=8, project=dev["id"], collections=(memory.LESSONS,), recency=0.6)
+    best = {}  # request -> (run time from the lesson id, hit); insertion order keeps HydraDB's ranking
+    for h in hits:
+        req, ts = (h.get("meta") or {}).get("request", h["title"]).lower(), h["id"].rsplit("-", 1)[-1]
+        ts = int(ts) if ts.isdigit() else 0
+        if h.get("score", 0) >= 0.3 and ts >= best.get(req, (-1, None))[0]:
+            best[req] = (ts, h)
+    lessons = [{**_slim(h, info), "summary": (h.get("meta") or {}).get("summary", h["title"])} for _, h in best.values()][:3]
+    msg = (f"Recalled {len(lessons)} similar past work order{'s' if len(lessons) > 1 else ''} from {_where(info)}: {lessons[0]['summary']}"
+           if lessons else f"No similar past work order in {_where(info)} yet; this run's lesson will be saved for the next one")
+    return lessons, msg, info
+
+
+def write_lesson(wo, intent, dev, passed, reason, headline, replay_of=None):
+    """The factory learns: store what this work order taught (verdict, failed SRs and hazards, the fix) in HydraDB."""
+    evs = [json.loads(l) for l in open(emit.FEED) if l.strip()]
+    evs = [e for e in evs if e["run"] == emit.RUN and e.get("wo") == wo]
+    item = memory.lesson_item(wo, dev["id"], intent, passed, reason, headline, evs, store.diff(wo), replay_of)
+    info = memory.remember([item])
+    ev("memory", "done", f"Saved lesson to {_where(info)} ({info['collection']}): {item['meta']['summary']}", wo=wo,
+       lesson={"title": item["title"], "summary": item["meta"]["summary"], "source": f"{info['backend']} · {info['collection']}"},
+       recall=info)
 
 
 def build(intent, wo=None):
@@ -117,15 +157,17 @@ def build(intent, wo=None):
         if os.path.exists(os.path.join(RUNS, f"{wo}.{ext}")):
             os.remove(os.path.join(RUNS, f"{wo}.{ext}"))
     ev("planner", "working", f'New request from the operator: "{intent}"', wo=wo, title=intent)
-    hits, msg, mem = recall(intent)
-    ev("memory", "done", msg, wo=wo, memory=mem)
     dev = project_device(wo)
+    hits, msg, mem, info = recall(intent, dev)
+    ev("memory", "done", msg, wo=wo, memory=mem, recall=info)
+    lessons, msg, info = past_runs(intent, dev)
+    ev("planner", "done", msg, wo=wo, lessons=lessons, recall=info)
     spec = json.load(open(os.path.join(ROOT, dev["repo"], "safety.json")))
-    analysis = safety_analysis(intent, spec, hits, dev)
+    analysis = safety_analysis(intent, spec, hits, dev, lessons)
     ev("planner", "done", f"Plan ready for {wo}; Claude Code works in its own git worktree", wo=wo, title=intent)
 
     text = (f"{intent}\n\nSafety Analyst guidance: {analysis.get('guidance', '')}\n\nRelevant organization memory:\n"
-            + "\n".join(f"- [{h['kind']}] {h['title']}: {h['text']}" for h in hits))
+            + "\n".join(f"- [{h['kind']}] {h['title']}: {h['text']}" for h in hits + lessons))
     tf = os.path.join(RUNS, f"{wo}.request.txt")
     open(tf, "w").write(text)
     md = os.path.join(RUNS, f"{wo}.md")
@@ -148,11 +190,10 @@ def build(intent, wo=None):
     reason = "" if passed else block_reason(wo, report)
 
     ev("evidence", "working", "Generating safety evidence pack")
-    path, summary = evidence_pack(wo, intent, analysis, hits, passed, reason, dev, spec)
+    path, summary = evidence_pack(wo, intent, analysis, hits + lessons, passed, reason, dev, spec)
     ev("evidence", "done", f"Evidence pack ready: {os.path.relpath(path, ROOT)}", wo=wo, evidence=summary)
 
-    memory.remember([{"id": f"run-{wo}", "kind": "run", "title": f"{wo}: {intent}",
-                      "text": f"Result {'PASS' if passed else 'BLOCKED'}. {summary['headline']}"}])
+    write_lesson(wo, intent, dev, passed, reason, summary["headline"])
     verdict = (f"{wo} approved by deterministic checks: ready to merge with evidence" if passed
                else f"{wo} BLOCKED: {reason}. Not mergeable; evidence attached")
     ev("reviewer", "done" if passed else "blocked", verdict, wo=wo)
@@ -401,9 +442,12 @@ def replay(src, wo=None):
                 os.remove(out(ext))
         json.dump(shown, open(out("commits.json"), "w"))
     prev, world, checked = 0.0, None, None
+    dev, intent, live = project_device(wo), rec[0].get("title", ""), {}
     for e in rec:
         time.sleep(min(max(e["t"] - prev, 0) / speed, cap))
         prev = e["t"]
+        if e.get("lesson"):  # memory recall and the lesson write-back happen live, not from the recording
+            continue
         kw = {k: v for k, v in e.items() if k not in ("run", "t", "agent", "state", "msg", "wo")}
         kw.setdefault("replay", {"wo": old, "at": int(float(rec[0]["run"]))})  # the UI says which real run this is
         if e["agent"] == "gate" and e["state"] == "working":
@@ -434,9 +478,20 @@ def replay(src, wo=None):
                             body = re.sub(r"^(\*\*Decision:\*\*.*)$", lambda m: m.group(1) + "\n" + checked["label"], body, count=1, flags=re.M)
                         open(out(ext), "w").write(body)
         msg = sub(e["msg"])
-        if e["agent"] == "memory" and e["state"] == "done":  # the context layer answers live, not from the recording
-            _, msg, kw["memory"] = recall(rec[0].get("title", ""))
+        if e["agent"] == "memory" and e["state"] == "done":
+            _, msg, kw["memory"], kw["recall"] = recall(intent, dev)
+            live["lessons"], live["msg"], live["info"] = past_runs(intent, dev)
+        if "lessons" in e or (e["agent"] == "safety" and e["state"] == "working" and "lessons" in live):
+            kw["lessons"], kw["recall"] = live.get("lessons", []), live.get("info")
+            msg = live.get("msg", msg) if e["agent"] == "planner" else safety_msg(kw["lessons"])
         emit.emit(e["agent"], e["state"], msg, **kw)
+        if e["agent"] == "memory" and e["state"] == "done" and not any("lessons" in r for r in rec):  # recorded before the planner recalled past runs
+            emit.emit("planner", "done", live["msg"], lessons=live["lessons"], recall=live["info"], **({"wo": wo} if wo else {}))
+        if e["agent"] == "evidence" and e["state"] == "done" and wo:
+            last = rec[-1]
+            reason = re.search(r"BLOCKED: (.*?)\. Not mergeable", sub(last["msg"]))
+            write_lesson(wo, intent, dev, last["agent"] == "reviewer" and last["state"] == "done", reason.group(1) if reason else "",
+                         (kw.get("evidence") or {}).get("headline", ""), replay_of=old)
         if e["agent"] == "gate" and e["state"] == "blocked":
             time.sleep(holds.pop(0) if len(holds) > 1 else holds[0])
     last, evd = rec[-1], next((e["evidence"] for e in reversed(rec) if e.get("evidence")), {})
