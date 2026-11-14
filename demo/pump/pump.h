@@ -7,12 +7,19 @@
 #define MIN_BG_FOR_BOLUS  70    /* SR-3 mitigates H-3 hypoglycemia (mg/dL) */
 #define OCCLUSION_KPA     80.0  /* SR-4 mitigates H-4 missed delivery from blocked line */
 #define WATCHDOG_MS       2000  /* SR-5 mitigates H-5 runaway delivery on controller hang */
+/* WO-200 extended bolus. MAX_BOLUS_U stays 10 U (Oct 28 clinical safety review). */
+#define MAX_EXTENDED_U    25.0  /* adult extended total; non-adults stay at MAX_BOLUS_U (H-1) */
+#define MAX_EXT_RATE_U_H  MAX_BOLUS_U /* extended delivery never exceeds 10 U in any hour (H-1) */
 
 typedef enum { OK = 0, REJECT_LIMIT, REJECT_DAILY, REJECT_LOW_BG, ALARM_OCCLUSION, ALARM_WATCHDOG } pump_status;
 
 typedef struct {
     double delivered_today_u;
     long last_heartbeat_ms;
+    int adult;
+    double confirm_u;      /* last over-limit entry rejected by request_bolus; confirms a large extended entry */
+    double ext_per_min_u;  /* active extended bolus: dose per minute */
+    int ext_minutes_left;
 } pump_state;
 
 pump_status request_bolus(pump_state *s, double units, int bg_mg_dl);
