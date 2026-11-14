@@ -99,7 +99,8 @@ export function useFactory() {
     return r.ok ? null : "Could not start the job.";
   }, []);
 
-  const evidenceUrl = (wo: string) => (base.current === null ? null : `${base.current}/api/evidence?wo=${encodeURIComponent(wo)}`);
+  const evidenceUrl = (wo: string) =>
+    base.current === null ? `/evidence-${encodeURIComponent(wo)}.md` : `${base.current}/api/evidence?wo=${encodeURIComponent(wo)}`;
 
   return { mode, events, status, send, evidenceUrl };
 }
