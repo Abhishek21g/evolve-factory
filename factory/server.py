@@ -12,6 +12,8 @@ GET  /api/trace/search?q=&project= repo files, doc sections and code lines for t
 GET  /api/record?project=ID        living source of record: each requirement's sync status against code, tests, links, simulation
 GET  /api/monitors?project=ID      monitoring agents (automations) and their run history
 GET  /api/monitors/evidence?run=R  one monitor run's evidence (report markdown + data)
+GET  /api/supply?project=ID        suppliers, parts/BOM with risk flags, finance (factory/supply.py, sample data labelled)
+GET  /api/supply/tower[?project=ID] control tower: one project, or every project
 GET  /api/connect/composio         redirects to a Composio Connect Link to authorize GitHub (one time)
 POST /api/projects   {name, device}                 create a project (imports its hazard log)
 POST /api/workorders {project, title, description}  create a work order
@@ -22,6 +24,8 @@ POST /api/trace/links/delete {project, id}          remove a trace link
 POST /api/trace/tests {project}                     rerun the project's requirement tests
 POST /api/record/resync {project}                   resync the source of record now (simulation evidence first, cached)
 POST /api/monitors/run {id, project}                run a monitor now (in the background)
+POST /api/supply/suppliers {project, name, tier, parent, kind, supplies, contact, email, affects}   connect a supplier team
+POST /api/supply/deliverables {project, supplier, deliverable, title, kind, url, item, expires}  a supplier submits a deliverable
 POST actions carry the acting person in the X-Actor header (recorded in the audit trail).
 Everything else is served from web/out. Keys are read from .env and never sent to the browser.
 """
@@ -41,6 +45,7 @@ import memory  # noqa: E402
 import monitors  # noqa: E402
 import record  # noqa: E402
 import store  # noqa: E402
+import supply  # noqa: E402
 import worldmodel  # noqa: E402
 import tracelinks  # noqa: E402
 
@@ -195,6 +200,11 @@ class H(SimpleHTTPRequestHandler):
         if u.path == "/api/monitors/evidence":
             ev = monitors.evidence(q.get("run", ""))
             return self.send(200, ev) if ev else self.send(404, {"error": "no evidence for this run"})
+        if u.path == "/api/supply/tower" and not q.get("project"):
+            return self.send(200, {"projects": supply.towers(job["wo"] if busy() else None)})
+        if u.path in ("/api/supply", "/api/supply/tower"):
+            v = supply.view(q["project"]) if u.path == "/api/supply" else supply.tower(q["project"], job["wo"] if busy() else None)
+            return self.send(200, v) if v else self.send(404, {"error": "unknown project"})
         if u.path.startswith("/api/"):
             return self.send(404, {"error": "not found"})
         return super().do_GET()
@@ -268,6 +278,20 @@ class H(SimpleHTTPRequestHandler):
                 if rid:
                     store.log(actor, "ran monitor", next(m["name"] for m in monitors.MONITORS if m["id"] == mid), clip("project", 60))
                 return self.send(202, {"run": rid, "already_running": rid is None})
+            if u.path in ("/api/supply/suppliers", "/api/supply/deliverables"):
+                if not any(p["id"] == clip("project", 60) for p in store._load()["projects"]):
+                    return self.send(404, {"error": "unknown project"})
+                dev = store.device(clip("project", 60))
+                if u.path == "/api/supply/suppliers":
+                    sup = supply.invite(dev["id"], store.safety_spec(dev), body)
+                    store.log(actor, "connected supplier team", sup["id"], f"{sup['name']} (tier {sup['tier']}, {len(sup['deliverables'])} deliverables requested)", clip("project", 60))
+                    return self.send(201, sup)
+                d = supply.submit(dev["id"], store.safety_spec(dev), actor, body)
+                store.log(actor, "recorded supplier deliverable", d["item"], f"{d['title']} from {d['supplier_name']} ({d['link']})", clip("project", 60))
+                if composio_status() == "connected":  # fire-and-forget: never delays the response
+                    subprocess.Popen([PY, os.path.join(ROOT, "factory/actions.py"), "supplier", json.dumps(d)],
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return self.send(201, d)
             if u.path == "/api/whatif":
                 if not clip("text") or not start("whatif", clip("text"), project=clip("project", 60)):
                     return self.send(409, {"error": "factory busy or empty question"})
