@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity, ArrowUp, Bot, Boxes, Brain, ChevronDown, FileCheck2, FlaskConical, GitBranch, GitPullRequest, Home, ListChecks, Network, Plus, Play, Search, ShieldAlert, Users,
+  Activity, ArrowUp, Bot, Boxes, Brain, FileCheck2, FlaskConical, GitBranch, GitPullRequest, Home, ListChecks, Network, Plus, Play, Search, ShieldAlert, Users,
 } from "lucide-react";
 import { useFactoryState, type MemoryItem, type Member, type State, type WorkOrder } from "@/lib/api";
 import type { Ev } from "@/lib/feed";
@@ -9,7 +9,7 @@ import { WorldChart } from "@/components/WorldChart";
 import { TraceGraph } from "@/components/TraceGraph";
 import { AGENT_ICON, AgentPage, AgentTeam } from "@/components/Agents";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
-import { Avatar, Badge, Button, Field, Modal, PageHead, Replayed, Section, Table, Who, ago, inputCls } from "@/components/ui";
+import { Ago, Avatar, Badge, Button, Field, Modal, PageHead, Replayed, Section, Table, Who, ago, inputCls } from "@/components/ui";
 
 /* ---------- routing: #/p/<project>/<page>[/<wo>] ---------- */
 function useRoute() {
@@ -79,7 +79,6 @@ function Sidebar({ state, project, page, me, setMe, live }: { state: State; proj
           <div className="truncate text-[13px] font-semibold">{state.project && project ? state.project.name : "Certus Factory"}</div>
           <div className="truncate text-[11px] text-dim">{project ? "Certus Factory" : "Software factory for physical AI"}</div>
         </div>
-        <ChevronDown size={14} className="ml-auto text-dim" />
       </a>
       {project && <ProjectSwitcher state={state} project={project} page={page} />}
       <nav className="flex-1 space-y-0.5 p-2 text-[13px]">
@@ -123,7 +122,7 @@ function Projects({ state, post, team, live }: Ctx) {
         rows={state.projects.map(p => [
           <a key="n" href={`#/p/${p.id}/overview`} className="whitespace-nowrap font-medium hover:underline">{p.name}</a>,
           <span key="d" className="whitespace-nowrap">{state.devices[p.device] || p.device}</span>, <span key="s" className="text-mute">{p.standard}</span>,
-          <span key="w" className="text-mute">{p.world_model}</span>, <Who key="o" m={team[p.owner]} />, <span key="c" className="whitespace-nowrap text-mute">{ago(p.created)}</span>,
+          <span key="w" className="text-mute">{p.world_model}</span>, <Who key="o" m={team[p.owner]} />, <span key="c" className="whitespace-nowrap text-mute"><Ago ts={p.created} /></span>,
         ])} />
       {open && <NewProject state={state} post={post} onClose={() => setOpen(false)} />}
     </>

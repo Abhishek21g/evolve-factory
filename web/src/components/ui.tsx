@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { Member } from "@/lib/api";
 
 const STATUS: Record<string, string> = {
@@ -120,3 +120,10 @@ export const ago = (ts: number) => {
   const s = Math.max(0, Date.now() / 1000 - ts);
   return s < 60 ? "just now" : s < 3600 ? `${Math.floor(s / 60)}m ago` : s < 86400 ? `${Math.floor(s / 3600)}h ago` : `${Math.floor(s / 86400)}d ago`;
 };
+
+/** `ago` for pages in the prerendered HTML: empty on first paint so hydration matches, then the real age. */
+export function Ago({ ts }: { ts: number }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  return <>{mounted ? ago(ts) : ""}</>;
+}
