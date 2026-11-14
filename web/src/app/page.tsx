@@ -7,7 +7,7 @@ import { useFactoryState, type MemoryItem, type Member, type State, type WorkOrd
 import type { Ev } from "@/lib/feed";
 import { WorldChart } from "@/components/WorldChart";
 import { TraceGraph } from "@/components/TraceGraph";
-import { Avatar, Badge, Button, Field, Modal, PageHead, Section, Table, Who, ago, inputCls } from "@/components/ui";
+import { Avatar, Badge, Button, Field, Modal, PageHead, Replayed, Section, Table, Who, ago, inputCls } from "@/components/ui";
 
 /* ---------- routing: #/p/<project>/<page>[/<wo>] ---------- */
 function useRoute() {
@@ -477,7 +477,7 @@ function WorkOrderView({ state, events, post, text, team, id, live }: Ctx & { id
   return (
     <>
       <div className="mb-1 text-[12px] text-dim"><a href={`#/p/${w.project}/work-orders`} className="hover:text-ink">Work Orders</a> / {w.id}</div>
-      <PageHead title={w.title} sub={<span className="inline-flex flex-wrap items-center gap-2"><Badge>{w.status}</Badge> requested by <Who m={team[w.requested_by]} /> · {ago(w.created)}</span>}>
+      <PageHead title={w.title} sub={<span className="inline-flex flex-wrap items-center gap-2"><Badge>{w.status}</Badge> requested by <Who m={team[w.requested_by]} /> · {ago(w.created)} <Replayed r={run.find(e => e.replay)?.replay} /></span>}>
         {w.evidence && <Button onClick={() => open("evidence", `Evidence pack · ${w.id}`)}><FileCheck2 size={14} /> Evidence</Button>}
         {w.commits.length > 0 && <Button onClick={() => open("diff", `Code change · ${w.id}`)}><GitBranch size={14} /> Code change</Button>}
         {pr && <Button onClick={() => window.open(pr, "_blank", "noopener")}><GitPullRequest size={14} /> Pull request</Button>}
@@ -531,7 +531,8 @@ function WorldModel({ state, events, post, live }: Ctx) {
   const p = state.project!;
   const [q, setQ] = useState("");
   const [err, setErr] = useState("");
-  const latest = [...events].reverse().find(e => e.world?.question)?.world;
+  const latestEv = [...events].reverse().find(e => e.world?.question);
+  const latest = latestEv?.world;
   const thinking = state.status?.job === "whatif";
   const ask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -548,7 +549,7 @@ function WorldModel({ state, events, post, live }: Ctx) {
         <Button primary type="submit" disabled={!live || state.status?.busy}><FlaskConical size={14} /> Simulate</Button>
       </form>
       {err && <p className="-mt-6 mb-6 text-[12px] text-bad">{err}</p>}
-      <Section title={latest?.question ? `“${latest.question}”` : "Latest what-if"} aside={thinking ? "Simulation Agent is building scenarios…" : latest ? "current firmware" : undefined}>
+      <Section title={latest?.question ? `“${latest.question}”` : "Latest what-if"} aside={thinking ? "Simulation Agent is building scenarios…" : latestEv?.replay ? <Replayed r={latestEv.replay} /> : latest ? "current firmware" : undefined}>
         {latest ? <WorldChart world={latest} /> : <Empty>Ask a question: the Simulation Agent turns it into scenarios and the world model answers.</Empty>}
       </Section>
       <Section title="Gate scenarios" aside="run on every work order">
