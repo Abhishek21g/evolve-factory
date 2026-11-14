@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity, ArrowUp, Bot, Boxes, Brain, FileCheck2, FlaskConical, GitBranch, GitPullRequest, Home, ListChecks, Network, Plus, Play, Search, ShieldAlert, Users,
+  Activity, ArrowUp, Bot, Orbit, Boxes, Brain, FileCheck2, FlaskConical, GitBranch, GitPullRequest, Home, ListChecks, Network, Plus, Play, Search, ShieldAlert, Users,
 } from "lucide-react";
 import { useFactoryState, type MemoryView, type Member, type State, type WorkOrder } from "@/lib/api";
 import type { Ev } from "@/lib/feed";
@@ -9,6 +9,7 @@ import { WorldChart } from "@/components/WorldChart";
 import { TraceGraph } from "@/components/TraceGraph";
 import { AGENT_ICON, AgentPage, AgentTeam } from "@/components/Agents";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
+import { LoopSummary, SimVsWorld, WorldLoopPage } from "@/components/WorldLoop";
 import { Ago, Avatar, Badge, Button, Field, Modal, PageHead, Replayed, Section, Table, Who, ago, inputCls } from "@/components/ui";
 
 /* ---------- routing: #/p/<project>/<page>[/<wo>] ---------- */
@@ -50,6 +51,7 @@ export default function App() {
           route.page === "work-orders" && route.item ? <WorkOrderView {...ctx} id={route.item} /> :
           route.page === "work-orders" ? <WorkOrders {...ctx} /> :
           route.page === "world-model" ? <WorldModel {...ctx} /> :
+          route.page === "world-loop" ? <WorldLoopPage {...ctx} id={route.item} /> :
           route.page === "traceability" ? <Traceability {...ctx} /> :
           route.page === "audit" ? <AuditTrail {...ctx} /> :
           route.page === "team" ? <Team {...ctx} /> :
@@ -67,7 +69,7 @@ type Ctx = { state: State; events: Ev[]; live: boolean; post: (p: string, b: obj
 function Sidebar({ state, project, page, me, setMe, live }: { state: State; project?: string; page: string; me: string; setMe: (id: string) => void; live: boolean }) {
   const nav = [
     ["overview", "Home", Home], ["agents", "Agents", Bot], ["memory", "Memory", Brain], null,
-    ["requirements", "Requirements", ShieldAlert], ["work-orders", "Work Orders", ListChecks], ["world-model", "Simulations", FlaskConical],
+    ["requirements", "Requirements", ShieldAlert], ["work-orders", "Work Orders", ListChecks], ["world-loop", "World Model", Orbit], ["world-model", "Simulations", FlaskConical],
     ["traceability", "Traceability", Network], null, ["audit", "Audit Trail", Activity], ["team", "Team", Users],
   ] as const;
   const humans = state.team.filter(m => m.kind === "human");
@@ -501,6 +503,7 @@ function WorkOrderView({ state, events, post, text, team, id, live }: Ctx & { id
       <PageHead title={w.title} sub={<span className="inline-flex flex-wrap items-center gap-2"><Badge>{w.status}</Badge> requested by <Who m={team[w.requested_by]} /> · {ago(w.created)} <Replayed r={run.find(e => e.replay)?.replay} /></span>}>
         {w.evidence && <Button onClick={() => open("evidence", `Evidence pack · ${w.id}`)}><FileCheck2 size={14} /> Evidence</Button>}
         {w.commits.length > 0 && <Button onClick={() => open("diff", `Code change · ${w.id}`)}><GitBranch size={14} /> Code change</Button>}
+        {w.world && <Button onClick={() => go(`/p/${w.project}/world-loop/${w.id}`)}><Orbit size={14} /> World model loop</Button>}
         {pr && <Button onClick={() => window.open(pr, "_blank", "noopener")}><GitPullRequest size={14} /> Pull request</Button>}
         <Button primary onClick={start} disabled={!live || busy || w.status === "Running"}><Play size={14} /> {w.status === "Draft" ? "Run" : "Run again"}</Button>
       </PageHead>
@@ -557,7 +560,7 @@ function WorkOrderView({ state, events, post, text, team, id, live }: Ctx & { id
 }
 
 /* ---------- world model: simulations ---------- */
-function WorldModel({ state, events, post, live }: Ctx) {
+function WorldModel({ state, events, post, live, getJSON }: Ctx) {
   const p = state.project!;
   const [q, setQ] = useState("");
   const [err, setErr] = useState("");
@@ -578,6 +581,8 @@ function WorldModel({ state, events, post, live }: Ctx) {
   return (
     <>
       <PageHead title="Simulations" sub={<>World model: {p.world_model}. Each simulation compiles the real firmware and puts it in the loop: it decides every action, step by step, in every simulated run.</>} />
+      <SimVsWorld air={air} />
+      <LoopSummary state={state} events={events} live={live} getJSON={getJSON} />
       <form onSubmit={ask} className="mb-8 flex flex-col gap-2 md:flex-row">
         <input value={q} onChange={e => setQ(e.target.value)} className={inputCls + " md:flex-1"} aria-label="Ask the world model"
           placeholder={air ? "Ask a what-if, e.g. What if the left AoA vane fails at 30 degrees?" : "Ask a what-if, e.g. What if a child eats 80 g and the parent types the dose 10x?"} />

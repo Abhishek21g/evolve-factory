@@ -5,6 +5,7 @@
 GET  /api/state?project=ID         team, projects, hazards, requirements, work orders, audit trail, trace graph
 GET  /api/events?since=N           live agent events from line N
 GET  /api/evidence?wo=WO-x         evidence pack (markdown)      GET /api/diff?wo=WO-x   code change
+GET  /api/worldmodel?wo=WO-x       world-model loop: every attempt's simulation, diagnosis, fix and re-simulation
 GET  /api/memory?q=...             org memory and recall (HydraDB, local fallback)
 GET  /api/connect/composio         redirects to a Composio Connect Link to authorize GitHub (one time)
 POST /api/projects   {name, device}                 create a project (imports its hazard log)
@@ -28,6 +29,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "factory"))
 import memory  # noqa: E402
 import store  # noqa: E402
+import worldmodel  # noqa: E402
 
 FEED = store.FEED
 STATIC = os.path.join(ROOT, "web", "out")
@@ -155,6 +157,9 @@ class H(SimpleHTTPRequestHandler):
                                    "inventory": memory.inventory(), "project": dev})
         if u.path == "/api/diff":
             return self.send(200, store.diff(wo) or "No code changes yet.", "text/plain")
+        if u.path == "/api/worldmodel":
+            loop = worldmodel.loop(wo)
+            return self.send(200, loop) if loop else self.send(404, {"error": "no simulation for this work order"})
         if u.path.startswith("/api/"):
             return self.send(404, {"error": "not found"})
         return super().do_GET()
