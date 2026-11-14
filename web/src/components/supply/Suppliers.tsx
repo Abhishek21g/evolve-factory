@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { FilePlus2, Mail, Users } from "lucide-react";
-import { Badge, Button, Field, Modal, PageHead, Section, Table, inputCls } from "@/components/ui";
+import { Badge, Button, Field, LOCAL_ONLY, Modal, PageHead, Section, Table, inputCls } from "@/components/ui";
 import { plural } from "@/lib/utils";
 import { KIND_LABEL, RISK_LABEL, type Deliverable, type PageCtx, type Part, type Risk, type Supplier, type SupplierKind, type SupplyView } from "@/lib/supply";
 import { Dot, Items, Pill, SampleNote, type Tone } from "./common";
@@ -115,7 +115,7 @@ function ComplianceFindings({ ctx, v, findings }: { ctx: PageCtx; v: SupplyView;
             <a href={supplierHref(p.id, r.supplier)} className="min-w-0 flex-1 hover:underline">{r.text}</a>
             <span className="text-sm text-dim">{RISK_LABEL[r.kind].toLowerCase()}</span>
             <Items ids={r.affects} pid={p.id} />
-            <Button onClick={() => open(r)} disabled={!ctx.live}>Open work order</Button>
+            <Button onClick={() => open(r)} disabled={!ctx.live} title={ctx.live ? undefined : LOCAL_ONLY}>Open work order</Button>
           </div>
         ))}
       </div>
@@ -140,7 +140,7 @@ export function SupplierWorkspace({ state, live, post, v, s, reload, showParts }
         <a href={`#/p/${p.id}/supply-chain`} className="hover:text-ink">Supply chain</a> / <a href={supplierHref(p.id)} className="hover:text-ink">Suppliers</a> / {s.id}
       </div>
       <PageHead title={s.name} sub={<span className="inline-flex flex-wrap items-center gap-2"><Badge tone={STATUS_TONE[s.status]}>{s.status}</Badge> Tier {s.tier} · {KIND_LABEL[s.kind]} · {s.location}{parent && <> · supplies <a href={supplierHref(p.id, parent.id)} className="underline">{parent.name}</a></>}</span>}>
-        <Button primary onClick={() => setSubmitting("new")} disabled={!live}><FilePlus2 size={14} /> Submit a deliverable</Button>
+        <Button primary onClick={() => setSubmitting("new")} disabled={!live} title={live ? undefined : LOCAL_ONLY}><FilePlus2 size={14} /> Submit a deliverable</Button>
       </PageHead>
       <SampleNote>Supplier workspace for {p.name}. {s.status === "Invited" ? "This team was connected from the factory; it sees only what is requested of it." : v.sample}</SampleNote>
       {done && (
@@ -160,7 +160,7 @@ export function SupplierWorkspace({ state, live, post, v, s, reload, showParts }
               <Expiry key="e" d={d} />,
               d.item ? <Items key="i" ids={[d.item]} pid={p.id} /> : <span key="i" className="text-dim">—</span>,
               d.url ? <a key="u" href={d.url} target="_blank" rel="noopener" className="text-[12px] text-acc hover:underline">open{d.link ? ` · ${d.link}` : ""}</a> : <span key="u" className="text-dim">—</span>,
-              d.status === "missing" || d.expiry ? <Button key="b" onClick={() => setSubmitting(d)} disabled={!live}>{d.status === "missing" ? "Submit" : "Renew"}</Button> : <span key="b" />,
+              d.status === "missing" || d.expiry ? <Button key="b" onClick={() => setSubmitting(d)} disabled={!live} title={live ? undefined : LOCAL_ONLY}>{d.status === "missing" ? "Submit" : "Renew"}</Button> : <span key="b" />,
             ])} />
           </Section>
           <Section title="Requirements and hazards this supplier affects">

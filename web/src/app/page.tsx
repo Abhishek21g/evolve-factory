@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import {
   Activity, BookCheck, Bot, Info, Orbit, Boxes, Brain, FlaskConical, Home, ListChecks, Network, Package, Phone, Plus, Radar, Search, ShieldAlert, Timer, Users, Wallet,
 } from "lucide-react";
-import { useFactoryState, type MemoryView, type Member, type State } from "@/lib/api";
+import { useFactoryState, type MemoryItem, type MemoryView, type Member, type State } from "@/lib/api";
 import { go, type Ctx } from "@/lib/ctx";
 import { AuditTable } from "@/components/common";
 import { HomePage } from "@/components/pages/Home";
@@ -18,7 +18,7 @@ import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { WorldLoopPage } from "@/components/WorldLoop";
 import { Automations, SourceOfRecord } from "@/components/Automations";
 import { Incidents } from "@/components/Hotline";
-import { Ago, Badge, Button, Field, Modal, PageHead, Section, Table, Who, ago, inputCls } from "@/components/ui";
+import { Ago, Badge, Button, Field, LOCAL_ONLY, Modal, PageHead, Section, Table, Who, ago, inputCls } from "@/components/ui";
 import { AllTowers, ControlTower } from "@/components/supply/ControlTower";
 import { Finance } from "@/components/supply/Finance";
 import { SupplyChain } from "@/components/supply/SupplyChain";
@@ -188,6 +188,13 @@ const COLLS: [string, string][] = [
   ["regulatory_kb", "Standards and the hazard log, per project"],
   ["factory_lessons", "One lesson per finished work order, written by the factory"],
 ];
+/** Hosted (no factory server, so no HydraDB to ask): rank the exported items by how many words of the request they
+ *  contain. The page says it is a keyword search over the snapshot. */
+const keywordHits = (items: MemoryItem[], q: string) => {
+  const words = q.toLowerCase().match(/[a-z0-9]{3,}/g) || [];
+  const n = (m: MemoryItem) => words.filter(w => `${m.title} ${m.text}`.toLowerCase().includes(w)).length;
+  return items.filter(n).sort((a, b) => n(b) - n(a)).slice(0, 8);
+};
 const served = (r?: { backend: string; ms: number } | null) => r?.backend === "HydraDB" ? `HydraDB · ${r.ms} ms` : "local copy (HydraDB unreachable)";
 
 function Memory({ state, post, getJSON, live }: Ctx) {
@@ -209,7 +216,7 @@ function Memory({ state, post, getJSON, live }: Ctx) {
   return (
     <>
       <PageHead title="Memory" sub={<>The factory&apos;s context layer in HydraDB: org memory, the regulatory knowledge base and lessons from every finished work order, scoped by project. Agents recall it before every change and write back after every verdict. Backend: <b className="text-ink">{data?.backend === "HydraDB" ? "HydraDB" : state.status?.hydradb === "falling back" ? "local (HydraDB unreachable, retrying)" : "local (add HYDRADB_API_KEY for HydraDB)"}</b></>}>
-        <Button primary onClick={() => setAdding(true)} disabled={!live}><Plus size={14} /> Add memory</Button>
+        <Button primary onClick={() => setAdding(true)} disabled={!live} title={live ? undefined : LOCAL_ONLY}><Plus size={14} /> Add memory</Button>
       </PageHead>
       <div className="mb-2 grid gap-2.5 sm:grid-cols-3">
         {COLLS.map(([c, desc]) => {
@@ -227,13 +234,13 @@ function Memory({ state, post, getJSON, live }: Ctx) {
         })}
       </div>
       <p className="mb-6 text-xs text-dim">{inv ? <>Counts {all ? "across all projects" : `for ${p.name}`} served by <b className="text-mute">{served(inv)}</b> · database default-tenant · {inv.backend === "HydraDB" ? `read ${ago(inv.at)}` : "HydraDB counts appear once it answers"}</> : null}</p>
-      <form onSubmit={e => { e.preventDefault(); load(q); }} className="mb-3 flex gap-2">
+      <form onSubmit={e => { e.preventDefault(); if (live) load(q); else setData(d => d && { ...d, hits: keywordHits(d.items, q), recall: null }); }} className="mb-3 flex gap-2">
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-dim" />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder={p.device === "flight-controls" ? "Ask what the agents would recall, e.g. AoA disagree alert threshold" : "Ask what the agents would recall, e.g. bigger meal boluses for adults"}
             className={inputCls + " pl-8"} aria-label="Search memory" />
         </div>
-        <Button type="submit" disabled={!live || !q.trim()}>Recall</Button>
+        <Button type="submit" disabled={!q.trim()}>Recall</Button>
         {data?.hits.length ? <Button onClick={() => { setQ(""); load(""); }}>Clear</Button> : null}
       </form>
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
@@ -243,7 +250,8 @@ function Memory({ state, post, getJSON, live }: Ctx) {
         <button aria-pressed={!kind} className={chip(!kind)} onClick={() => setKind("")}>All types · {base.length}</button>
         {kinds.map(([k, n]) => <button key={k} aria-pressed={kind === k} className={chip(kind === k)} onClick={() => setKind(kind === k ? "" : k)}>{k.replace("_", " ")} · {n}</button>)}
       </div>
-      {data?.hits.length ? <p className="mb-3 text-sm text-dim">Top {data.hits.length} items the agents would read for this request · recalled by <b className="text-ink">{served(data.recall)}</b> from {data.recall?.collections?.join(", ")}</p> : null}
+      {data?.hits.length ? <p className="mb-3 text-sm text-dim">{live || data.recall ? <>Top {data.hits.length} items the agents would read for this request · recalled by <b className="text-ink">{served(data.recall)}</b> from {data.recall?.collections?.join(", ")}</>
+        : <>{data.hits.length} snapshot items containing words of this request · keyword search in your browser; HydraDB recall runs on the local factory server</>}</p> : null}
       <div className="divide-y divide-line rounded-lg border border-line">
         {items.map(m => (
           <div key={m.id} className="px-4 py-3">

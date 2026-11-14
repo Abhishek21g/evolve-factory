@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Play, RefreshCw } from "lucide-react";
 import type { State } from "@/lib/api";
-import { Ago, Badge, Button, PageHead, Section } from "@/components/ui";
+import { Ago, Badge, Button, LOCAL_ONLY, PageHead, Section } from "@/components/ui";
 import { DiagnosisCard, type Diag } from "@/components/WorldLoop";
 import { plural } from "@/lib/utils";
 
@@ -253,7 +253,7 @@ export function Automations({ state, live, checking = false, getJSON, post }: Pr
             <div className="mb-2 text-[11.5px] text-dim">{m.schedule}{m.next && !m.running ? <> · next <Until ts={m.next} /></> : null}</div>
             <p className="mb-3 text-[12px] leading-relaxed text-mute">{m.what}</p>
             {m.last && <p className="mb-3 text-[12px] text-ink">{m.last.summary} <span className="text-dim">· <Ago ts={m.last.started} /></span></p>}
-            <div className="mt-auto"><Button onClick={() => run(m.id)} disabled={!live || m.running}><Play size={13} /> Run now</Button></div>
+            <div className="mt-auto"><Button onClick={() => run(m.id)} disabled={!live || m.running} title={live ? undefined : LOCAL_ONLY}><Play size={13} /> Run now</Button></div>
           </div>
         ))}
       </div>

@@ -5,7 +5,7 @@ import type { State } from "@/lib/api";
 import { Button as KitButton } from "@/components/kit/button";
 import { Input } from "@/components/kit/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/kit/tabs";
-import { Badge, Button, PageHead, Section, TONE_CLS } from "@/components/ui";
+import { Badge, Button, LOCAL_ONLY, PageHead, Section, TONE_CLS } from "@/components/ui";
 
 type Tone = "ok" | "warn" | "off";
 type Tool = { id: string; name: string; tone: Tone; detail: string; use: string; connect?: string | null; url?: string };
@@ -129,8 +129,8 @@ export function Integrations({ state, live, base, getJSON, post }: Props) {
               </div>
               <div className="shrink-0 self-center">
                 {p.connected ? <Badge tone="ok">Connected</Badge>
-                  : <KitButton variant="outline" size="sm" disabled={!live || !o.composio.key} title={live ? `Authorize ${p.name} for the factory in Composio` : "Connect on the live factory"}
-                    onClick={() => window.open(connectUrl(p.id), "_blank", "noopener")}>Connect <ExternalLink size={12} /></KitButton>}
+                  : <span title={live ? `Authorize ${p.name} for the factory in Composio` : LOCAL_ONLY} className="inline-flex"><KitButton variant="outline" size="sm" disabled={!live || !o.composio.key}
+                    onClick={() => window.open(connectUrl(p.id), "_blank", "noopener")}>Connect <ExternalLink size={12} /></KitButton></span>}
               </div>
             </div>
           ))}
@@ -227,7 +227,7 @@ function AddServer({ live, post, onAdded }: { live: boolean; post: Props["post"]
         <button type="button" onClick={() => preset("deepwiki", "https://mcp.deepwiki.com/mcp")} className="rounded-full border border-line px-2 py-0.5 text-xs text-mute hover:text-ink">DeepWiki (public)</button>
         <button type="button" onClick={() => preset("certus-factory-http", "http://localhost:8787/mcp")} className="rounded-full border border-line px-2 py-0.5 text-xs text-mute hover:text-ink">Certus Factory (HTTP)</button>
         <span className="flex-1" />
-        <Button primary type="submit" disabled={!live || !name.trim() || !target.trim()}>Add server</Button>
+        <Button primary type="submit" disabled={!live || !name.trim() || !target.trim()} title={live ? undefined : LOCAL_ONLY}>Add server</Button>
       </div>
       {transport === "stdio" && <p className="mt-2 text-xs text-dim">stdio servers are saved for your MCP clients; the factory never starts local commands from the browser, so only HTTP servers can be tested here.</p>}
       {err && <p className="mt-2 text-sm text-bad">{err}</p>}
@@ -251,7 +251,7 @@ function SelfServer({ o, live, factoryUrl, probe, onTest }: { o: Overview; live:
         <span className="text-base font-medium">Certus Factory as an MCP server</span>
         <span className="rounded border border-line px-1.5 py-px text-2xs text-dim">read-only</span>
         <span className="flex-1" />
-        <KitButton variant="outline" size="sm" onClick={onTest} disabled={!live || probe === "testing"}>{probe === "testing" ? "Testing…" : "Test connection"}</KitButton>
+        <span title={live ? undefined : LOCAL_ONLY} className="inline-flex"><KitButton variant="outline" size="sm" onClick={onTest} disabled={!live || probe === "testing"}>{probe === "testing" ? "Testing…" : "Test connection"}</KitButton></span>
       </div>
       <p className="mt-1.5 text-sm text-mute">Claude Code, Cursor or any MCP client can query the safety record: traces, verdicts, gaps and memory.</p>
       <ProbeResult p={probe} />
