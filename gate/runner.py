@@ -16,9 +16,11 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "dashboard"))
+import emit as feed  # noqa: E402  dashboard event feed
 DEFAULT_AGENT = 'claude -p --permission-mode acceptEdits --allowedTools "Bash(make:*)"'
 # Checks come from gate/checks.json in the main checkout (trusted, agents can't edit it).
-# Each check is {"name", "cmd"}; cmd may use {root} {repo} {base} {wo}. Exit 0 = pass, else BLOCKED;
+# Each check is {"name", "cmd"}; cmd may use {root} {repo} {base} {wo} {json} (path for machine-readable output). Exit 0 = pass, else BLOCKED;
 # whatever it prints (markdown) goes in the report and is fed back to the agent.
 
 PROMPT = """You are implementing Software Factory Work Order {wo}.
@@ -42,11 +44,19 @@ def sh(cmd, cwd, check=True):
     return subprocess.run(cmd, cwd=cwd, check=check, capture_output=True, text=True)
 
 
-def run_checks(checks, wt, base, wo):
+def say(agent, state, msg, **kw):
+    """Report to the dashboard. A broken feed must never stop a run."""
+    try:
+        feed.emit(agent, state, msg, **kw)
+    except Exception as e:
+        print(f"(dashboard feed unavailable: {e})", file=sys.stderr)
+
+
+def run_checks(checks, wt, base, wo, gate_json):
     """Run every check (no short-circuit). Returns (all_passed, markdown report)."""
     parts, ok = [], True
     for c in checks:
-        cmd = c["cmd"].format(root=ROOT, repo=wt, base=base, wo=wo)
+        cmd = c["cmd"].format(root=ROOT, repo=wt, base=base, wo=wo, json=gate_json)
         p = subprocess.run(cmd, shell=True, cwd=ROOT, capture_output=True, text=True)
         passed = p.returncode == 0
         ok &= passed
@@ -89,12 +99,28 @@ def main(argv=None):
     os.makedirs(os.path.join(ROOT, ".runs"), exist_ok=True)
     out = os.path.join(ROOT, ".runs", f"{args.wo}.md")
     prompt = PROMPT.format(wo=args.wo, text=text)
+    gate_json = os.path.join(ROOT, ".runs", f"{args.wo}.gate.json")
+    coder = os.environ.get("AGENT_NAME", "coder-claude")
+    title = text.splitlines()[0]
+    say("planner", "done", f'Picked up {args.wo} "{title}"; coder works in its own worktree', wo=args.wo, title=title)
     ok, report = False, ""
     for attempt in range(args.retries + 1):
-        print(f"[{args.wo}] attempt {attempt + 1}: running agent", flush=True)
+        n = attempt + 1
+        print(f"[{args.wo}] attempt {n}: running agent", flush=True)
+        say(coder, "working", f"Attempt {n}: implementing" if n == 1 else f"Attempt {n}: fixing what the gate blocked", wo=args.wo)
         run_agent(wt, prompt)
         commit(wt, f"{args.wo}: {text.splitlines()[0][:60]} (attempt {attempt + 1})")
-        ok, report = run_checks(checks, wt, args.base, args.wo)
+        say(coder, "done", f"Attempt {n}: committed", wo=args.wo)
+        say("gate", "working", "Running checks", wo=args.wo)
+        if os.path.exists(gate_json):
+            os.remove(gate_json)
+        ok, report = run_checks(checks, wt, args.base, args.wo, gate_json)
+        extra = {}
+        if os.path.exists(gate_json):
+            extra["gate"] = json.load(open(gate_json))
+        elif not ok:
+            extra["gate"] = {"verdict": "BLOCKED", "rows": []}
+        say("gate", "pass" if ok else "blocked", f"Attempt {n}: {'all checks passed' if ok else 'BLOCKED'}", wo=args.wo, **extra)
         print(f"[{args.wo}] attempt {attempt + 1}: {'PASS' if ok else 'BLOCKED'}", flush=True)
         if ok:
             break
@@ -107,6 +133,7 @@ def main(argv=None):
         title = f"{args.wo}: {text.splitlines()[0][:70]}"
         sh(["gh", "pr", "create", "--base", args.base, "--head", branch, "--title", title, "--body", report], wt)
         print("PR opened")
+        say("reviewer", "done", f"PR opened for {args.wo}", wo=args.wo)
     return 0 if ok else 1
 
 
