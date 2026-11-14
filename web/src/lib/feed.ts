@@ -18,10 +18,13 @@ export type World = {
   scenarios?: Scenario[]; results: WorldRun[]; kind?: string;
   axis?: { unit: string; min: number; max: number; band: [number, number]; threshold_label: string; event_label: string; above?: boolean; time_unit: string; subject: string };
 };
-export type Hit = { kind: string; title: string; text: string; score?: number };
+export type Hit = { kind: string; title: string; text: string; score?: number; collection?: string; source?: string; synthetic?: boolean; summary?: string };
+/** Where a memory call was served from and how long it took (factory/memory.py search/remember). */
+export type Recall = { backend: string; ms: number; collections?: string[]; collection?: string };
 export type Ev = {
   run: string; t: number; agent: string; state: string; msg: string; wo?: string; title?: string;
   gate?: Gate; world?: World; memory?: Hit[];
+  lessons?: Hit[]; lesson?: { title: string; summary: string; source: string }; recall?: Recall;
   analysis?: { hazards?: string[]; requirements?: string[]; risk?: string; guidance?: string; new_hazard?: string };
   evidence?: { wo: string; decision: string; headline: string }; candidate?: string; pr?: string;
   replay?: { wo?: string | null; at: number };

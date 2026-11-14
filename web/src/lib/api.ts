@@ -16,7 +16,15 @@ export type WorkOrder = {
 };
 export type Audit = { ts: number; actor: string; action: string; object: string; detail: string };
 export type AgentLive = { id: string; done: number; blocked: number; msg: string; state: string; ts: number; wo: string | null };
-export type MemoryItem = { id: string; kind: string; title: string; text: string; score?: number };
+export type MemoryItem = { id: string; kind: string; title: string; text: string; score?: number; project?: string; collection?: string; synthetic?: boolean };
+/** kinds: per project (device id), "" = all projects. */
+type Counts = { total: number; kinds: Record<string, Record<string, number>>; projects: Record<string, number> };
+/** GET /api/memory: the project's memory, a live recall, and per-collection counts read from HydraDB. */
+export type MemoryView = {
+  backend: string; items: MemoryItem[]; hits: MemoryItem[]; project?: string | null;
+  recall?: { backend: string; ms: number; collections?: string[] } | null;
+  inventory?: { backend: string; ms: number; at: number; collections: Record<string, Counts> };
+};
 export type TraceNode = { id: string; kind: string; label: string; sub: string; tone: string };
 export type State = {
   team: Member[]; devices: Record<string, string>; projects: Project[]; project: Project | null;
