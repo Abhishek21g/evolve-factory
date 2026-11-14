@@ -13,8 +13,8 @@ test("live: integrations, Composio connect, MCP add + test, Certus MCP server", 
   await page.getByRole("link", { name: "Manage integrations" }).click();
   await expect(page.getByRole("heading", { name: "Integrations" })).toBeVisible();
   const connected = page.getByTestId("connected-now");
-  for (const n of ["Claude Code", "8090 Software Factory", "HydraDB", "Composio · GitHub", "Vercel"]) await expect(connected).toContainText(n);
-  await expect(page.getByTestId("catalog").getByRole("button", { name: /Connect/ })).toHaveCount(9);
+  for (const n of ["Claude Code", "8090 Software Factory", "HydraDB", "Composio · GitHub", "ElevenLabs", "Vercel"]) await expect(connected).toContainText(n);
+  await expect(page.getByTestId("catalog").getByRole("button", { name: /Connect/ })).toHaveCount(8);
   await expect(page.getByRole("button", { name: "Import requirements (coming soon)" })).toHaveCount(4);
 
   const [popup] = await Promise.all([context.waitForEvent("page"), page.getByTestId("catalog").getByRole("button", { name: /Connect/ }).first().click()]);

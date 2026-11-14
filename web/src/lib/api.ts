@@ -35,6 +35,7 @@ export type State = {
     online: boolean; busy: boolean; job: string | null; running: string | null; project?: string | null; memory: string; composio: boolean; software_factory: boolean; replay?: boolean;
     hydradb?: "connected" | "connecting" | "falling back" | "missing key";
     composio_status?: "connected" | "not connected" | "checking" | "error" | "missing key";
+    elevenlabs?: "connected" | "no agent" | "missing key";
   };
 };
 
