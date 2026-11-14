@@ -218,7 +218,7 @@ class H(SimpleHTTPRequestHandler):
         if u.path == "/api/callouts":
             evs = store.events()
             b = callouts.for_wo(evs, wo) if wo else callouts.latest_whatif([e for e in evs if e["project"] == q.get("project", "")])
-            return self.send(200, b) if b else self.send(404, {"error": "no simulation to voice"})
+            return self.send(200, b or {"wo": None, "title": None, "before": None, "after": None})  # nothing simulated yet: not an error
         if u.path == "/api/hotline":
             return self.send(200, {"agent_id": hotline.agent_id(), "live": bool(elevenlabs.key() and hotline.agent_id())})
         if u.path == "/api/hotline/token":
@@ -334,7 +334,7 @@ class H(SimpleHTTPRequestHandler):
                 mid = "drift" if u.path == "/api/record/resync" else clip("id", 30)
                 rid = monitors.trigger(mid, clip("project", 60))
                 if rid:
-                    store.log(actor, "ran monitor", next(m["name"] for m in monitors.MONITORS if m["id"] == mid), clip("project", 60))
+                    store.log(actor, "ran monitor", next(m["name"] for m in monitors.MONITORS if m["id"] == mid), "Run now", clip("project", 60))
                 return self.send(202, {"run": rid, "already_running": rid is None})
             if u.path in ("/api/supply/suppliers", "/api/supply/deliverables"):
                 if not any(p["id"] == clip("project", 60) for p in store._load()["projects"]):
@@ -342,7 +342,7 @@ class H(SimpleHTTPRequestHandler):
                 dev = store.device(clip("project", 60))
                 if u.path == "/api/supply/suppliers":
                     sup = supply.invite(dev["id"], store.safety_spec(dev), body)
-                    store.log(actor, "connected supplier team", sup["id"], f"{sup['name']} (tier {sup['tier']}, {len(sup['deliverables'])} deliverables requested)", clip("project", 60))
+                    store.log(actor, "connected supplier team", sup["id"], f"{sup['name']} (tier {sup['tier']}, {monitors.plural(len(sup['deliverables']), 'deliverable')} requested)", clip("project", 60))
                     return self.send(201, sup)
                 d = supply.submit(dev["id"], store.safety_spec(dev), actor, body)
                 store.log(actor, "recorded supplier deliverable", d["item"], f"{d['title']} from {d['supplier_name']} ({d['link']})", clip("project", 60))

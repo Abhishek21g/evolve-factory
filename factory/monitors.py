@@ -51,6 +51,10 @@ running = {}                 # (monitor, project) -> run id
 paused = lambda: False       # noqa: E731  the server sets this to "a factory run is in progress": scheduled runs wait
 
 
+def plural(k, one):
+    return f"{k} {one}{'' if k == 1 else 's'}"
+
+
 def _hist():
     return json.load(open(HIST)) if os.path.exists(HIST) else {"runs": []}
 
@@ -129,12 +133,12 @@ def reliability(pid, dev):
             text = f"{len(bad) - len(new)} of {len(world['results'])} simulated runs leave the envelope" + (" (also in the last run)" if prev else "")
             findings.append({"severity": "warn", "text": text if new else f"{text}: {what}", "link": "faults"})
     if recovered:
-        findings.append({"severity": "info", "text": f"{len(recovered)} run(s) back inside the envelope since the last run"})
+        findings.append({"severity": "info", "text": f"{plural(len(recovered), 'run')} back inside the envelope since the last run"})
     code_changed = bool(prev) and prev["fp"] != fp
     status = "fail" if any(f["severity"] == "bad" for f in findings) else "warn" if any(f["severity"] == "warn" for f in findings) else "pass"
     summary = (f"{len(world['results'])} simulated runs ({'cached: same code as before' if cached else 'fresh simulation'}), "
                f"{sum(t['result'] == 'PASS' for t in tests)}/{len(tests)} requirement tests pass; "
-               + (f"{len(new)} new exceedance(s), {len(recovered)} recovered since the last run" if prev else "first run: baseline recorded")
+               + (f"{plural(len(new), 'new exceedance')}, {len(recovered)} recovered since the last run" if prev else "first run: baseline recorded")
                + ("; code changed since the last run" if code_changed else ""))
     md = [f"# Reliability monitor: {status.upper()}", "", summary, "", "| Requirement test | Result | ms |", "|---|---|---|"]
     md += [f"| {t['id']} | {t['result']} | {t['ms']} |" for t in tests]
@@ -217,8 +221,8 @@ def supplier_compliance(pid, dev):
                 for r in sorted(v["risks"], key=lambda r: list(sev).index(r["kind"]) if r["kind"] in sev else 9)]
     n = lambda s: sum(f["severity"] == s for f in findings)  # noqa: E731
     status = "fail" if n("bad") else "warn" if n("warn") else "pass"
-    summary = (f"{len(v['suppliers'])} suppliers, {len(v['parts'])} parts (sample data): {n('bad')} blocking finding(s), "
-               f"{n('warn')} certificate(s) expiring within {supply.EXPIRING_DAYS} days, {n('info')} structural risk(s)")
+    summary = (f"{len(v['suppliers'])} suppliers, {len(v['parts'])} parts (sample data): {plural(n('bad'), 'blocking finding')}, "
+               f"{plural(n('warn'), 'certificate')} expiring within {supply.EXPIRING_DAYS} days, {plural(n('info'), 'structural risk')}")
     md = [f"# Supplier compliance monitor: {status.upper()}", "", summary, "", v["sample"], "", "| Severity | Finding |", "|---|---|"]
     md += [f"| {f['severity']} | {f['text']} |" for f in findings]
     return status, summary, findings, {"md": "\n".join(md)}

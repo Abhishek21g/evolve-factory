@@ -200,6 +200,8 @@ export function Incidents({ state, live, base, post, getJSON, id }: Props) {
   const refresh = useCallback(() => setTick(t => t + 1), []);
   const one = id ? list?.find(x => x.id === id) : null;
   const agent = cfg?.agent_id || sample?.agent_id;
+  const own = sample?.incident.project === p.id ? sample : null;
+  const home = sample && !own ? state.projects.find(x => x.id === sample.incident.project) : null;
   return (
     <>
       <PageHead title="Incidents" sub={<>Safety hotline: call in an incident and it becomes a traced draft work order, a memory item and a link to the most likely hazard. Voice agent by ElevenLabs{agent ? <> · agent <code className="font-mono text-xs">{agent}</code></> : null}.</>} />
@@ -207,8 +209,10 @@ export function Incidents({ state, live, base, post, getJSON, id }: Props) {
         <>
           <Section title="Call the hotline" aside={cfg?.live ? "live: your microphone, the ElevenLabs agent, this factory" : "recorded sample call"}>
             <div className="rounded-lg border border-line bg-panel p-4">
-              {cfg?.live && base !== null ? <LiveCall post={post} base={base} onFiled={refresh} /> : sample ? <RecordedCall sample={sample} /> : <p className="text-sm text-dim">Hotline not configured: set ELEVENLABS_API_KEY in .env and run <code className="font-mono">factory/hotline.py setup</code> (docs/HOTLINE.md).</p>}
-              {cfg?.live && sample && <details className="mt-4"><summary className="cursor-pointer text-sm text-mute">Recorded sample call</summary><div className="mt-3"><RecordedCall sample={sample} /></div></details>}
+              {cfg?.live && base !== null ? <LiveCall post={post} base={base} onFiled={refresh} /> : own ? <RecordedCall sample={own} />
+                : home ? <p className="text-sm text-dim">No recorded call on this project. Hear the recorded sample call on <a href={`#/p/${home.id}/incidents`} className="text-acc hover:underline">{home.name}</a>.</p>
+                : <p className="text-sm text-dim">Hotline not configured: set ELEVENLABS_API_KEY in .env and run <code className="font-mono">factory/hotline.py setup</code> (docs/HOTLINE.md).</p>}
+              {cfg?.live && own && <details className="mt-4"><summary className="cursor-pointer text-sm text-mute">Recorded sample call</summary><div className="mt-3"><RecordedCall sample={own} /></div></details>}
             </div>
           </Section>
           <Section title="Reported incidents">
