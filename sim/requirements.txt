@@ -1,2 +1,3 @@
 simglucose==0.2.11
 setuptools<70  # simglucose 0.2.x still imports pkg_resources
+anthropic==2.8.0  # sim/agent.py (Simulation Agent)
