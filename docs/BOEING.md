@@ -1,6 +1,6 @@
 # Boeing: flight-controls project in Certus Factory
 
-Why this exists: mentors told us Boeing is a CertusAI customer, and asked to see the factory on aerospace software.
+Why this exists: Boeing asked CertusAI about DO-254, and mentors asked to see the factory on aerospace software.
 This page records what Boeing actually needs, where we got it, and what the demo project covers.
 
 ## 1. Where Boeing stands with CertusAI (be exact on stage)
