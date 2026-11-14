@@ -75,11 +75,12 @@ def warm():
         time.sleep(30)
 
 
-def start(kind, *args, wo=None):
+def start(kind, *args, wo=None, project=""):
     with lock:
         if busy():
             return False
         env = {k: v for k, v in os.environ.items() if k not in ("RUN_ID", "RUN_T0")}  # fresh dashboard run
+        env["FACTORY_PROJECT"] = project  # which project's code, safety spec, gate and world model
         log = open(os.path.join(ROOT, ".runs", "server-job.log"), "w")
         job["proc"] = subprocess.Popen([PY, os.path.join(ROOT, "factory/pipeline.py"), kind, *args], cwd=ROOT, env=env,
                                        stdout=log, stderr=subprocess.STDOUT)
@@ -167,7 +168,7 @@ class H(SimpleHTTPRequestHandler):
                 if not w:
                     return self.send(404, {"error": "unknown work order"})
                 text = w["title"] + ("\n\n" + w["description"] if w["description"] else "")
-                if not start("build", text, w["id"], wo=w["id"]):
+                if not start("build", text, w["id"], wo=w["id"], project=w["project"]):
                     return self.send(409, {"error": "factory busy"})
                 store.log(actor, "started run", w["id"], w["title"])
                 return self.send(202, {"started": w["id"]})
@@ -185,18 +186,18 @@ class H(SimpleHTTPRequestHandler):
                 if not t:
                     return self.send(400, {"error": "say what you want"})
                 if clip("skill", 20) == "simulate" or re.match(r"\s*what (if|happens)", t, re.I):
-                    if not start("whatif", t):
+                    if not start("whatif", t, project=clip("project", 60)):
                         return self.send(409, {"error": "factory busy"})
                     store.log(actor, "asked the world model", "world model", t)
                     return self.send(202, {"started": "whatif"})
                 if busy():
                     return self.send(409, {"error": "factory busy"})
                 w = store.create_wo(actor, clip("project", 60), t[:120], "")
-                start("build", t, w["id"], wo=w["id"])
+                start("build", t, w["id"], wo=w["id"], project=w["project"])
                 store.log(actor, "started run", w["id"], t[:120])
                 return self.send(202, {"started": w["id"], "id": w["id"]})
             if u.path == "/api/whatif":
-                if not clip("text") or not start("whatif", clip("text")):
+                if not clip("text") or not start("whatif", clip("text"), project=clip("project", 60)):
                     return self.send(409, {"error": "factory busy or empty question"})
                 store.log(actor, "asked the world model", "world model", clip("text"))
                 return self.send(202, {"started": "whatif"})
@@ -208,6 +209,7 @@ class H(SimpleHTTPRequestHandler):
 if __name__ == "__main__":
     load_env()
     os.makedirs(os.path.join(ROOT, ".runs"), exist_ok=True)
+    store.ensure_projects()
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8787
     print(f"Certus Factory server on http://localhost:{port}  (UI from web/out, memory: {memory.backend()})", flush=True)
     threading.Thread(target=warm, daemon=True).start()
