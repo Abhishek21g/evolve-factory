@@ -1,13 +1,14 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity, ArrowUp, BookCheck, Bot, Check, ChevronsUpDown, Info, Orbit, Boxes, Brain, ShieldCheck, FileCheck2, FlaskConical, GitBranch, GitPullRequest, Home, ListChecks, Network, Plus, Play, Search, ShieldAlert, Timer, Users,
+  Activity, ArrowUp, BookCheck, Bot, Check, ChevronsUpDown, Info, Orbit, Boxes, Brain, FileCheck2, FlaskConical, GitBranch, GitPullRequest, Home, ListChecks, Network, Plus, Play, Search, ShieldAlert, Timer, Users,
 } from "lucide-react";
 import { useFactoryState, type MemoryView, type Member, type State, type WorkOrder } from "@/lib/api";
 import type { Ev } from "@/lib/feed";
 import { WorldChart } from "@/components/WorldChart";
 import { Traceability } from "@/components/trace/Traceability";
 import { AgentIcon, AgentPage, AgentTeam } from "@/components/Agents";
+import { CertusMark } from "@/components/CertusMark";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/kit/dropdown-menu";
 import { LoopSummary, SimVsWorld, WorldLoopPage } from "@/components/WorldLoop";
@@ -86,7 +87,7 @@ function Sidebar({ state, project, page, me, setMe, live }: { state: State; proj
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-sidebar md:flex">
       <a href="#/" className="flex h-14 items-center gap-2.5 px-4">
-        <span className="grid size-7 place-items-center rounded-md bg-gradient-to-br from-acc to-violet-400 text-bg"><ShieldCheck size={16} strokeWidth={2.4} /></span>
+        <CertusMark size={28} />
         <span className="min-w-0">
           <span className="block truncate text-base font-semibold tracking-tight">Certus Factory</span>
           <span className="block truncate text-xs text-dim">Software factory for physical AI</span>
