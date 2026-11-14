@@ -169,7 +169,7 @@ Code adding a separate alert-only threshold, 5/5 pass, 0 new exceedances ([#41](
 | Source of Record | `safety.json` as the single source of truth, resynced against code, tests, trace links and simulation evidence; drift is flagged per requirement |
 | Automations | The four monitoring agents above: schedule, **Run now**, run history, findings and evidence |
 | Incidents | Safety hotline (ElevenLabs agent): a call becomes a draft work order, a HydraDB memory item and a trace link to the most likely hazard. The recorded sample call plays on Boeing Flight Controls |
-| Suppliers, Supply Chain, Finance | Sample data, labelled as such: supplier tiers, certificates and deliverables (a submitted deliverable becomes a real trace link), parts, raw materials, imports and risk flags, factory spend vs budget, cost per work order |
+| Supply Chain (Parts and Suppliers tabs), Finance | Sample data, labelled as such: supplier tiers, certificates and deliverables (a submitted deliverable becomes a real trace link), parts, raw materials, imports and risk flags, factory spend vs budget, cost per work order |
 | Audit Trail, Team | Who (human or agent) did what; the people and agents on the project |
 | Integrations | Connected tools, the Composio plugin catalog (real Connect links), requirements/ALM imports (coming soon), MCP servers (add, test) and Certus Factory as an MCP server |
 
