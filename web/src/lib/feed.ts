@@ -27,8 +27,10 @@ export type Ev = {
   lessons?: Hit[]; lesson?: { title: string; summary: string; source: string }; recall?: Recall;
   analysis?: { hazards?: string[]; requirements?: string[]; risk?: string; guidance?: string; new_hazard?: string };
   evidence?: { wo: string; decision: string; headline: string }; candidate?: string; pr?: string;
-  replay?: { wo?: string | null; at: number };
+  replay?: Replay;
 };
+/** Which real run a replayed run plays; `hosted`: played in the browser on the hosted site, `note` when nothing typed matched it. */
+export type Replay = { wo?: string | null; at: number; hosted?: boolean; note?: string | null };
 export type Status = { online: boolean; busy: boolean; job: string | null; memory: string; composio: boolean; software_factory: boolean };
 export type Mode = "connecting" | "live" | "replay";
 

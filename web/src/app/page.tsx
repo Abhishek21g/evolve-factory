@@ -62,7 +62,7 @@ export default function App() {
         {live === false && (
           <div className="mb-6 flex items-center gap-2 rounded-lg border border-line bg-panel px-4 py-2.5 text-sm text-mute">
             <Info size={15} className="shrink-0 text-acc" />
-            Read-only snapshot of a real run. Clone the repo and run <code className="font-mono text-ink">demo/go.sh</code> to create projects and run work orders.
+            Hosted demo: requests and what-ifs play recorded real runs in your browser. Clone the repo and run <code className="font-mono text-ink">demo/go.sh</code> for live agents.
           </div>
         )}
         {route.project && !p && !unknown ? null :
@@ -130,7 +130,7 @@ function Sidebar({ state, project, page, me, setMe, live }: { state: State; proj
       <div className="space-y-2 border-t border-line p-3">
         <div className="flex items-center gap-2 px-1 text-xs text-mute">
           <span className={`size-2 rounded-full ${live ? "bg-ok shadow-[0_0_8px] shadow-ok/60" : "bg-dim"}`} />
-          {live ? "Factory online" : "Read-only snapshot"} <span className="text-dim">· memory {state.status?.memory || "local"}</span>
+          {live ? "Factory online" : "Hosted demo"} <span className="text-dim">· memory {state.status?.memory || "local"}</span>
         </div>
         <UserMenu humans={humans} me={me} setMe={setMe} active={page === "integrations"}
           integrations={project ? `#/p/${project}/integrations` : "#/settings/integrations"} />

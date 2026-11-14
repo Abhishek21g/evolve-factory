@@ -2,6 +2,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "cn";
 import type { Member } from "@/lib/api";
+import type { Replay } from "@/lib/feed";
 import { Button as KitButton } from "@/components/kit/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/kit/dialog";
 
@@ -124,9 +125,11 @@ export function Modal({ title, children, onClose, wide }: { title: string; child
 }
 
 /** Honest note on a run served from a recorded real run instead of fresh agents. */
-export const Replayed = ({ r }: { r?: { wo?: string | null; at: number } }) => r ? (
+export const Replayed = ({ r }: { r?: Replay | null }) => r ? (
   <span className="text-xs text-dim">
-    replayed from real run{r.wo ? ` ${r.wo}` : ""} · {new Date(r.at * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+    {r.hosted ? <span className="rounded border border-line px-1.5 py-0.5 text-mute">Recorded run (replay)</span> : "replayed from real run"}
+    {r.wo ? ` ${r.hosted ? "of " : ""}${r.wo}` : ""} · {new Date(r.at * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+    {r.note && ` · ${r.note}`}
   </span>
 ) : null;
 

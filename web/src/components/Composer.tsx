@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowUp, FlaskConical, Hammer, Loader2 } from "lucide-react";
 import { cn } from "cn";
 import type { Project } from "@/lib/api";
-import { deviceCopy, type Mode } from "@/lib/device";
+import { deviceCopy, type Mode, type Suggestion } from "@/lib/device";
 import { ToggleGroup, ToggleGroupItem } from "@/components/kit/toggle-group";
 import { Kbd } from "@/components/kit/kbd";
 import { DeviceIcon } from "@/components/ProjectSwitcher";
@@ -21,13 +21,15 @@ const MODES: Record<Mode, { label: string; icon: typeof Hammer; hint: string; pl
 const WHAT_IF = /^\s*what (if|happens)\b/i;
 
 /** The factory's one input: build a change or ask the world model, for the selected project. */
-export function Composer({ project, onSubmit, disabledReason, modes = ["build", "simulate"], autoFocus, suggestions = true }: {
+export function Composer({ project, onSubmit, disabledReason, modes = ["build", "simulate"], autoFocus, suggestions = true, chips }: {
   project: Project;
   onSubmit: (text: string, mode: Mode) => Promise<string | null | undefined>;
   disabledReason?: string | null;
   modes?: Mode[];
   autoFocus?: boolean;
   suggestions?: boolean;
+  /** One-click requests instead of the device's (the hosted site offers its recorded prompts). */
+  chips?: readonly Suggestion[];
 }) {
   const [text, setText] = useState("");
   const [mode, setMode] = useState<Mode>(modes[0]);
@@ -110,7 +112,7 @@ export function Composer({ project, onSubmit, disabledReason, modes = ["build", 
       {err && <p role="alert" className="mt-2 text-sm text-bad">{err}</p>}
       {suggestions && (
         <div className="mt-3 flex flex-wrap justify-center gap-2">
-          {deviceCopy(project.device).suggest.filter(([m]) => modes.includes(m)).map(([m, t]) => {
+          {(chips || deviceCopy(project.device).suggest).filter(([m]) => modes.includes(m)).map(([m, t]) => {
             const I = MODES[m].icon;
             return (
               <button key={t} type="button" onClick={() => pick(m, t)}

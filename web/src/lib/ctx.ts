@@ -15,8 +15,8 @@ export const go = (h: string) => { location.hash = h; };
 
 /** Why the factory can't start a job right now, or null when it can. */
 export function blocked(state: State, live: boolean): string | null {
-  if (!live) return "Read-only snapshot: run demo/go.sh locally to start work.";
   const st = state.status;
+  if (!live && !st?.hosted) return "Read-only snapshot: run demo/go.sh locally to start work.";
   if (!st?.busy) return null;
   const where = st.project && st.project !== state.project?.id ? ` in ${state.projects.find(p => p.id === st.project)?.name || st.project}` : "";
   return `The factory is busy with ${st.running || "a simulation"}${where}. It takes the next job when that finishes.`;

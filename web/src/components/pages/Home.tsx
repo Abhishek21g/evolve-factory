@@ -1,12 +1,13 @@
 "use client";
 import { cn } from "cn";
+import { recordedChips } from "@/lib/api";
 import { blocked, go, type Ctx } from "@/lib/ctx";
 import { AgentIcon } from "@/components/Agents";
 import { Composer } from "@/components/Composer";
 import { Badge, Section } from "@/components/ui";
 
 /** Agent-first home: one composer for the selected project, then the team and recent work. */
-export function HomePage({ state, post, team, me, live, base }: Ctx) {
+export function HomePage({ state, post, team, me, live, checking, base }: Ctx) {
   const p = state.project!;
   const hour = new Date().getHours();
   const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -41,7 +42,7 @@ export function HomePage({ state, post, team, me, live, base }: Ctx) {
       <div className="mx-auto mt-4 max-w-3xl md:mt-12">
         <h1 className="text-center text-3xl font-semibold tracking-tight">{greet}, {team[me]?.name.split(" ")[0]}.</h1>
         <p className="mb-7 mt-2 text-center text-md text-mute">What should the agent team build for {p.name}, or what should the world model try?</p>
-        <Composer project={p} onSubmit={ask} disabledReason={blocked(state, live)} />
+        <Composer project={p} onSubmit={ask} disabledReason={blocked(state, live)} chips={live || checking ? undefined : recordedChips(p.id)} />
         {busy && (
           <p className="mt-4 flex items-center justify-center gap-2 text-sm text-run">
             <span className="pulse size-1.5 rounded-full bg-run" />
