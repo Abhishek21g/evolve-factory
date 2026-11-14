@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { State } from "@/lib/api";
 import type { Ev } from "@/lib/feed";
 import { Badge, PageHead, Replayed, Section } from "@/components/ui";
+import { CockpitCallouts } from "@/components/Callouts";
 
 /* Types of factory/worldmodel.py loop() */
 type Step = { t: number; kind: "scenario" | "code" | "sim" | "violation"; text: string };
@@ -338,6 +339,7 @@ export function WorldLoopPage({ state, events, live, getJSON, id }: Props & { id
       {loop ? (
         <>
           <p className="mb-3 text-base"><a href={`#/p/${p.id}/work-orders/${loop.wo}`} className="font-mono text-mute hover:underline">{loop.wo}</a> <span className="text-ink">{loop.title}</span></p>
+          <CockpitCallouts getJSON={getJSON} device={p.device} wkey={loop.wo} tick={`${events.length}-${live}`} />
           <LoopView loop={loop} />
         </>
       ) : loop === undefined ? null : <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-base text-dim">{wo ? "No simulation for this work order yet. Run it: the world model flies every attempt." : "Run a work order: every attempt is flown in the world model and diagnosed here."}</p>}

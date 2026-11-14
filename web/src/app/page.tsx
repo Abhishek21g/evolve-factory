@@ -13,6 +13,7 @@ import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/kit/dropdown-menu";
 import { LoopSummary, SimVsWorld, WorldLoopPage } from "@/components/WorldLoop";
 import { Automations, SourceOfRecord } from "@/components/Automations";
+import { CockpitCallouts } from "@/components/Callouts";
 import { Ago, Avatar, Badge, Button, Field, Modal, PageHead, Replayed, Section, Table, Who, ago, inputCls } from "@/components/ui";
 
 /* ---------- routing: #/p/<project>/<page>[/<wo>] ---------- */
@@ -606,6 +607,7 @@ function WorldModel({ state, events, post, live, getJSON }: Ctx) {
       <PageHead title="Simulations" sub={<>World model: {p.world_model}. Each simulation compiles the real firmware and puts it in the loop: it decides every action, step by step, in every simulated run.</>} />
       <SimVsWorld air={air} />
       <LoopSummary state={state} events={events} live={live} getJSON={getJSON} />
+      <CockpitCallouts getJSON={getJSON} device={p.device} wkey={woSim?.id} tick={`${events.length}-${live}`} />
       <form onSubmit={ask} className="mb-8 flex flex-col gap-2 md:flex-row">
         <input value={q} onChange={e => setQ(e.target.value)} className={inputCls + " md:flex-1"} aria-label="Ask the world model"
           placeholder={air ? "Ask a what-if, e.g. What if the left AoA vane fails at 30 degrees?" : "Ask a what-if, e.g. What if a child eats 80 g and the parent types the dose 10x?"} />
@@ -621,6 +623,7 @@ function WorldModel({ state, events, post, live, getJSON }: Ctx) {
         {plan && <p className="mb-3 line-clamp-1 text-sm text-mute" title={plan.msg}><span className="text-dim">Simulation Agent plan:</span> {plan.msg}</p>}
         {latest ? <WorldChart world={latest} /> : <Empty>Ask a question: the Simulation Agent turns it into scenarios and the world model answers.</Empty>}
       </Section>
+      <CockpitCallouts getJSON={getJSON} device={p.device} kind="whatif" wkey={p.id} tick={`${events.length}-${live}`} />
       {woSim?.world && (
         <Section title={`Latest work order: ${woSim.id} · ${woSim.title}`} aside={<a href={`#/p/${p.id}/work-orders/${woSim.id}`} className="hover:text-ink">Open work order</a>}>
           <WorldChart world={woSim.world} />
