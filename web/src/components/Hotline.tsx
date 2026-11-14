@@ -19,7 +19,7 @@ type Props = {
 };
 type CallStatus = "idle" | "connecting" | "connected" | "ended" | "error";
 
-/** Incidents from the factory server, else the recorded sample call's incident (hosted site). */
+/** Incidents from the factory server (or its snapshot), else the recorded sample call's incident. */
 function useIncidents(getJSON: Props["getJSON"], live: boolean, project: string, tick: number) {
   const [list, setList] = useState<Incident[] | null>(null);
   const [sample, setSample] = useState<Sample | null>(null);
@@ -27,7 +27,7 @@ function useIncidents(getJSON: Props["getJSON"], live: boolean, project: string,
     let stop = false;
     (async () => {
       const s = await fetch("/hotline/sample-call.json").then(r => (r.ok ? r.json() as Promise<Sample> : null)).catch(() => null);
-      const l = live ? (await getJSON<{ incidents: Incident[] }>(`incidents?project=${encodeURIComponent(project)}`))?.incidents ?? null : null;
+      const l = (await getJSON<{ incidents: Incident[] }>(`incidents?project=${encodeURIComponent(project)}`))?.incidents ?? null;
       if (stop) return;
       setSample(s);
       setList(l ?? (s && s.incident.project === project ? [s.incident] : []));
