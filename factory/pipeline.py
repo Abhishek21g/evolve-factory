@@ -183,7 +183,7 @@ def whatif(question):
     os.makedirs(RUNS, exist_ok=True)
     json.dump(clean, open(sf, "w"))
     ev("world", "working", f"Running {len(clean) * 10} simulated patients on the current pump firmware")
-    subprocess.run([PY, os.path.join(ROOT, "sim/world.py"), "--repo", ROOT, "--base", "HEAD", "--scenarios", sf,
+    subprocess.run([PY, os.path.join(ROOT, "sim/world.py"), "--repo", ROOT, "--base", "none", "--scenarios", sf,
                     "--question", question], cwd=ROOT, capture_output=True)
     return 0
 

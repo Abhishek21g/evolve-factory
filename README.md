@@ -1,3 +1,22 @@
+# Certus Factory
+
+**A software factory for physical AI.** Tell it what you want in plain English. Agents recall the organization's
+memory, analyze hazards, write the code, and every change is verified by deterministic tests and a world model
+(the real firmware running in simulated patients) before it can merge. Each change ships with a safety evidence pack.
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r sim/requirements.txt -r factory/requirements.txt
+cd web && npm install && npm run build && cd ..
+.venv/bin/python factory/server.py          # open http://localhost:8787
+```
+
+- **Build it**: request, then shared memory (HydraDB), Safety Analyst (hazards), coding agent (Claude Code) in a git worktree, deterministic gate, world model, evidence pack, Composio actions.
+- **Simulate**: ask a what-if question; the Simulation Agent turns it into scenarios and the world model answers on the current firmware.
+- Approval is never an LLM decision: tests plus the world model decide.
+- Optional keys in `.env` (gitignored): `HYDRADB_API_KEY`, `COMPOSIO_API_KEY`, `SF_API_KEY`. Without them it runs with local fallbacks.
+- `web/` is a static Next.js app. Served locally by `factory/server.py`; on Vercel it plays a recorded run (replay mode).
+- `factory/seed_memory.jsonl` is example organization knowledge (tickets, meeting notes, chats, emails) written for this demo.
+
 # evolve-factory
 
 Team entry for EVOLVE: 8090 AI Hackathon (Redwood City, Nov 13–14, 2026).
@@ -49,6 +68,10 @@ Keep this list current; judges require it.
 | Cursor | IDE | proprietary |
 | simglucose 0.2.11 (UVA/Padova T1D simulator) | world model, simulated patients | MIT |
 | numpy, pandas, scipy (simglucose deps) | simulation | BSD-3-Clause |
+| Next.js 15, React 19, Tailwind CSS 4 | web UI | MIT |
+| HydraDB (hydradb-sdk) | shared memory / context layer | proprietary SDK, hosted service (sponsor) |
+| Composio (composio 0.32) | agent actions in GitHub / Slack | Apache-2.0 (sponsor) |
+| Vercel | hosting the UI | service (sponsor) |
 
 ## Built before the event
 
