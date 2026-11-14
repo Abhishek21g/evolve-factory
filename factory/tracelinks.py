@@ -30,6 +30,7 @@ CLAUSES = {
     },
     "flight-controls": {
         "hazard": [("ARP4761 FHA", "ARP4761 Functional hazard assessment"),
+                   ("ARP4754A DAL", "ARP4754A Development assurance level assignment"),
                    ("14 CFR 25.1309(b)", "14 CFR 25.1309(b) Failure condition probabilities")],
         "requirement": [("DO-178C §11.21", "DO-178C §11.21 Trace data"),
                         ("14 CFR 25.672", "14 CFR 25.672 Stability augmentation and automatic systems")],
