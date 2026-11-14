@@ -169,7 +169,7 @@ export function CockpitCallouts({ getJSON, device, kind = "build", wkey, tick = 
           {recorded && beat.wo ? ` · recorded run ${beat.wo}` : recorded ? " · recorded run" : ""}
         </span>
       </div>
-      <div className={`grid gap-3 ${panels.length > 1 ? "xl:grid-cols-2" : ""}`}>
+      <div className="grid gap-3 xl:grid-cols-2">
         {panels.map(([t, side]) => <Panel key={side} tl={t} side={side} />)}
       </div>
     </section>

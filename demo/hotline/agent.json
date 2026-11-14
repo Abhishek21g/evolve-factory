@@ -1,0 +1,8 @@
+{
+ "tool_id": "tool_9801m7d9j531ex9asep8v5cjw96j",
+ "agent_id": "agent_2201m7d9j59dezmvsqas9gba15x0",
+ "name": "Certus Safety Hotline",
+ "llm": "claude-haiku-4-5",
+ "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+ "tool": "create_incident"
+}

@@ -168,6 +168,7 @@ class H(SimpleHTTPRequestHandler):
                            "memory": memory.backend(), "hydradb": memory.status(),
                            "composio": bool(os.environ.get("COMPOSIO_API_KEY")), "composio_status": composio_status(),
                            "software_factory": bool(os.environ.get("SF_API_KEY")), "replay": os.environ.get("FACTORY_REPLAY") == "1"}
+            s["status"]["elevenlabs"] = hotline.status()
             return self.send(200, s)
         if u.path == "/api/connect/composio":  # one-time: authorize GitHub for the factory's Composio user
             link = subprocess.run([PY, os.path.join(ROOT, "factory/actions.py"), "connect"], capture_output=True, text=True,
@@ -183,7 +184,7 @@ class H(SimpleHTTPRequestHandler):
             return self.send(code, obj, headers=h)
         if u.path == "/api/integrations":
             return self.send(200, integrations.overview({"hydradb": memory.status(), "composio_status": composio_status(),
-                                                         "software_factory": bool(os.environ.get("SF_API_KEY"))}))
+                                                         "software_factory": bool(os.environ.get("SF_API_KEY")), "elevenlabs": hotline.status()}))
         if u.path == "/api/integrations/connect":  # Composio Connect Link for a catalog toolkit
             link = integrations.connect_link(q.get("toolkit", ""))
             return self.send(302, "", headers={"Location": link}) if link else self.send(502, {"error": "could not get a Composio connect link"})

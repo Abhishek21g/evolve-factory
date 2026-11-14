@@ -38,7 +38,6 @@ CATALOG = [
     ("googledrive", "Google Drive", "Docs", "Import hazard analyses and test protocols"),
     ("sentry", "Sentry", "Monitoring", "Field errors become hazards to review"),
     ("datadog", "Datadog", "Monitoring", "Fleet telemetry for the world model"),
-    ("elevenlabs", "ElevenLabs", "Voice", "Spoken status and verdict briefings"),
     ("neon", "Neon", "Database", "Postgres for the audit trail and evidence index"),
 ]
 SLUGS = [c[0] for c in CATALOG]
@@ -114,6 +113,10 @@ def overview(status):
          "detail": {"connected": "files evidence as GitHub issues", "not connected": "GitHub not authorized yet", "checking": "checking…",
                     "error": "unreachable: runs continue", "missing key": "add COMPOSIO_API_KEY to connect"}.get(gh, gh),
          "use": "Files the evidence pack on GitHub after every verdict", "connect": "github" if gh == "not connected" else None},
+        {"id": "elevenlabs", "name": "ElevenLabs", "tone": {"connected": "ok", "no agent": "warn"}.get(status["elevenlabs"], "off"),
+         "detail": {"connected": "voice agent and callout voices", "no agent": "run factory/hotline.py setup",
+                    "missing key": "add ELEVENLABS_API_KEY to connect"}[status["elevenlabs"]],
+         "use": "Cockpit callouts from the simulation, the safety hotline voice agent"},
         {"id": "vercel", "name": "Vercel", "tone": "ok" if _cache["vercel"] else "warn" if _cache["vercel"] is None else "off",
          "detail": "certus-factory.vercel.app is up" if _cache["vercel"] else "checking…" if _cache["vercel"] is None else "site unreachable",
          "use": "Hosts the read-only snapshot of the factory", "url": VERCEL_URL},
