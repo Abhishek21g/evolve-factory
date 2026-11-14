@@ -12,7 +12,7 @@ calls = []
 
 
 def fake(reply):
-    def _send(req):
+    def _send(req, timeout=30):
         calls.append((req.method, req.full_url.replace(sf.BASE, ""), json.loads(req.data) if req.data else None,
                       req.get_header("Authorization")))
         return 200, json.dumps(reply).encode()
@@ -46,7 +46,7 @@ sf.link_pr("uuid-1", "https://github.com/o/r/pull/1")
 assert calls[-1][:3] == ("POST", "/work_orders/uuid-1/pull_requests", {"url": "https://github.com/o/r/pull/1"})
 
 
-def boom(req):
+def boom(req, timeout=30):
     raise urllib.error.HTTPError(req.full_url, 401, "no", {}, __import__("io").BytesIO(b'{"detail":"API key has expired"}'))
 
 
@@ -55,6 +55,19 @@ try:
     sf.health(); raise SystemExit("401 not raised")
 except sf.SFError as e:
     assert "401" in str(e) and "expired" in str(e) and "sofa-ext-test" not in str(e)
+
+import socket  # noqa: E402
+
+
+def slow(req, timeout=30):
+    raise socket.timeout("The read operation timed out")
+
+
+sf._send = slow
+try:
+    sf.link_pr("uuid-1", "https://github.com/o/r/pull/1"); raise SystemExit("timeout escaped as a raw exception")
+except sf.SFError as e:
+    assert "timeout" in str(e).lower()
 
 del os.environ["SF_API_KEY"]
 sf.load_env = lambda: None

@@ -6,6 +6,7 @@ The key selects the project, so no project id is sent. Stdlib only.
   python3 gate/sf.py health            # confirm the key works (read-only)
   python3 gate/sf.py get WO-12         # print the WO the runner would receive (read-only)
 """
+import http.client
 import json
 import os
 import re
@@ -35,13 +36,13 @@ def load_env():
         pass
 
 
-def _send(req):
+def _send(req, timeout=30):
     """The one network call. Tests replace this."""
-    with urllib.request.urlopen(req, timeout=30) as r:
+    with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.status, r.read()
 
 
-def request(method, path, body=None):
+def request(method, path, body=None, timeout=30):
     load_env()
     key = os.environ.get("SF_API_KEY", "")
     if not key:
@@ -52,13 +53,14 @@ def request(method, path, body=None):
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "Accept": "application/json"},
     )
     try:
-        status, raw = _send(req)
+        status, raw = _send(req, timeout)
     except urllib.error.HTTPError as e:
         detail = e.read().decode(errors="replace")[:500]
         hint = " (is the key expired, or not a sofa-ext- key?)" if e.code == 401 else ""
         raise SFError(f"{method} {path} -> HTTP {e.code}{hint}: {detail}") from None
-    except urllib.error.URLError as e:
-        raise SFError(f"{method} {path} -> network error: {e.reason}") from None
+    except (urllib.error.URLError, http.client.HTTPException, OSError) as e:
+        # includes socket.timeout: the request may still have been applied on SF's side
+        raise SFError(f"{method} {path} -> network error or timeout: {getattr(e, 'reason', e)}") from None
     return json.loads(raw) if raw else {}
 
 
@@ -93,7 +95,8 @@ def set_status(wo_id, status):
 
 
 def link_pr(wo_id, url):
-    return request("POST", f"/work_orders/{wo_id}/pull_requests", {"url": url})
+    # SF can be slow to verify the PR with GitHub; a timeout here may still have linked it.
+    return request("POST", f"/work_orders/{wo_id}/pull_requests", {"url": url}, timeout=90)
 
 
 if __name__ == "__main__":
