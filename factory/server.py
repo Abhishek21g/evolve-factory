@@ -91,7 +91,8 @@ class H(SimpleHTTPRequestHandler):
             s = store.state(q.get("project", ""), job["wo"] if busy() else None)
             s["status"] = {"online": True, "busy": busy(), "job": job["kind"] if busy() else None, "running": job["wo"] if busy() else None,
                            "memory": "HydraDB" if os.environ.get("HYDRADB_API_KEY") else "local",
-                           "composio": bool(os.environ.get("COMPOSIO_API_KEY")), "software_factory": bool(os.environ.get("SF_API_KEY"))}
+                           "composio": bool(os.environ.get("COMPOSIO_API_KEY")), "software_factory": bool(os.environ.get("SF_API_KEY")),
+                           "replay": os.environ.get("FACTORY_REPLAY") == "1"}
             return self.send(200, s)
         if u.path == "/api/events":
             since = int(q.get("since", "0"))

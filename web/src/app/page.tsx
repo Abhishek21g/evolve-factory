@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity, ArrowUp, Bot, Boxes, Brain, ChevronDown, FileCheck2, FlaskConical, GitBranch, Home, ListChecks, Network, Plus, Play, Search, ShieldAlert, Users,
+  Activity, ArrowUp, Bot, Boxes, Brain, ChevronDown, FileCheck2, FlaskConical, GitBranch, GitPullRequest, Home, ListChecks, Network, Plus, Play, Search, ShieldAlert, Users,
 } from "lucide-react";
 import { useFactoryState, type MemoryItem, type Member, type State, type WorkOrder } from "@/lib/api";
 import type { Ev } from "@/lib/feed";
@@ -92,7 +92,7 @@ function Sidebar({ state, project, page, me, setMe, live }: { state: State; proj
       <div className="space-y-3 border-t border-line p-3 text-[12px]">
         <div className="flex items-center gap-2 text-dim">
           <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-ok" : "bg-dim"}`} />
-          {live ? "Factory online" : "Snapshot"} · memory {state.status?.memory || "local"}
+          {live ? "Factory online" : "Snapshot"} · memory {state.status?.memory || "local"}{live && state.status?.replay ? " · replay" : ""}
         </div>
         <label className="flex items-center gap-2">
           <Avatar m={humans.find(h => h.id === me)} />
@@ -469,6 +469,7 @@ function WorkOrderView({ state, events, post, text, team, id, live }: Ctx & { id
   const lastRun = mine.length ? mine[mine.length - 1].run : null;
   const run = mine.filter(e => e.run === lastRun);
   const step = (agent: string) => [...run].reverse().find(e => e.agent === agent || (agent === "coder-claude" && e.agent.startsWith("coder")));
+  const pr = [...run].reverse().find(e => e.pr)?.pr;
   const busy = state.status?.busy;
   const start = async () => { const r = await post("run", { wo: id }); setErr(r.error || ""); };
   const open = async (kind: "evidence" | "diff", title: string) => setDoc({ title, body: await text(`${kind}?wo=${id}`) });
@@ -479,6 +480,7 @@ function WorkOrderView({ state, events, post, text, team, id, live }: Ctx & { id
       <PageHead title={w.title} sub={<span className="inline-flex flex-wrap items-center gap-2"><Badge>{w.status}</Badge> requested by <Who m={team[w.requested_by]} /> · {ago(w.created)}</span>}>
         {w.evidence && <Button onClick={() => open("evidence", `Evidence pack · ${w.id}`)}><FileCheck2 size={14} /> Evidence</Button>}
         {w.commits.length > 0 && <Button onClick={() => open("diff", `Code change · ${w.id}`)}><GitBranch size={14} /> Code change</Button>}
+        {pr && <Button onClick={() => window.open(pr, "_blank", "noopener")}><GitPullRequest size={14} /> Pull request</Button>}
         <Button primary onClick={start} disabled={!live || busy || w.status === "Running"}><Play size={14} /> {w.status === "Draft" ? "Run" : "Run again"}</Button>
       </PageHead>
       {err && <p className="-mt-3 mb-4 text-[12px] text-bad">{err}</p>}
