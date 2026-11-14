@@ -42,19 +42,27 @@ MEAL_AT, MINUTES = 30, 360
 SEVERE_HYPO, HYPER = 54, 250
 OK, REJECT_LIMIT = 0, 1
 CR = pd.read_csv(os.path.join(os.path.dirname(simglucose.__file__), "params", "Quest.csv")).set_index("Name")["CR"]
+PATIENT_FILE = os.path.join(os.path.dirname(simglucose.__file__), "params", "vpatient_params.csv")
 
 
 SHIM = os.path.join(os.path.dirname(os.path.abspath(__file__)), "shim.c")
 
 
 def load_pump(src_dir, out_dir):
+    return bind_pump(compile_pump(src_dir, os.path.join(out_dir, "libpump.so")))
+
+
+def compile_pump(src_dir, lib):
     """Compile candidate pump.c + sim/shim.c against the candidate's own pump.h (no struct mirroring)."""
-    lib = os.path.join(out_dir, "libpump.so")
     flags = ["-undefined", "dynamic_lookup"] if sys.platform == "darwin" else []  # weak optional symbols
     p = subprocess.run(["cc", "-shared", "-fPIC", *flags, "-I", src_dir, "-o", lib,
                         os.path.join(src_dir, "pump.c"), SHIM], capture_output=True, text=True)
     if p.returncode:
         raise RuntimeError("pump does not match the world-model interface in pump.h:\n" + p.stderr[-1500:])
+    return lib
+
+
+def bind_pump(lib):
     pump = ctypes.CDLL(lib)
     pump.sim_new.restype = ctypes.c_void_p
     pump.sim_new.argtypes = [ctypes.c_int]
@@ -71,6 +79,11 @@ def load_pump(src_dir, out_dir):
 #   carbs: meal grams; typo: factor the user mistypes the correct dose by (1 = no typo);
 #   fallback when the pump rejects: "extended" (user picks extended mode) or "reenter" (user types the intended dose);
 #   cohort: adult | adolescent | child (10 virtual patients each).
+# Optional what-if knobs (defaults reproduce the gate scenarios exactly):
+#   meal_at: minute of the meal (30); minutes: run length (360); eaten: grams actually eaten (= carbs; 0 = bolused
+#   but skipped the meal); dose_u: units the user types (overrides carbs / CR * typo); bg_start: starting BG mg/dL
+#   (patient's own fasting BG); sensitivity: multiplier on insulin action above basal, Vmx (1; >1 approximates the
+#   raised insulin sensitivity after exercise; insulin-independent exercise uptake is not modeled).
 SCENARIOS = [
     {"id": "large-meal", "label": "120 g meal, correct dose", "carbs": 120, "typo": 1, "fallback": "extended", "cohort": "adult"},
     {"id": "decimal-slip", "label": "15 g snack, dose typed 10x", "carbs": 15, "typo": 10, "fallback": "reenter", "cohort": "adult"},
@@ -79,9 +92,9 @@ SCENARIOS = [
 
 def decide(pump, s, sc, cr, bg):
     """User asks the pump under test for a meal dose. Returns (carbs_g, extended_active, note)."""
-    carbs = sc["carbs"]
-    want = carbs / cr
-    typed = want * sc.get("typo", 1)
+    carbs = sc.get("eaten", sc["carbs"])
+    want = sc["carbs"] / cr
+    typed = sc["dose_u"] if sc.get("dose_u") is not None else want * sc.get("typo", 1)
     if pump.sim_bolus(s, typed, bg) == OK:
         return carbs, False, (f"typo {typed:.1f} U delivered" if typed != want else f"bolus {want:.1f} U")
     if sc.get("fallback") == "reenter" and typed != want and pump.sim_bolus(s, want, bg) == OK:
@@ -96,24 +109,53 @@ def decide(pump, s, sc, cr, bg):
 def simulate(pump, name, scenario, cr):
     """Pump in the loop, one step per minute. Insulin given = what the pump code itself recorded as
     delivered (delivered_today_u delta), never what we assume it would deliver."""
-    p = T1DPatient.withName(name)
+    p = patient(name, scenario)
     basal = p._params["u2ss"] * p._params["BW"] / 6000  # U/min, simglucose convention
+    meal_at = scenario.get("meal_at", MEAL_AT)
     s = pump.sim_new(1)  # adult profile
     trace, carbs, ext, note = [], 0, False, ""
     try:
-        for t in range(MINUTES):
+        for t in range(scenario.get("minutes", MINUTES)):
             bg = int(p.observation.Gsub)
             before = pump.sim_delivered(s)
-            if t == MEAL_AT:
+            if t == meal_at:
                 carbs, ext, note = decide(pump, s, scenario, cr, bg)
             elif ext:
                 pump.sim_tick(s, bg)
             dose = max(0.0, pump.sim_delivered(s) - before)
-            p.step(Action(CHO=carbs if t == MEAL_AT else 0, insulin=basal + dose))
+            p.step(Action(CHO=carbs if t == meal_at else 0, insulin=basal + dose))
             trace.append(float(p.observation.Gsub))
     finally:
         pump.sim_free(s)
     return note, trace
+
+
+def patient(name, scenario):
+    """Virtual patient, optionally with a starting BG and a changed insulin sensitivity (both approximations:
+    plasma, tissue and sensor glucose are scaled together; sensitivity scales Vmx, insulin-dependent uptake)."""
+    if scenario.get("bg_start") is None and scenario.get("sensitivity", 1) == 1:
+        return T1DPatient.withName(name)
+    params = pd.read_csv(PATIENT_FILE).set_index("Name").loc[name].copy()
+    params["Name"] = name
+    x0 = params[[f"x0_{i:2d}" for i in range(1, 14)]].to_numpy(dtype=float)
+    if scenario.get("bg_start") is not None:
+        x0[[3, 4, 12]] *= scenario["bg_start"] / params["Gb"]
+    params["Vmx"] *= scenario.get("sensitivity", 1)
+    return T1DPatient(params, init_state=x0)
+
+
+def row(sc, name, note, trace):
+    """One patient run, as reported by the gate and the dashboard (trace every 5 min)."""
+    return {"scenario": sc["id"], "patient": name, "note": note,
+            "min": round(min(trace)), "max": round(max(trace)),
+            "hypo": min(trace) < SEVERE_HYPO, "hyper_min": sum(g > HYPER for g in trace),
+            "tir": round(100 * sum(70 <= g <= 180 for g in trace) / len(trace)),
+            "nadir_at": trace.index(min(trace)),
+            "trace": [round(g) for g in trace[::5]]}
+
+
+def names(sc):
+    return [f"{sc.get('cohort', 'adult')}#{i:03d}" for i in range(1, 11)]
 
 
 def cohort(src_dir, scenarios):
@@ -121,13 +163,8 @@ def cohort(src_dir, scenarios):
         pump = load_pump(src_dir, d)
         results = []
         for sc in scenarios:
-            scenario = sc["id"]
-            for name in [f"{sc.get('cohort', 'adult')}#{i:03d}" for i in range(1, 11)]:
-                note, trace = simulate(pump, name, sc, float(CR[name]))
-                results.append({"scenario": scenario, "patient": name, "note": note,
-                                "min": round(min(trace)), "max": round(max(trace)),
-                                "hypo": min(trace) < SEVERE_HYPO, "hyper_min": sum(g > HYPER for g in trace),
-                                "trace": [round(g) for g in trace[::5]]})
+            for name in names(sc):
+                results.append(row(sc, name, *simulate(pump, name, sc, float(CR[name]))))
     return results
 
 
