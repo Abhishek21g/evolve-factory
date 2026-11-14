@@ -4,6 +4,7 @@
 
 Adults with high insulin needs cannot cover a large meal with one 10 U bolus. This is a one-line config change: set MAX_BOLUS_U in demo/pump/pump.h to 25.0.
 **Decision:** APPROVED (deterministic: unit tests + world model; no LLM in the approval path)
+Deterministic gate: Rust (forbid unsafe) · verdict digest 8093c0f1152d
 **Summary:** 5 requirements tested, 5 passed; world model PASS: 0 new severe-hypo runs in 20 simulations, 2 pre-existing
 
 ## 1. Hazard analysis (Safety Analyst)

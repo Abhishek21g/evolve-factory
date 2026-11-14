@@ -29,6 +29,17 @@ const SKILLS: Record<string, string[]> = {
   reviewer: ["Decides merge from checks only, never from an LLM", "Opens the pull request with the evidence"],
   actions: ["Files the evidence pack as a GitHub issue after every verdict", "Runs in the background so it never delays a run", "Needs COMPOSIO_API_KEY and a connected GitHub account"],
 };
+/** Skills that depend on the project's device (default: the insulin pump's, above). */
+const SKILLS_BY_DEVICE: Record<string, Record<string, string[]>> = {
+  "flight-controls": {
+    safety: ["Maps a change to hazards and safety requirements (ARP4761, DO-178C DAL A)", "Tells the coder how to implement it safely", "Proposes new hazards for the log"],
+    world: ["Flies the candidate flight control software in 6 weight/CG configs of a 737-class model", "Compares every flight against main", "Blocks on a new stall or altitude loss"],
+    simulation: ["Turns a what-if question into flight scenarios (speed, pull, sideslip, vane failure, gusts)", "Clamps every scenario to the flight model's valid range"],
+  },
+};
+const PLACEHOLDER: Record<string, string> = {
+  "flight-controls": "Give the team a work order, e.g. Add AoA disagree alert when the two sensors differ by more than 5 degrees",
+};
 
 const tone = (s?: string) => s === "working" ? "run" : s === "blocked" ? "bad" : s === "done" || s === "pass" ? "ok" : "idle";
 const word = (s?: string) => s === "working" ? "working" : s === "blocked" ? "blocked" : s === "done" || s === "pass" ? "done" : "idle";
@@ -80,7 +91,7 @@ export function AgentTeam({ state, events, live, post, team }: AgentCtx) {
       <PageHead title="Agents" sub="The agent team. Each agent has one job; people approve, agents execute, and every step is recorded. Open an agent to see its log, output and history." />
       <form onSubmit={start} className="mb-3 flex flex-col gap-2 md:flex-row">
         <input value={text} onChange={e => setText(e.target.value)} className={inputCls + " md:flex-1"} aria-label="Give the team a work order"
-          placeholder="Give the team a work order, e.g. Add an alarm when the extended bolus is interrupted" />
+          placeholder={PLACEHOLDER[p.device] || "Give the team a work order, e.g. Add an alarm when the extended bolus is interrupted"} />
         <Button primary type="submit" disabled={!live || busy || !text.trim()}><ArrowUp size={14} /> Start work order</Button>
         {draft && <Button onClick={() => act("run", { wo: draft.id })} disabled={!live || busy}><Play size={14} /> Run draft {draft.id}</Button>}
       </form>
@@ -193,7 +204,7 @@ export function AgentPage({ state, events, team, id }: AgentCtx & { id: string }
         </div>
         <div className="min-w-0">
           <Section title="Skills">
-            <ul className="space-y-1.5 text-[13px] text-mute">{(SKILLS[id] || [a.role]).map(s => <li key={s} className="flex gap-2"><span className="text-acc">·</span>{s}</li>)}</ul>
+            <ul className="space-y-1.5 text-[13px] text-mute">{(SKILLS_BY_DEVICE[p.device]?.[id] || SKILLS[id] || [a.role]).map(s => <li key={s} className="flex gap-2"><span className="text-acc">·</span>{s}</li>)}</ul>
           </Section>
           <Section title="History" aside={`${mine.length} run${mine.length === 1 ? "" : "s"}`}>
             <Table head={["Run", "Request", "Result", "When"]} empty="No runs yet."

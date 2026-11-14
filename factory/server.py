@@ -37,11 +37,10 @@ import store  # noqa: E402
 import worldmodel  # noqa: E402
 import tracelinks  # noqa: E402
 
-FEED = store.FEED
 STATIC = os.path.join(ROOT, "web", "out")
 PY = os.path.join(ROOT, ".venv/bin/python")
 lock = threading.Lock()
-job = {"proc": None, "kind": None, "wo": None}
+job = {"proc": None, "kind": None, "wo": None, "project": None}
 HUMANS = {m["id"] for m in store.TEAM if m["kind"] == "human"}
 
 
@@ -101,7 +100,7 @@ def start(kind, *args, wo=None, project=""):
         log = open(os.path.join(ROOT, ".runs", "server-job.log"), "w")
         job["proc"] = subprocess.Popen([PY, os.path.join(ROOT, "factory/pipeline.py"), kind, *args], cwd=ROOT, env=env,
                                        stdout=log, stderr=subprocess.STDOUT)
-        job["kind"], job["wo"] = kind, wo
+        job["kind"], job["wo"], job["project"] = kind, wo, project
         return True
 
 
@@ -135,7 +134,7 @@ class H(SimpleHTTPRequestHandler):
         wo = re.sub(r"[^A-Za-z0-9-]", "", q.get("wo", ""))
         if u.path == "/api/state":
             s = store.state(q.get("project", ""), job["wo"] if busy() else None)
-            s["status"] = {"online": True, "busy": busy(), "job": job["kind"] if busy() else None, "running": job["wo"] if busy() else None,
+            s["status"] = {"online": True, "busy": busy(), "job": job["kind"] if busy() else None, "running": job["wo"] if busy() else None, "project": job["project"] if busy() else None,
                            "memory": memory.backend(), "hydradb": memory.status(),
                            "composio": bool(os.environ.get("COMPOSIO_API_KEY")), "composio_status": composio_status(),
                            "software_factory": bool(os.environ.get("SF_API_KEY")), "replay": os.environ.get("FACTORY_REPLAY") == "1"}
@@ -151,8 +150,8 @@ class H(SimpleHTTPRequestHandler):
             return
         if u.path == "/api/events":
             since = int(q.get("since", "0"))
-            lines = open(FEED).read().splitlines() if os.path.exists(FEED) else []
-            return self.send(200, {"total": len(lines), "events": [json.loads(l) for l in lines[since:] if l.strip()]})
+            evs = store.events()  # every event stamped with its project; the UI shows the selected project's
+            return self.send(200, {"total": len(evs), "events": evs[since:]})
         if u.path == "/api/evidence":
             p = os.path.join(ROOT, ".runs", f"{wo}.evidence.md")
             if not os.path.exists(p):
@@ -203,7 +202,7 @@ class H(SimpleHTTPRequestHandler):
                 text = w["title"] + ("\n\n" + w["description"] if w["description"] else "")
                 if not start("build", text, w["id"], wo=w["id"], project=w["project"]):
                     return self.send(409, {"error": "factory busy"})
-                store.log(actor, "started run", w["id"], w["title"])
+                store.log(actor, "started run", w["id"], w["title"], w["project"])
                 return self.send(202, {"started": w["id"]})
             if u.path == "/api/memory":
                 if not clip("text", 2000):
@@ -221,13 +220,13 @@ class H(SimpleHTTPRequestHandler):
                 if clip("skill", 20) == "simulate" or re.match(r"\s*what (if|happens)", t, re.I):
                     if not start("whatif", t, project=clip("project", 60)):
                         return self.send(409, {"error": "factory busy"})
-                    store.log(actor, "asked the world model", "world model", t)
+                    store.log(actor, "asked the world model", "world model", t, clip("project", 60))
                     return self.send(202, {"started": "whatif"})
                 if busy():
                     return self.send(409, {"error": "factory busy"})
                 w = store.create_wo(actor, clip("project", 60), t[:120], "")
                 start("build", t, w["id"], wo=w["id"], project=w["project"])
-                store.log(actor, "started run", w["id"], t[:120])
+                store.log(actor, "started run", w["id"], t[:120], w["project"])
                 return self.send(202, {"started": w["id"], "id": w["id"]})
             if u.path.startswith("/api/trace/"):
                 if not any(p["id"] == clip("project", 60) for p in store._load()["projects"]):
@@ -247,7 +246,7 @@ class H(SimpleHTTPRequestHandler):
             if u.path == "/api/whatif":
                 if not clip("text") or not start("whatif", clip("text"), project=clip("project", 60)):
                     return self.send(409, {"error": "factory busy or empty question"})
-                store.log(actor, "asked the world model", "world model", clip("text"))
+                store.log(actor, "asked the world model", "world model", clip("text"), clip("project", 60))
                 return self.send(202, {"started": "whatif"})
         except ValueError as e:
             return self.send(400, {"error": str(e)})
