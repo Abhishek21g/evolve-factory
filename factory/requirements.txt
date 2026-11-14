@@ -1,0 +1,2 @@
+hydradb-sdk>=2,<3   # proprietary license, used as a hosted service client
+composio==0.32.0    # Apache-2.0
