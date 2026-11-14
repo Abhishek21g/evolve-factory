@@ -128,7 +128,7 @@ def overview(status):
             "composio": {"key": bool(os.environ.get("COMPOSIO_API_KEY")), "checked": (comp or {}).get("at"), "error": (comp or {}).get("detail")},
             "requirements_tools": [{"name": n, "use": u} for n, u in REQUIREMENTS_TOOLS],
             "mcp": {"servers": servers(), "self": {"tools": [{"name": t["name"], "description": t["description"]} for t in mcp_server.TOOLS],
-                                                    "root": ROOT, "python": PY, "script": os.path.join(ROOT, "factory", "mcp_server.py")}}}
+                                                    "python": os.path.relpath(PY, ROOT), "script": "factory/mcp_server.py"}}}
 
 
 # ---------- MCP servers ----------

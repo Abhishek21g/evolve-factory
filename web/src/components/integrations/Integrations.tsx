@@ -60,7 +60,7 @@ function snapshotOverview(state: State): Overview {
       { name: "Jama Connect", use: "Requirements, hazards and trace links" }, { name: "IBM DOORS Next", use: "Requirements modules and link types" },
       { name: "Polarion ALM", use: "Work items, test runs and risk records" }, { name: "Ketryx", use: "IEC 62304 design controls and SOUP" },
     ],
-    mcp: { servers: [], self: { tools: SELF_TOOLS.map(([name, description]) => ({ name, description })), python: "<repo>/.venv/bin/python", script: "<repo>/factory/mcp_server.py" } },
+    mcp: { servers: [], self: { tools: SELF_TOOLS.map(([name, description]) => ({ name, description })), python: ".venv/bin/python", script: "factory/mcp_server.py" } },
   };
 }
 
@@ -239,9 +239,9 @@ function SelfServer({ o, live, factoryUrl, probe, onTest }: { o: Overview; live:
   const { python, script, tools } = o.mcp.self;
   const stdio = JSON.stringify({ mcpServers: { [SELF]: { command: python, args: [script] } } }, null, 2);
   const snippets = [
-    ["cursor", "Cursor", "~/.cursor/mcp.json or .cursor/mcp.json", stdio],
-    ["claude-code", "Claude Code", "terminal", `claude mcp add ${SELF} -- ${python} ${script}`],
-    ["claude-desktop", "Claude Desktop", "claude_desktop_config.json", stdio],
+    ["cursor", "Cursor", ".cursor/mcp.json in the repo (paths are relative to the repo root)", stdio],
+    ["claude-code", "Claude Code", "terminal, from the repo root", `claude mcp add ${SELF} -- ${python} ${script}`],
+    ["claude-desktop", "Claude Desktop", "claude_desktop_config.json (prefix both paths with where you cloned the repo)", stdio],
     ["http", "HTTP", "while the factory server runs", `claude mcp add --transport http ${SELF} ${factoryUrl}\n\n${JSON.stringify({ mcpServers: { [SELF]: { url: factoryUrl } } }, null, 2)}`],
   ] as const;
   return (
