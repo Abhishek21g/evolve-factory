@@ -109,6 +109,13 @@ export function Modal({ title, children, onClose, wide }: { title: string; child
   );
 }
 
+/** Honest note on a run served from a recorded real run instead of fresh agents. */
+export const Replayed = ({ r }: { r?: { wo?: string | null; at: number } }) => r ? (
+  <span className="text-[11px] text-dim">
+    replayed from real run{r.wo ? ` ${r.wo}` : ""} · {new Date(r.at * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+  </span>
+) : null;
+
 export const ago = (ts: number) => {
   const s = Math.max(0, Date.now() / 1000 - ts);
   return s < 60 ? "just now" : s < 3600 ? `${Math.floor(s / 60)}m ago` : s < 86400 ? `${Math.floor(s / 3600)}h ago` : `${Math.floor(s / 86400)}d ago`;
