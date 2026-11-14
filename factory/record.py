@@ -68,6 +68,12 @@ def locate(repo, symbol, files):
     return first
 
 
+def offline_env():
+    """Environment for the subprocesses monitors start: no model API keys and no agent commands."""
+    return {k: v for k, v in os.environ.items()
+            if not re.match(r"(ANTHROPIC|OPENAI|CLAUDE)|AGENT_(JSON_)?CMD$", k)}
+
+
 def run_test(cmd):
     m = re.match(r"make -s -C (\S+) (\S+)", cmd)
     if m:  # make compares whole seconds: a binary built in the same second as a source edit would never rebuild
@@ -77,7 +83,7 @@ def run_test(cmd):
             os.remove(binary)
     t = time.time()
     try:
-        p = subprocess.run(cmd, shell=True, cwd=ROOT, capture_output=True, text=True, timeout=60)
+        p = subprocess.run(cmd, shell=True, cwd=ROOT, env=offline_env(), capture_output=True, text=True, timeout=60)
         ok, log = p.returncode == 0, (p.stdout + p.stderr).strip()[-400:]
     except subprocess.TimeoutExpired:
         ok, log = False, "timed out after 60 s"
