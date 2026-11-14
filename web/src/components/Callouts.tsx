@@ -36,6 +36,8 @@ let stopCurrent: (() => void) | null = null;
 const cache: Record<string, HTMLAudioElement> = {};
 const clip = (id: string) => (cache[id] ??= Object.assign(new Audio(`/audio/${id}.mp3`), { preload: "auto" }));
 
+const SPEED = 2; // demo pace: playhead and voice clips both run at 2x
+
 const TONE: Record<Tone, string> = { ok: "#34d399", warn: "#fbbf24", bad: "#f87171" };
 const W = 560, H = 190, PL = 36, PR = 70, PT = 10, PB = 24, SH = 34;
 
@@ -62,13 +64,14 @@ function Panel({ tl, side }: { tl: Timeline; side: "before" | "after" | "whatif"
     setFired([]);
     const t0 = performance.now(), done = new Set<number>();
     const tick = () => {
-      const t = Math.min(total, ((performance.now() - t0) / 1000 / tl.play_s) * total);
+      const t = Math.min(total, ((performance.now() - t0) / 1000 / (tl.play_s / SPEED)) * total);
       tl.events.forEach((e, i) => {
         if (e.t <= t && !done.has(i)) {
           done.add(i);
           setFired(f => [...f, i]);
           if (e.clip) {
             const a = clip(e.clip).cloneNode() as HTMLAudioElement;
+            a.playbackRate = SPEED;
             a.play().catch(() => { /* clip not generated yet: the caption still shows */ });
           }
         }
