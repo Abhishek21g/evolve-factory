@@ -26,21 +26,21 @@ export type Loop = {
   wo: string; title: string; project: string; device: string; repo: string; threshold: number | null;
   axis: { unit: string; min: number; max: number } | null; replay?: { wo?: string | null; at: number } | null; attempts: Attempt[]; final?: string;
 };
-type Props = { state: State; events: Ev[]; live: boolean; getJSON: <T>(p: string) => Promise<T | null> };
+type Props = { state: State; events: Ev[]; live: boolean; checking?: boolean; getJSON: <T>(p: string) => Promise<T | null> };
 
 /** The loop of one work order from the factory server; refetched as new agent events arrive, so it fills in live. */
-export function useLoop(getJSON: Props["getJSON"], wo: string | undefined, tick: string) {
+export function useLoop(getJSON: Props["getJSON"], wo: string | undefined, tick: string, live: boolean, checking = false) {
   const [loop, setLoop] = useState<Loop | null | undefined>(undefined);
   useEffect(() => {
-    if (!wo) return;
+    if (!wo || checking) return;
     let stop = false;
     (async () => {
-      const l = (await getJSON<Loop>(`worldmodel?wo=${encodeURIComponent(wo)}`))
-        ?? await fetch(`/worldmodel-${wo}.json`).then(r => (r.ok ? r.json() : null)).catch(() => null);
+      const l = live ? await getJSON<Loop>(`worldmodel?wo=${encodeURIComponent(wo)}`)  // the hosted snapshot has static files
+        : await fetch(`/worldmodel-${wo}.json`).then(r => (r.ok ? r.json() : null)).catch(() => null);
       if (!stop) setLoop(l);
     })();
     return () => { stop = true; };
-  }, [getJSON, wo, tick]);
+  }, [getJSON, wo, tick, live, checking]);
   return loop === undefined ? undefined : loop?.wo === wo ? loop : null;
 }
 
@@ -319,12 +319,12 @@ export function LoopView({ loop }: { loop: Loop }) {
 }
 
 /* ---------- page: #/p/<project>/world-loop/<wo> ---------- */
-export function WorldLoopPage({ state, events, live, getJSON, id }: Props & { id?: string }) {
+export function WorldLoopPage({ state, events, live, checking, getJSON, id }: Props & { id?: string }) {
   const p = state.project!;
   const air = p.device === "flight-controls";
   const wos = [...(state.work_orders || [])].reverse().filter(w => w.world || w.status !== "Draft");
   const wo = id || wos.find(w => w.world)?.id;
-  const loop = useLoop(getJSON, wo, `${events.length}-${live}`);
+  const loop = useLoop(getJSON, wo, `${events.length}-${live}`, live, checking);
   return (
     <>
       <PageHead title="World Model" sub={<>Where a change is flown before it can merge: the world model picks the scenarios, the simulation runs them, and every failure comes back as a diagnosis the coding agent fixes. {loop?.replay && <Replayed r={loop.replay} />}</>}>
@@ -348,10 +348,10 @@ export function WorldLoopPage({ state, events, live, getJSON, id }: Props & { id
 }
 
 /** Compact loop summary for the Simulations page and the work order view. */
-export function LoopSummary({ state, events, live, getJSON, wo }: Props & { wo?: string }) {
+export function LoopSummary({ state, events, live, checking, getJSON, wo }: Props & { wo?: string }) {
   const p = state.project!;
   const target = wo || [...(state.work_orders || [])].reverse().find(w => w.world)?.id;
-  const loop = useLoop(getJSON, target, `${events.length}-${live}`);
+  const loop = useLoop(getJSON, target, `${events.length}-${live}`, live, checking);
   const d = loop?.attempts.find(a => a.diagnosis)?.diagnosis;
   if (!loop || !loop.attempts.length) return null;
   return (
