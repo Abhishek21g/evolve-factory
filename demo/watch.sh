@@ -12,6 +12,9 @@
 # pushes to main that only touched docs/DEMO.md (its own merged PRs).
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# Keys from the main checkout's .env: with ANTHROPIC_API_KEY set, Claude's 5-hour limit can't stall the watcher.
+main=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
+for f in .env "$main/.env"; do if [ -f "$f" ]; then set -a; . "$f"; set +a; break; fi; done
 INTERVAL=${INTERVAL:-120}
 AGENT=${WATCH_AGENT_CMD:-'claude -p --permission-mode acceptEdits --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git log:*),Bash(git diff:*),Bash(git show:*)"'}
 WT="$PWD/.worktrees/demo-doc"

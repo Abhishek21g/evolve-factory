@@ -3,6 +3,7 @@
   .venv/bin/python demo/record.py WO-200            # build run of WO-200 -> demo/replay/build.*
   .venv/bin/python demo/record.py whatif            # latest what-if run  -> demo/replay/whatif.jsonl
   .venv/bin/python demo/record.py WO-101 ../other   # record from another checkout's feed and .runs/
+  FACTORY_BASE=demo-base .venv/bin/python demo/record.py WO-302   # run built on another branch (diff against it)
 Only real runs go in: events are copied from the dashboard feed as they happened, with their real timestamps.
 """
 import json
@@ -24,8 +25,9 @@ def main(target, root):
         run = [e["run"] for e in evs if e.get("wo") == target and e["agent"] == "planner"][-1]
         rec, kind = [e for e in evs if e["run"] == run and e.get("wo") == target], "build"
         git = lambda *a: subprocess.run(["git", "-C", root, *a], capture_output=True, text=True).stdout  # noqa: E731
-        diff = git("diff", "--stat", "-p", f"origin/main...wo/{target}", "--", "demo/")
-        log = git("log", "--format=%H%x09%an%x09%at%x09%s", f"origin/main..wo/{target}")
+        base = "origin/" + os.environ.get("FACTORY_BASE", "main")  # the branch the run was built on
+        diff = git("diff", "--stat", "-p", f"{base}...wo/{target}", "--", "demo/")
+        log = git("log", "--format=%H%x09%an%x09%at%x09%s", f"{base}..wo/{target}")
         commits = [dict(zip(("sha", "author", "ts", "subject"), c.split("\t"))) for c in log.splitlines() if c.count("\t") == 3]
         if diff:
             open(os.path.join(OUT, "build.diff.txt"), "w").write(diff)
