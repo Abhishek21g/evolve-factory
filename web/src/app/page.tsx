@@ -92,7 +92,7 @@ function Sidebar({ state, project, page, me, setMe, live }: { state: State; proj
       <div className="space-y-3 border-t border-line p-3 text-[12px]">
         <div className="flex items-center gap-2 text-dim">
           <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-ok" : "bg-dim"}`} />
-          {live ? "Factory online" : "Snapshot"} · memory {state.status?.memory || "local"}{live && state.status?.replay ? " · replay" : ""}
+          {live ? "Factory online" : "Snapshot"} · memory {state.status?.memory || "local"}
         </div>
         <label className="flex items-center gap-2">
           <Avatar m={humans.find(h => h.id === me)} />
