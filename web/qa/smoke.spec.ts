@@ -86,12 +86,11 @@ test.describe("every page, both projects", () => {
     const problems = watch(page);
     const ps = await projects(page);
     await open(page, `#/p/${ps[0].id}/overview`);
-    const nav = page.getByRole("navigation", { name: "Main" }).getByRole("link");
-    for (let i = 0; i < await nav.count(); i++) {
-      const link = nav.nth(i);
-      const href = await link.getAttribute("href");
-      await link.click();
-      await expect(page).toHaveURL(new RegExp(`${(href || "").replace(/[/#]/g, "\\$&")}$`));
+    const nav = page.getByRole("navigation", { name: "Main" });
+    const hrefs = await nav.getByRole("link").evaluateAll(as => as.map(a => a.getAttribute("href") || ""));
+    for (const href of [...hrefs.filter(h => h !== "#/"), "#/"]) {  // "All projects" last: it swaps the nav to the all-projects one
+      await nav.locator(`a[href="${href}"]`).click();
+      await expect(page).toHaveURL(new RegExp(`${href.replace(/[/#]/g, "\\$&")}$`));
       await expect(page.locator("main h1").first()).toBeVisible();
     }
     for (const p of ps) {
