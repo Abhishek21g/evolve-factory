@@ -21,7 +21,12 @@ mkdir -p .runs
 main=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
 [ -e .env ] || [ ! -f "$main/.env" ] || ln -s "$main/.env" .env
 # With ANTHROPIC_API_KEY set, the Claude CLI bills the API instead of the subscription, so its 5-hour limit can't stop a run.
-if [ -f .env ]; then set -a; . ./.env; set +a; fi
+# Only KEY=value lines are loaded, so a stray pasted value can't abort the script (or echo a secret).
+if [ -f .env ]; then
+  set -a; . <(grep -E '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=' .env); set +a
+  bad=$(grep -nvE '^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=|#|$)' .env | cut -d: -f1 | paste -sd, - || true)
+  [ -z "$bad" ] || echo "warning: .env line(s) $bad are not KEY=value and were skipped"
+fi
 if [ ! -x "$PY" ]; then
   if [ "$main" != "$PWD" ] && [ -x "$main/.venv/bin/python" ]; then
     ln -s "$main/.venv" .venv
