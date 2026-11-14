@@ -30,7 +30,6 @@ const CATALOG: [string, string, string, string][] = [
   ["googledrive", "Google Drive", "Docs", "Import hazard analyses and test protocols"],
   ["sentry", "Sentry", "Monitoring", "Field errors become hazards to review"],
   ["datadog", "Datadog", "Monitoring", "Fleet telemetry for the world model"],
-  ["elevenlabs", "ElevenLabs", "Voice", "Spoken status and verdict briefings"],
   ["neon", "Neon", "Database", "Postgres for the audit trail and evidence index"],
 ];
 const SELF_TOOLS = [
@@ -52,6 +51,7 @@ function snapshotOverview(state: State): Overview {
       { id: "software-factory", name: "8090 Software Factory", tone: st?.software_factory ? "ok" : "off", detail: st?.software_factory ? "work orders and reports via REST" : "not connected in this snapshot", use: "Requirements, blueprints and work orders come from Software Factory" },
       { id: "hydradb", name: "HydraDB", tone: hydra === "connected" ? "ok" : "off", detail: hydra === "connected" ? "shared memory, live recall" : "not connected in this snapshot", use: "Org memory, regulatory knowledge base, lessons from every verdict" },
       { id: "composio", name: "Composio · GitHub", tone: gh === "connected" ? "ok" : "off", detail: gh === "connected" ? "files evidence as GitHub issues" : "not connected in this snapshot", use: "Files the evidence pack on GitHub after every verdict" },
+      { id: "elevenlabs", name: "ElevenLabs", tone: "ok", detail: "recorded callouts and a recorded hotline call", use: "Cockpit callouts from the simulation, the safety hotline voice agent" },
       { id: "vercel", name: "Vercel", tone: "ok", detail: "you are on certus-factory.vercel.app", use: "Hosts the read-only snapshot of the factory", url: "https://certus-factory.vercel.app" },
     ],
     catalog: CATALOG.map(([id, name, category, use]) => ({ id, name, category, use, via: "Composio", connected: false, logo: `https://logos.composio.dev/api/${id}` })),
@@ -94,7 +94,7 @@ export function Integrations({ state, live, base, getJSON, post }: Props) {
       )}
 
       <Section title="Connected now" aside={o.composio.checked ? `checked ${Math.round(Date.now() / 1000 - o.composio.checked)}s ago` : undefined}>
-        <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-5" data-testid="connected-now">
+        <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3" data-testid="connected-now">
           {o.connected.map(t => {
             const Icon = ICONS[t.id] || Server;
             return (

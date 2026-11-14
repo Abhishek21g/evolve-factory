@@ -31,6 +31,9 @@ export function HomePage({ state, post, team, me, live, base }: Ctx) {
       base === null ? "Connect on the live server"
         : comp === "not connected" ? <a href={`${base}/api/connect/composio`} target="_blank" rel="noopener" className="text-acc hover:underline">Connect GitHub</a>
         : { connected: "files evidence on GitHub", checking: "checking…", error: "unreachable: runs continue", "missing key": "add key to connect" }[comp]],
+    ["ElevenLabs", !st?.elevenlabs || st.elevenlabs === "connected" ? "ok" : st.elevenlabs === "no agent" ? "warn" : "off",
+      !st?.elevenlabs ? "recorded callouts and hotline call"
+        : { connected: "cockpit callouts, safety hotline", "no agent": "run factory/hotline.py setup", "missing key": "add key to connect" }[st.elevenlabs]],
     ["Vercel", "ok", "hosting"],
   ];
   return (
