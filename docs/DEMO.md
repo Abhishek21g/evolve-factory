@@ -1,7 +1,7 @@
 # Demo: stage script + video (replay only, about 2:50)
 
 Replay only: every run plays a recorded real run (`demo/go.sh replay`), nothing calls an LLM, nothing can hang.
-Words to say are in [PITCH.md](PITCH.md) (section 1 on stage, section 7 for the video); this file is the clicks.
+Words to say are in [PITCH.md](PITCH.md) (section 1 on stage, section 5 for the video); this file is the clicks.
 Timings were measured on Nov 14 (08:30) on `main` with the replay defaults, from the moment you press Enter.
 
 ## Before recording or going on stage (T-10 min)

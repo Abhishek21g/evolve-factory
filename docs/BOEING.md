@@ -1,30 +1,16 @@
 # Boeing: flight-controls project in Certus Factory
 
 Why this exists: Boeing asked CertusAI about DO-254, and mentors asked to see the factory on aerospace software.
-This page records what Boeing actually needs, where we got it, and what the demo project covers.
+This page records the standards an aircraft program has to meet and what the demo project covers.
 
-## 1. Where Boeing stands with CertusAI (be exact on stage)
+## 1. Context
 
-**Boeing is not a customer.** Boeing asked whether Certus supports **DO-254** (design assurance for airborne
-electronic hardware: FPGAs and ASICs) and asked to see the workflow on it. The founder is in conversation with
-Boeing's AI lead. DO-254 support is CertusAI's next build. Say "Boeing asked us for DO-254", never "Boeing is a
-customer".
+Boeing asked CertusAI about **DO-254** (design assurance for airborne electronic hardware: FPGAs and ASICs).
+**Boeing is not a customer**, and nothing in this project is Boeing code or data. DO-254 is hardware; this
+project shows the same engine on the software side (**DO-178C**), which is the larger half of an aircraft
+program's certification evidence. Defense programs need the same kind of evidence (MIL-STD-882E).
 
-| Claim | Source (CertusAI team material, private) |
-|---|---|
-| "Is Boeing a customer? Not yet. Boeing asked us to show the workflow on DO-254, and we're building that module now." | `certus_ai/meetings/investor-handbook.md` §4.10; Notion "Pitch Handbook", "Certus X Anorak Ventures" |
-| "Boeing asked whether we support DO-254 ... in conversation with [Boeing's AI lead]. (Say exactly where it stands. Do not round up.)" | `certus_ai/meetings/hrt/script.md`, `hrt/prep.md`; Notion "HRT Ventures" |
-| Don't claim that NVIDIA, Zoox, GM or Boeing are customers. | `investor-handbook.md` "never say" list |
-| Pricing hypothesis: each regulation is a module ($150-300k/yr); "a prime like Boeing runs several modules, about $1M a year" | `investor-handbook.md` numbers card; Notion "Pitch Handbook" |
-| Module order: ISO 26262 now, DO-254 next, IEC 61508 after; DO-178C on the roadmap ("same engine, new rule pack") | Notion "Pitch Handbook", "Architecture: GTM-facing version", M12 one-pager |
-| FAA Stages of Involvement (SOI 1-4: planning, development, verification, final) each review the trace evidence | `certus_ai/meetings/hrt/script.md` Q&A |
-| DO-178C is a stub in CertusAI's standards library (document types FHA, FTA, FMEA, DAL; rating taxonomy DAL); "DO-178C end to end: NOT CLAIMED" | `certus_ai/packages/standards-library` README; `certus-pitch/docs/CERTUS_KNOWLEDGE_TRANSFER.md` |
-| Defense programs need the same evidence (MIL-STD-882E) | Notion "Certus X Anorak Ventures" |
-
-So the honest pitch: Boeing pulled us toward aerospace (DO-254). This project shows the same engine on the
-software side (DO-178C), which is the larger half of an aircraft program's certification evidence.
-
-## 2. What Boeing has to show (regulations and standards)
+## 2. What a transport-aircraft program has to show (regulations and standards)
 
 Public standards; identifiers and roles as commonly cited (RTCA, SAE, FAA, EASA).
 
