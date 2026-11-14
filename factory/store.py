@@ -28,7 +28,7 @@ TEAM = [
     {"id": "simulation", "name": "Simulation Agent", "role": "Turns questions into scenarios", "kind": "agent"},
     {"id": "evidence", "name": "Evidence", "role": "Writes the safety case", "kind": "agent"},
     {"id": "reviewer", "name": "Reviewer", "role": "Merge decision from checks", "kind": "agent"},
-    {"id": "actions", "name": "Composio", "role": "Acts in GitHub and Slack", "kind": "agent"},
+    {"id": "actions", "name": "Composio", "role": "Files evidence on GitHub", "kind": "agent"},
 ]
 DEVICES = {
     "insulin-pump": {"label": "Insulin pump", "world_model": "UVA/Padova type 1 diabetes simulator (simglucose), 30 virtual patients",

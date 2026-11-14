@@ -23,7 +23,11 @@ export type State = {
   hazards?: Hazard[]; requirements?: Requirement[]; work_orders?: WorkOrder[]; audit: Audit[];
   trace?: { nodes: TraceNode[]; edges: { source: string; target: string }[] };
   agents?: Record<string, AgentLive>; memory?: MemoryItem[];
-  status?: { online: boolean; busy: boolean; job: string | null; running: string | null; memory: string; composio: boolean; software_factory: boolean; replay?: boolean };
+  status?: {
+    online: boolean; busy: boolean; job: string | null; running: string | null; memory: string; composio: boolean; software_factory: boolean; replay?: boolean;
+    hydradb?: "connected" | "connecting" | "falling back" | "missing key";
+    composio_status?: "connected" | "not connected" | "checking" | "error" | "missing key";
+  };
 };
 
 const BASES = () => ["", ...(process.env.NEXT_PUBLIC_FACTORY_URL ? [process.env.NEXT_PUBLIC_FACTORY_URL] : []), "http://localhost:8787"];

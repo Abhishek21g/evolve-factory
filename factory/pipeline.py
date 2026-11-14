@@ -20,7 +20,6 @@ sys.path.insert(0, os.path.join(ROOT, "dashboard"))
 sys.path.insert(0, os.path.join(ROOT, "factory"))
 import emit  # noqa: E402
 import memory  # noqa: E402
-import actions  # noqa: E402
 import store  # noqa: E402
 
 PY = os.path.join(ROOT, ".venv/bin/python")
@@ -87,6 +86,12 @@ def safety_analysis(intent, spec, hits):
     return out
 
 
+def recall(intent):
+    hits = memory.recall(intent, k=5)
+    return (hits, f"Recalled {len(hits)} items from {memory.backend()} (tickets, meetings, chats, emails, code)",
+            [{k: h.get(k) for k in ("kind", "title", "text", "score")} for h in hits])
+
+
 def build(intent, wo=None):
     global WO
     wo = WO = wo or next_wo()
@@ -94,9 +99,8 @@ def build(intent, wo=None):
         if os.path.exists(os.path.join(RUNS, f"{wo}.{ext}")):
             os.remove(os.path.join(RUNS, f"{wo}.{ext}"))
     ev("planner", "working", f'New request from the operator: "{intent}"', wo=wo, title=intent)
-    hits = memory.recall(intent, k=5)
-    ev("memory", "done", f"Recalled {len(hits)} items from {memory.backend()} (tickets, meetings, chats, emails, code)",
-       wo=wo, memory=[{k: h.get(k) for k in ("kind", "title", "text", "score")} for h in hits])
+    hits, msg, mem = recall(intent)
+    ev("memory", "done", msg, wo=wo, memory=mem)
     spec = json.load(open(os.path.join(ROOT, "demo/pump/safety.json")))
     analysis = safety_analysis(intent, spec, hits)
     ev("planner", "done", f"Plan ready for {wo}; Claude Code works in its own git worktree", wo=wo, title=intent)
@@ -128,13 +132,20 @@ def build(intent, wo=None):
 
     memory.remember([{"id": f"run-{wo}", "kind": "run", "title": f"{wo}: {intent}",
                       "text": f"Result {'PASS' if passed else 'BLOCKED'}. {summary['headline']}"}])
-    acted = actions.after_run(wo, intent, passed, summary)
-    if acted:
-        ev("actions", "done", acted, wo=wo)
-    ev("reviewer", "done" if passed else "blocked",
-       f"{wo} approved by deterministic checks: ready to merge with evidence" if passed
-       else f"{wo} BLOCKED: {reason}. Not mergeable; evidence attached", wo=wo)
+    verdict = (f"{wo} approved by deterministic checks: ready to merge with evidence" if passed
+               else f"{wo} BLOCKED: {reason}. Not mergeable; evidence attached")
+    ev("reviewer", "done" if passed else "blocked", verdict, wo=wo)
+    post_actions(wo, intent, passed, verdict, summary["headline"])
     return 0 if passed else 1
+
+
+def post_actions(wo, intent, passed, verdict, headline):
+    """Composio files the evidence on GitHub in its own process, after the verdict is on screen: never blocks a run."""
+    if not os.environ.get("COMPOSIO_API_KEY"):
+        return
+    job = json.dumps({"wo": wo, "intent": intent, "passed": passed, "verdict": verdict, "headline": headline})
+    subprocess.Popen([PY, os.path.join(ROOT, "factory/actions.py"), "post", job], cwd=ROOT, start_new_session=True,
+                     stdout=open(os.path.join(RUNS, "actions.log"), "a"), stderr=subprocess.STDOUT)
 
 
 def block_reason(wo, report):
@@ -251,7 +262,7 @@ def recorded(kind, text):
 def save(kind, text, wo=None):
     """Cache this process's finished live run so the same request answers instantly next time."""
     evs = [json.loads(line) for line in open(emit.FEED) if line.strip()]
-    rec = [e for e in evs if e["run"] == emit.RUN and (not wo or e.get("wo") == wo)]
+    rec = [e for e in evs if e["run"] == emit.RUN and (not wo or e.get("wo") == wo) and e["agent"] != "actions"]
     done = rec and (rec[-1]["agent"] == "reviewer" and not rec[-1].get("not_run") if wo else any(e.get("world") for e in rec))
     if not done:
         return
@@ -273,7 +284,7 @@ def replay(src, wo=None):
     Messages, gate rows, simulations, evidence and PR link are the recorded ones."""
     speed, cap = float(os.environ.get("REPLAY_SPEED", "4")), float(os.environ.get("REPLAY_MAX_GAP", "4"))
     holds = [float(h) for h in os.environ.get("REPLAY_HOLD", "30,15").split(",")]
-    rec = [json.loads(line) for line in open(src + ".jsonl") if line.strip()]
+    rec = [e for line in open(src + ".jsonl") if line.strip() and (e := json.loads(line))["agent"] != "actions"]
     old = rec[0].get("wo")
     sub = (lambda s: s.replace(old, wo)) if old and wo else (lambda s: s)  # noqa: E731
     os.makedirs(RUNS, exist_ok=True)
@@ -293,9 +304,15 @@ def replay(src, wo=None):
                     json.dump(kw[key], open(os.path.join(RUNS, f"{wo}.{key}.json"), "w"))
             if "evidence" in kw:
                 kw["evidence"] = {**kw["evidence"], "wo": wo}
-        emit.emit(e["agent"], e["state"], sub(e["msg"]), **kw)
+        msg = sub(e["msg"])
+        if e["agent"] == "memory" and e["state"] == "done":  # the context layer answers live, not from the recording
+            _, msg, kw["memory"] = recall(rec[0].get("title", ""))
+        emit.emit(e["agent"], e["state"], msg, **kw)
         if e["agent"] == "gate" and e["state"] == "blocked":
             time.sleep(holds.pop(0) if len(holds) > 1 else holds[0])
+    last, evd = rec[-1], next((e["evidence"] for e in reversed(rec) if e.get("evidence")), {})
+    if wo and last["agent"] == "reviewer" and not last.get("not_run"):
+        post_actions(wo, rec[0].get("title", "").split("\n")[0], last["state"] == "done", sub(last["msg"]), evd.get("headline", ""))
     return 0 if not wo or rec[-1]["state"] == "done" else 1
 
 
