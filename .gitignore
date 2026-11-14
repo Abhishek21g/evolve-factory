@@ -10,3 +10,5 @@ build/
 .vercel
 dashboard/events.jsonl
 .cursor/
+.worktrees/
+.runs/

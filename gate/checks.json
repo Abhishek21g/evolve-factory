@@ -1,0 +1,4 @@
+[
+  {"name": "protected-files", "cmd": "python3 {root}/gate/check_protected.py --repo {repo} --base {base}"},
+  {"name": "safety-gate", "cmd": "python3 {root}/gate/gate.py --repo {repo} --safety {root}/demo/pump/safety.json --base {base}"}
+]
