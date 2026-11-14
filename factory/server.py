@@ -33,6 +33,8 @@ POST /api/monitors/run {id, project}                run a monitor now (in the ba
 POST /api/supply/suppliers {project, name, tier, parent, kind, supplies, contact, email, affects}   connect a supplier team
 POST /api/supply/deliverables {project, supplier, deliverable, title, kind, url, item, expires}  a supplier submits a deliverable
 /api/auth/*  sign-in, session, sign-out (factory/auth.py)
+/api/integrations*  Integrations page (factory/integrations.py)
+POST /mcp    Certus Factory as an MCP server, Streamable HTTP (factory/mcp_server.py)
 POST actions carry the acting person in the X-Actor header (recorded in the audit trail).
 Everything else is served from web/out. Keys are read from .env and never sent to the browser.
 """
@@ -53,6 +55,8 @@ import callouts  # noqa: E402
 import elevenlabs  # noqa: E402
 import hotline  # noqa: E402
 import incidents  # noqa: E402
+import integrations  # noqa: E402
+import mcp_server  # noqa: E402
 import memory  # noqa: E402
 import monitors  # noqa: E402
 import record  # noqa: E402
@@ -149,7 +153,7 @@ class H(SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Actor, Authorization")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Actor, Authorization, Mcp-Session-Id, MCP-Protocol-Version")
         self.send_header("Access-Control-Allow-Methods", "GET, POST")
         self.send_header("Access-Control-Allow-Private-Network", "true")
         self.end_headers()
@@ -177,6 +181,14 @@ class H(SimpleHTTPRequestHandler):
         if u.path.startswith("/api/auth/"):
             code, obj, h = auth.handle(u.path, {}, self.headers)
             return self.send(code, obj, headers=h)
+        if u.path == "/api/integrations":
+            return self.send(200, integrations.overview({"hydradb": memory.status(), "composio_status": composio_status(),
+                                                         "software_factory": bool(os.environ.get("SF_API_KEY"))}))
+        if u.path == "/api/integrations/connect":  # Composio Connect Link for a catalog toolkit
+            link = integrations.connect_link(q.get("toolkit", ""))
+            return self.send(302, "", headers={"Location": link}) if link else self.send(502, {"error": "could not get a Composio connect link"})
+        if u.path == "/mcp":
+            return self.send(405, {"error": "POST JSON-RPC messages to this MCP endpoint"})
         if u.path == "/api/events":
             since = int(q.get("since", "0"))
             evs = store.events()  # every event stamped with its project; the UI shows the selected project's
@@ -247,10 +259,15 @@ class H(SimpleHTTPRequestHandler):
         actor = actor if actor in HUMANS else "abhishek"
         try:
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+            if u.path == "/mcp":
+                resp = [r for r in map(mcp_server.handle, body) if r] if isinstance(body, list) else mcp_server.handle(body)
+                return self.send(200, resp) if resp else self.send(202, "")
             clip = lambda k, n=300: str(body.get(k, "")).strip()[:n]  # noqa: E731
             if u.path.startswith("/api/auth/"):
                 code, obj, h = auth.handle(u.path, body, self.headers)
                 return self.send(code, obj, headers=h)
+            if u.path.startswith("/api/integrations/"):
+                return self.send(*integrations.post(u.path, body, actor, self.server.server_port))
             if u.path == "/api/projects":
                 if not clip("name", 80):
                     return self.send(400, {"error": "name required"})
@@ -349,6 +366,7 @@ if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8787
     print(f"Certus Factory server on http://localhost:{port}  (UI from web/out, memory: {memory.backend()})", flush=True)
     threading.Thread(target=warm, daemon=True).start()
+    threading.Thread(target=integrations.warm, daemon=True).start()
     for k, dev in store.DEVICES.items():  # requirement test results ready before anyone opens Traceability
         tracelinks.warm_tests(k, store.safety_spec(dev))
     monitors.paused = busy
