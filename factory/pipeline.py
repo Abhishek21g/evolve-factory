@@ -338,11 +338,12 @@ def _title(text):
 
 
 def _cached(kind, text, wo=None):
-    """Cache path for this request on the project's current code: builds start from origin/<base>, what-ifs simulate
-    this checkout. A code change gives a new key, so a cached run is never older than the software it describes."""
+    """Cache path for this request on the code that produces it: the project's device code (builds start from
+    origin/<base>, what-ifs simulate this checkout) plus this checkout's simulator, gate and pipeline. Any change to
+    them gives a new key, so a cached run is never older than the code it describes."""
     rev = f"origin/{os.environ.get('FACTORY_BASE') or 'main'}" if kind == "build" else "HEAD"
-    code = subprocess.run(["git", "-C", ROOT, "rev-parse", f"{rev}:{project_device(wo)['repo']}"],
-                          capture_output=True, text=True).stdout.strip()
+    code = subprocess.run(["git", "-C", ROOT, "rev-parse", f"{rev}:{project_device(wo)['repo']}", "HEAD:sim", "HEAD:gate",
+                           "HEAD:factory/pipeline.py"], capture_output=True, text=True).stdout
     return os.path.join(CACHE, f"{kind}-{hashlib.sha1((_title(text) + code).encode()).hexdigest()[:12]}")
 
 
@@ -386,10 +387,16 @@ def replay(src, wo=None):
     old = rec[0].get("wo")
     sub = (lambda s: s.replace(old, wo)) if old and wo else (lambda s: s)  # noqa: E731
     os.makedirs(RUNS, exist_ok=True)
+    # The recorded code change appears as the run reaches it: each attempt's commit with its "committed" event, the
+    # final diff and evidence pack with the evidence step. Copied up front, they would give away the ending.
+    out = lambda ext: os.path.join(RUNS, f"{wo}.{ext}")  # noqa: E731
+    later = sorted(json.load(open(src + ".commits.json")), key=lambda c: int(c["ts"])) if os.path.exists(src + ".commits.json") else []
+    shown = []
     if wo:
-        for ext in ("evidence.md", "diff.txt", "commits.json"):
-            if os.path.exists(f"{src}.{ext}"):
-                open(os.path.join(RUNS, f"{wo}.{ext}"), "w").write(sub(open(f"{src}.{ext}").read()))
+        for ext in ("evidence.md", "diff.txt"):
+            if os.path.exists(out(ext)):
+                os.remove(out(ext))
+        json.dump(shown, open(out("commits.json"), "w"))
     prev = 0.0
     for e in rec:
         time.sleep(min(max(e["t"] - prev, 0) / speed, cap))
@@ -403,6 +410,14 @@ def replay(src, wo=None):
                     json.dump(kw[key], open(os.path.join(RUNS, f"{wo}.{key}.json"), "w"))
             if "evidence" in kw:
                 kw["evidence"] = {**kw["evidence"], "wo": wo}
+            if e["agent"].startswith("coder") and e["msg"].endswith("committed") and later:
+                c = later.pop(0)
+                shown.insert(0, {**c, "subject": sub(c["subject"])})
+                json.dump(shown, open(out("commits.json"), "w"))
+            if e["agent"] == "evidence" and e["state"] == "done":
+                for ext in ("evidence.md", "diff.txt", "commits.json"):
+                    if os.path.exists(f"{src}.{ext}"):
+                        open(out(ext), "w").write(sub(open(f"{src}.{ext}").read()))
         msg = sub(e["msg"])
         if e["agent"] == "memory" and e["state"] == "done":  # the context layer answers live, not from the recording
             _, msg, kw["memory"] = recall(rec[0].get("title", ""))
@@ -415,14 +430,20 @@ def replay(src, wo=None):
     return 0 if not wo or rec[-1]["state"] == "done" else 1
 
 
-# Every one-click request on Home (SUGGEST in web/src/app/page.tsx); keep the two lists in sync.
-HOME = [("whatif", "What if a child eats 80 g and the parent types the dose 10x?"), ("whatif", "What if an adult eats 150 g of carbs?"),
-        ("build", "Let adults take larger meal boluses"), ("build", "Add an alarm when the extended bolus is interrupted")]
+# Every one-click request on Home, per device (SUGGEST and SUGGEST_BY_DEVICE in web/src/app/page.tsx); keep in sync.
+HOME = {"insulin-pump": [("whatif", "What if a child eats 80 g and the parent types the dose 10x?"),
+                         ("whatif", "What if an adult eats 150 g of carbs?"),
+                         ("build", "Let adults take larger meal boluses"),
+                         ("build", "Add an alarm when the extended bolus is interrupted")],
+        "flight-controls": [("build", "Add AoA disagree alert when the two sensors differ by more than 5 degrees"),
+                            ("whatif", "What if the left AoA vane fails at 30 degrees?"),
+                            ("whatif", "What if the pilot pulls to a stall in heavy turbulence?")]}
 
 
 def prewarm():
-    """Run each Home suggestion for real once per pump version (demo/go.sh live starts this in the background), so a
-    click on stage replays a fresh real run. Own feed, no PRs, no Composio side effects; one pre-warm at a time."""
+    """Run each Home suggestion without a recording for real, once per code version (demo/go.sh live starts this in the
+    background), so a click on stage replays a real run in seconds. Own feed, no PRs, no Composio side effects; one
+    pre-warm at a time."""
     lock = open(os.path.join(RUNS, "prewarm.lock"), "w")
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -431,12 +452,18 @@ def prewarm():
         return 0
     env = {k: v for k, v in os.environ.items() if k not in ("RUN_ID", "RUN_T0", "FACTORY_PR", "COMPOSIO_API_KEY")}
     env.update(FACTORY_CACHE="0", EVENTS=os.path.join(RUNS, "prewarm-events.jsonl"))
-    for i, (kind, text) in enumerate(HOME, 1):
-        if os.path.exists(_cached(kind, text) + ".jsonl"):
-            print(f"cached: {text}", flush=True)
+    projects = {p["device"]: p["id"] for p in store._load()["projects"]}
+    tag = hashlib.sha1(ROOT.encode()).hexdigest()[:4]  # wo/* branches are shared by every checkout
+    for i, (device, kind, text) in enumerate([(d, k, t) for d, items in HOME.items() for k, t in items], 1):
+        if device not in projects:
+            continue
+        os.environ["FACTORY_PROJECT"] = env["FACTORY_PROJECT"] = projects[device]
+        src = recorded(kind, text)
+        if src:
+            print(f"{'cached' if src.startswith(CACHE) else 'recorded'}: {text}", flush=True)
             continue
         print(f"warming: {text}", flush=True)
-        subprocess.run([PY, os.path.abspath(__file__), kind, text, *([f"WO-WARM{i}"] if kind == "build" else [])], env=env)
+        subprocess.run([PY, os.path.abspath(__file__), kind, text, *([f"WO-WARM{i}-{tag}"] if kind == "build" else [])], env=env)
         print(f"{'ready' if os.path.exists(_cached(kind, text) + '.jsonl') else 'FAILED'}: {text}", flush=True)
     return 0
 
