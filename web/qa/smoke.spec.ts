@@ -30,10 +30,12 @@ async function latestWO(page: Page, pid: string): Promise<string | null> {
 /** Console errors, uncaught exceptions and failed requests while the page is used. */
 function watch(page: Page) {
   const problems: string[] = [];
-  page.on("console", m => { if (m.type() === "error") problems.push(`console error: ${m.text().slice(0, 300)}`); });
-  page.on("pageerror", e => problems.push(`uncaught: ${e.message.slice(0, 300)}`));
-  page.on("response", r => { if (r.status() >= 400 && !r.url().includes("/api/connect/")) problems.push(`HTTP ${r.status()} ${r.request().method()} ${r.url()}`); });
-  page.on("requestfailed", r => { if (!r.failure()?.errorText.includes("ERR_ABORTED")) problems.push(`request failed: ${r.url()} ${r.failure()?.errorText}`); });
+  const ignore = process.env.QA_IGNORE ? new RegExp(process.env.QA_IGNORE) : null; // known, reported issues only
+  const add = (x: string) => { if (!ignore?.test(x)) problems.push(x); };
+  page.on("console", m => { if (m.type() === "error") add(`console error: ${m.text().slice(0, 300)}`); });
+  page.on("pageerror", e => add(`uncaught: ${e.message.slice(0, 300)}`));
+  page.on("response", r => { if (r.status() >= 400 && !r.url().includes("/api/connect/")) add(`HTTP ${r.status()} ${r.request().method()} ${r.url()}`); });
+  page.on("requestfailed", r => { if (!r.failure()?.errorText.includes("ERR_ABORTED")) add(`request failed: ${r.url()} ${r.failure()?.errorText}`); });
   return problems;
 }
 
