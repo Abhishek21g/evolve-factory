@@ -7,6 +7,7 @@ import { useFactoryState, type MemoryItem, type Member, type State, type WorkOrd
 import type { Ev } from "@/lib/feed";
 import { WorldChart } from "@/components/WorldChart";
 import { TraceGraph } from "@/components/TraceGraph";
+import { AGENT_ICON, AgentPage, AgentTeam } from "@/components/Agents";
 import { Avatar, Badge, Button, Field, Modal, PageHead, Replayed, Section, Table, Who, ago, inputCls } from "@/components/ui";
 
 /* ---------- routing: #/p/<project>/<page>[/<wo>] ---------- */
@@ -51,7 +52,8 @@ export default function App() {
           route.page === "traceability" ? <Traceability {...ctx} /> :
           route.page === "audit" ? <AuditTrail {...ctx} /> :
           route.page === "team" ? <Team {...ctx} /> :
-          route.page === "agents" ? <Agents {...ctx} /> :
+          route.page === "agents" && route.item ? <AgentPage {...ctx} id={route.item} /> :
+          route.page === "agents" ? <AgentTeam {...ctx} /> :
           route.page === "memory" ? <Memory {...ctx} /> : <HomePage {...ctx} />}
       </main>
     </div>
@@ -156,9 +158,6 @@ function NewProject({ state, post, onClose }: { state: State; post: Ctx["post"];
 }
 
 /* ---------- home: agent-first, like Software Factory ---------- */
-const AGENT_ICON: Record<string, string> = {
-  planner: "◇", memory: "◎", safety: "△", "coder-claude": "</>", "coder-codex": "</>", gate: "✓", world: "∿", simulation: "?", evidence: "▤", reviewer: "⚖", actions: "↗",
-};
 const SUGGEST = [
   ["build", "Let adults take larger meal boluses"],
   ["build", "Add an alarm when the extended bolus is interrupted"],
@@ -221,7 +220,7 @@ function HomePage({ state, post, team, me, live }: Ctx) {
           </div>
         </form>
         {err && <p className="mt-2 text-[12px] text-bad">{err}</p>}
-        {busy && <p className="mt-2 text-[12px] text-run">Agents are working on {state.status?.running || "a simulation"}…</p>}
+        {busy && <p className="mt-2 text-[12px] text-run">Agents are working on <a href={`#/p/${p.id}/${state.status?.running ? `work-orders/${state.status.running}` : "world-model"}`} className="underline">{state.status?.running || "a simulation"}</a>. <a href={`#/p/${p.id}/agents`} className="underline">Watch the team</a></p>}
         <div className="mt-3 flex flex-wrap justify-center gap-1.5">
           {SUGGEST.map(([m, t]) => (
             <button key={t} onClick={() => { setMode(m); setText(t); }}
@@ -235,18 +234,18 @@ function HomePage({ state, post, team, me, live }: Ctx) {
           <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
             {agents.map(a => {
               const l = live_[a.id];
-              const st = l?.state || "idle";
+              const st = l?.state === "working" && !busy ? "idle" : l?.state || "idle";
               const t = st === "working" ? "run" : st === "blocked" ? "bad" : l?.done ? "ok" : "idle";
               return (
-                <div key={a.id} className={`rounded-lg border bg-panel p-3 ${t === "run" ? "border-run/40" : "border-line"}`}>
+                <a key={a.id} href={`#/p/${p.id}/agents/${a.id}`} className={`block rounded-lg border bg-panel p-3 hover:border-white/20 ${t === "run" ? "border-run/40" : "border-line"}`}>
                   <div className="flex items-center gap-2">
                     <span className="grid h-6 w-6 place-items-center rounded-md bg-white/[.05] font-mono text-[11px] text-acc">{AGENT_ICON[a.id] || "◇"}</span>
                     <span className="truncate text-[13px] font-medium">{a.name}</span>
                     <span className={`ml-auto h-1.5 w-1.5 shrink-0 rounded-full ${t === "run" ? "pulse bg-run" : t === "bad" ? "bg-bad" : t === "ok" ? "bg-ok" : "bg-[#2a2f36]"}`} />
                   </div>
-                  <p className="mt-2 line-clamp-2 min-h-[2.6em] text-[12px] leading-snug text-mute">{st === "working" ? l?.msg : l?.msg || a.role}</p>
-                  <div className="mt-1.5 text-[11px] text-dim">{l ? `${l.done} steps done${l.wo ? ` · ${l.wo}` : ""}` : a.role}</div>
-                </div>
+                  <p className="mt-2 line-clamp-2 min-h-[2.6em] text-[12px] leading-snug text-mute">{l?.msg || a.role}</p>
+                  <div className="mt-1.5 text-[11px] text-dim">{l ? `${st === "working" ? "working" : "idle"} · ${l.done} step${l.done === 1 ? "" : "s"} done${l.wo ? ` · ${l.wo}` : ""}` : "idle · not run yet"}</div>
+                </a>
               );
             })}
           </div>
@@ -275,51 +274,6 @@ function HomePage({ state, post, team, me, live }: Ctx) {
             </ul>
           </Section>
         </div>
-      </div>
-    </>
-  );
-}
-
-/* ---------- agents ---------- */
-function Agents({ state, events, team }: Ctx) {
-  const live_ = state.agents || {};
-  const agents = state.team.filter(m => m.kind === "agent");
-  const [sel, setSel] = useState(agents[0]?.id);
-  const steps = [...events].reverse().filter(e => e.agent === sel || (sel === "coder-claude" && e.agent === "coder-claude")).slice(0, 25);
-  return (
-    <>
-      <PageHead title="Agents" sub="The team that does the work. Each agent has one job; people approve, agents execute, and every step is recorded." />
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
-        <ul className="space-y-1">
-          {agents.map(a => {
-            const l = live_[a.id];
-            return (
-              <li key={a.id}>
-                <button onClick={() => setSel(a.id)} className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left ${sel === a.id ? "bg-white/[.06]" : "hover:bg-white/[.03]"}`}>
-                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-white/[.05] font-mono text-[11px] text-acc">{AGENT_ICON[a.id] || "◇"}</span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-[13px] font-medium">{a.name}</span>
-                    <span className="block truncate text-[11px] text-dim">{a.role}</span>
-                  </span>
-                  <span className="ml-auto shrink-0 text-[11px] text-dim">{l?.state === "working" ? <span className="text-run">working</span> : l ? `${l.done} done` : "idle"}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        <Section title={`${team[sel || ""]?.name || ""} · activity`}>
-          {steps.length ? (
-            <ol className="space-y-3 border-l border-line pl-4">
-              {steps.map((e, i) => (
-                <li key={i} className="relative text-[13px]">
-                  <span className={`absolute -left-[21px] top-1.5 h-2 w-2 rounded-full ${e.state === "blocked" ? "bg-bad" : e.state === "working" ? "bg-run" : "bg-ok"}`} />
-                  <div className="text-[11px] text-dim">{e.wo || "world model"} · {ago(Number(e.run) + e.t)}</div>
-                  <div className={e.state === "blocked" ? "text-bad" : ""}>{e.msg}</div>
-                </li>
-              ))}
-            </ol>
-          ) : <Empty>This agent has not worked yet. Ask the factory to build something on Home.</Empty>}
-        </Section>
       </div>
     </>
   );
@@ -610,12 +564,15 @@ function AuditTrail({ state, team }: Ctx) {
 }
 
 function Team({ state }: Ctx) {
-  const part = (k: string) => state.team.filter(m => m.kind === k).map(m => [<Who key="w" m={m} />, <span key="r" className="text-mute">{m.role}</span>]);
+  const pid = state.project!.id;
+  const part = (k: string) => state.team.filter(m => m.kind === k).map(m => [
+    k === "agent" ? <a key="w" href={`#/p/${pid}/agents/${m.id}`} className="hover:underline"><Who m={m} /></a> : <Who key="w" m={m} />,
+    <span key="r" className="text-mute">{m.role}</span>]);
   return (
     <>
       <PageHead title="Team" sub="People decide and approve. Agents do the work, and every action is attributed in the audit trail." />
       <Section title="People"><Table head={["Name", "Role"]} rows={part("human")} /></Section>
-      <Section title="Agents"><Table head={["Agent", "Responsibility"]} rows={part("agent")} /></Section>
+      <Section title="Agents" aside={<a href={`#/p/${pid}/agents`} className="hover:text-ink">Open the agent team</a>}><Table head={["Agent", "Responsibility"]} rows={part("agent")} /></Section>
     </>
   );
 }
