@@ -3,6 +3,9 @@
 Usage:
   python3 gate/runner.py --wo WO-12 --text "Allow larger meal bolus for adult profile" [--pr]
   python3 gate/runner.py --wo WO-12 --text-file wo.txt
+  python3 gate/runner.py --wo WO-2 [--pr]      # no --text: fetch the Work Order from Software Factory (needs SF_API_KEY)
+When the WO comes from Software Factory the runner also sets its status (in_progress, then in_review once the PR is
+linked, or blocked if the gate never passes). Status updates never stop a run; failures print a warning.
 
 Agent command comes from $AGENT_CMD (default: claude -p ...). The prompt is passed on stdin.
 Safety spec is read from the main checkout (trusted), never from the agent's worktree.
@@ -18,6 +21,8 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "dashboard"))
 import emit as feed  # noqa: E402  dashboard event feed
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import sf  # noqa: E402  Software Factory client
 DEFAULT_AGENT = 'claude -p --permission-mode acceptEdits --allowedTools "Bash(make:*)"'
 # Checks come from gate/checks.json in the main checkout (trusted, agents can't edit it).
 # Each check is {"name", "cmd"}; cmd may use {root} {repo} {base} {wo} {json} (path for machine-readable output). Exit 0 = pass, else BLOCKED;
@@ -78,6 +83,17 @@ def commit(wt, msg):
     sh(["git", "commit", "-q", "--allow-empty", "-m", msg], wt)
 
 
+def sf_update(sf_wo, action, *a):
+    """Best-effort Software Factory write. A failure warns but never stops the run."""
+    if not sf_wo:
+        return
+    try:
+        getattr(sf, action)(sf_wo["id"], *a)
+        print(f"[SF] {action} {' '.join(a)} ok", flush=True)
+    except sf.SFError as e:
+        print(f"[SF] warning: {action} failed: {e}", file=sys.stderr)
+
+
 def main(argv=None):
     a = argparse.ArgumentParser()
     a.add_argument("--wo", required=True)
@@ -88,7 +104,16 @@ def main(argv=None):
     a.add_argument("--retries", type=int, default=2)
     a.add_argument("--pr", action="store_true", help="push the branch and open a PR with gh")
     args = a.parse_args(argv)
-    text = args.text or open(args.text_file).read()
+    sf_wo = None
+    if args.text or args.text_file:
+        text = args.text or open(args.text_file).read()
+    else:
+        try:
+            sf_wo = sf.get_wo(args.wo)
+        except sf.SFError as e:
+            sys.exit(f"Could not fetch {args.wo} from Software Factory: {e}\nPass --text to run without it.")
+        text = sf_wo["title"] + ("\n\n" + sf_wo["text"].strip() if sf_wo["text"].strip() else "")
+        print(f"[SF] fetched {args.wo} [{sf_wo['status']}]: {sf_wo['title']}", flush=True)
     checks = json.load(open(args.checks))
 
     wt = os.path.join(ROOT, ".worktrees", args.wo)
@@ -105,6 +130,7 @@ def main(argv=None):
     coder = os.environ.get("AGENT_NAME", "coder-claude")
     title = text.splitlines()[0]
     say("planner", "done", f'Picked up {args.wo} "{title}"; coder works in its own worktree', wo=args.wo, title=title)
+    sf_update(sf_wo, "set_status", "in_progress")
     ok, report = False, ""
     for attempt in range(args.retries + 1):
         n = attempt + 1
@@ -144,9 +170,14 @@ def main(argv=None):
     if ok and args.pr:
         sh(["git", "push", "-u", "origin", branch], wt)
         title = f"{args.wo}: {text.splitlines()[0][:70]}"
-        sh(["gh", "pr", "create", "--base", args.base, "--head", branch, "--title", title, "--body", report], wt)
-        print("PR opened")
+        pr = sh(["gh", "pr", "create", "--base", args.base, "--head", branch, "--title", title, "--body", report], wt)
+        pr_url = pr.stdout.strip().splitlines()[-1]
+        print(f"PR opened: {pr_url}")
+        sf_update(sf_wo, "link_pr", pr_url)
+        sf_update(sf_wo, "set_status", "in_review")
         say("reviewer", "done", f"PR opened for {args.wo}", wo=args.wo)
+    if not ok:
+        sf_update(sf_wo, "set_status", "blocked")
     return 0 if ok else 1
 
 
